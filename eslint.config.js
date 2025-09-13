@@ -28,7 +28,11 @@ export default [
       'no-lonely-if': 'error',
       'no-multi-spaces': 'error',
       'no-redeclare': 'off',
+<<<<<<< HEAD
       'no-shadow': ['warn', { allow: ['err', 'resolve', 'reject'] }],
+=======
+      'no-shadow': 'off',
+>>>>>>> 56aa0be436939e9e252dae49f7e3d86b2441513c
       'no-undef': 'off',
       'no-unused-vars': 'off',
       'no-var': 'error',
