@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: write
   contents: write
   pull-requests: write
+  actions: write
   repository-projects: read
 
 jobs:
@@ -19,6 +19,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - uses: AndreasAugustin/actions-template-sync@v2
         with:
           source_repo_path: StageDog/tavern_helper_template
@@ -28,3 +29,5 @@ jobs:
           template_sync_ignore_file_path: .github/.templatesyncignore
           is_force_deletion: true
           git_remote_pull_params: --allow-unrelated-histories --strategy=recursive --no-edit -X diff-algorithm=minimal -X ignore-all-space -X patience -X renormalize
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
