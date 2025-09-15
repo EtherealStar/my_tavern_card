@@ -10,6 +10,10 @@ import TerserPlugin from 'terser-webpack-plugin';
 import TsconfigPathsPlugin from 'tsconfig-paths-webpack-plugin';
 import { VueLoaderPlugin } from 'vue-loader';
 import webpack from 'webpack';
+<<<<<<< HEAD
+=======
+import WebpackObfuscator from 'webpack-obfuscator';
+>>>>>>> eea3fdb9001064d40a9b26593495d8cc9f1bafcb
 const require = createRequire(import.meta.url);
 const HTMLInlineCSSWebpackPlugin = require('html-inline-css-webpack-plugin').default;
 
@@ -83,6 +87,10 @@ function watch_it(compiler: webpack.Compiler) {
       console.info(`[Listener] 已启动酒馆监听服务, 正在监听: http://0.0.0.0:${port}`);
       io.on('connect', socket => {
         console.info(`[Listener] 成功连接到酒馆网页 '${socket.id}', 初始化推送...`);
+<<<<<<< HEAD
+=======
+        io.emit('iframe_updated');
+>>>>>>> eea3fdb9001064d40a9b26593495d8cc9f1bafcb
         socket.on('disconnect', reason => {
           console.info(`[Listener] 与酒馆网页 '${socket.id}' 断开连接: ${reason}`);
         });
@@ -97,6 +105,10 @@ function watch_it(compiler: webpack.Compiler) {
 }
 
 function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Configuration {
+<<<<<<< HEAD
+=======
+  const should_obfuscate = fs.readFileSync(path.join(__dirname, entry.script), 'utf-8').includes('@obfuscate');
+>>>>>>> eea3fdb9001064d40a9b26593495d8cc9f1bafcb
   const script_filepath = path.parse(entry.script);
 
   return (_env, argv) => ({
@@ -115,7 +127,10 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
       path: path.join(__dirname, 'dist', path.relative(path.join(__dirname, 'src'), script_filepath.dir)),
       chunkFilename: `${script_filepath.name}.[contenthash].chunk.js`,
       asyncChunks: true,
+<<<<<<< HEAD
       chunkLoading: 'import',
+=======
+>>>>>>> eea3fdb9001064d40a9b26593495d8cc9f1bafcb
       clean: true,
       publicPath: '',
       library: {
@@ -189,7 +204,11 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
                   {
                     test: /\.vue\.s(a|c)ss$/,
                     use: [
+<<<<<<< HEAD
                       'vue-style-loader',
+=======
+                      { loader: 'vue-style-loader', options: { ssrId: true } },
+>>>>>>> eea3fdb9001064d40a9b26593495d8cc9f1bafcb
                       { loader: 'css-loader', options: { url: false } },
                       'postcss-loader',
                       'sass-loader',
@@ -198,17 +217,38 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
                   },
                   {
                     test: /\.vue\.css$/,
+<<<<<<< HEAD
                     use: ['vue-style-loader', { loader: 'css-loader', options: { url: false } }, 'postcss-loader'],
+=======
+                    use: [
+                      { loader: 'vue-style-loader', options: { ssrId: true } },
+                      { loader: 'css-loader', options: { url: false } },
+                      'postcss-loader',
+                    ],
+>>>>>>> eea3fdb9001064d40a9b26593495d8cc9f1bafcb
                     exclude: /node_modules/,
                   },
                   {
                     test: /\.s(a|c)ss$/,
+<<<<<<< HEAD
                     use: [{ loader: 'css-loader', options: { url: false } }, 'postcss-loader', 'sass-loader'],
+=======
+                    use: [
+                      'style-loader',
+                      { loader: 'css-loader', options: { url: false } },
+                      'postcss-loader',
+                      'sass-loader',
+                    ],
+>>>>>>> eea3fdb9001064d40a9b26593495d8cc9f1bafcb
                     exclude: /node_modules/,
                   },
                   {
                     test: /\.css$/,
+<<<<<<< HEAD
                     use: [{ loader: 'css-loader', options: { url: false } }, 'postcss-loader'],
+=======
+                    use: ['style-loader', { loader: 'css-loader', options: { url: false } }, 'postcss-loader'],
+>>>>>>> eea3fdb9001064d40a9b26593495d8cc9f1bafcb
                     exclude: /node_modules/,
                   },
                 ]
@@ -264,9 +304,29 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
             },
           }),
         ]
+<<<<<<< HEAD
     ).concat({ apply: watch_it }, new VueLoaderPlugin()),
     optimization: {
       minimize: true,
+=======
+    )
+      .concat({ apply: watch_it }, new VueLoaderPlugin())
+      .concat(
+        should_obfuscate
+          ? [
+              new WebpackObfuscator({
+                controlFlowFlattening: true,
+                numbersToExpressions: true,
+                selfDefending: true,
+                simplify: true,
+                splitStrings: true,
+              }),
+            ]
+          : [],
+      ),
+    optimization: {
+      minimize: false,
+>>>>>>> eea3fdb9001064d40a9b26593495d8cc9f1bafcb
       minimizer: [
         argv.mode === 'production'
           ? new TerserPlugin({
@@ -302,8 +362,12 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
         },
       },
     },
+<<<<<<< HEAD
     externals: [
       ({ context, request }, callback) => {
+=======
+    externals: ({ context, request }, callback) => {
+>>>>>>> eea3fdb9001064d40a9b26593495d8cc9f1bafcb
         if (!context || !request) {
           return callback();
         }
@@ -329,13 +393,25 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
           'vue-router': 'VueRouter',
           yaml: 'YAML',
           zod: 'z',
+<<<<<<< HEAD
+=======
+        'pixi.js': 'PIXI',
+>>>>>>> eea3fdb9001064d40a9b26593495d8cc9f1bafcb
         };
         if (request in builtin) {
           return callback(null, 'var ' + builtin[request as keyof typeof builtin]);
         }
+<<<<<<< HEAD
         return callback(null, 'module-import https://testingcf.jsdelivr.net/npm/' + request + '/+esm');
       },
     ],
+=======
+      if (['vue3-pixi', 'vue-demi'].includes(request)) {
+        return callback();
+      }
+      return callback(null, 'module-import https://testingcf.jsdelivr.net/npm/' + request + '/+esm');
+    },
+>>>>>>> eea3fdb9001064d40a9b26593495d8cc9f1bafcb
   });
 }
 
