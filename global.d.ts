@@ -12,7 +12,11 @@ declare module '*.css' {
 }
 declare module '*.vue' {
   import { DefineComponent } from 'vue';
+<<<<<<< HEAD
   const component: DefineComponent<{}, {}, any>;
+=======
+  const component: DefineComponent;
+>>>>>>> 5c50a912fa25d0306aa9d4d189827066e4f04ec0
   export default component;
 }
 
