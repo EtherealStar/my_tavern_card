@@ -1,0 +1,67 @@
+<div class="rpg-panel">
+  <div class="panel-header">
+    <div class="panel-title">开始游玩</div>
+    <div class="panel-actions">
+      <button class="btn-settings" title="设置">⚙ 设置</button>
+    </div>
+  </div>
+  <div class="rpg-actions">
+    <button class="btn-save">存档到世界书</button>
+    <button class="btn-load">读取存档</button>
+  </div>
+  <div class="rpg-actions" style="margin-top: 8px">
+    <button class="btn-ai-generate">普通生成</button>
+    <button class="btn-ai-generate-streaming">流式生成</button>
+  </div>
+
+  <div class="current-content" style="margin-top: 15px">
+    <div class="content-header">
+      <h4>当前内容</h4>
+    </div>
+    <div
+      class="current-message-content"
+      style="padding: 10px; background: #f8f9fa; border-radius: 6px; min-height: 100px; white-space: pre-wrap"
+    >
+      暂无内容
+    </div>
+  </div>
+
+  <div class="game-info" style="margin-top: 15px">
+    <div class="info-header">
+      <h4>游戏信息</h4>
+    </div>
+    <div class="character-info">
+      <div class="info-row">
+        <span class="info-label">角色：</span>
+        <span class="character-name">未知</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">世界：</span>
+        <span class="character-world">未知</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">难度：</span>
+        <span class="character-difficulty">未知</span>
+      </div>
+    </div>
+    <div class="ai-status" style="margin-top: 10px; padding: 5px; text-align: center; border-radius: 4px">
+      检查中...
+    </div>
+  </div>
+
+  <div class="settings-modal hidden">
+    <div class="settings-card">
+      <div class="settings-title">外观设置</div>
+      <div class="settings-row">
+        <label>配色方案：</label>
+        <select class="select-theme">
+          <option value="default">默认（白色）</option>
+          <option value="rose">玫瑰（#FFF3F4 / #FF9097 / #DCB18C）</option>
+        </select>
+      </div>
+      <div class="settings-actions">
+        <button class="btn-close-settings">确定</button>
+      </div>
+    </div>
+  </div>
+</div>

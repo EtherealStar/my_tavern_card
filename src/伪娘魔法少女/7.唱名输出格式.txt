@@ -1,0 +1,55 @@
+{{// 设置
+uid: 6
+启用: true
+类型: 绿灯
+位置: D系统
+深度: 2
+顺序: 100
+概率: 100
+主要关键字:
+  - 唱名
+  - 变身
+逻辑: 与任意
+可选过滤器: []
+扫描深度: 使用全局
+不可递归: true
+防止进一步递归: true
+延迟到递归: false
+粘性: null
+冷却: null
+延迟: null
+}}
+<唱名输出格式详细介绍>
+当{{user}}以任何方式观看接触魔法少女时(例如观看直播，战斗开始时，自己变身时)，按照如下状态栏格式输出唱名，遵循<唱名输出规范>
+格式如下:
+<songname>
+<span style="color: #引子颜色"><ruby>引子中文<rt>引子日文</rt></ruby></span><br>
+<span style="color: #核心描述颜色"><ruby>核心描述中文<rt>核心描述日文</rt></ruby></span><br>
+<span style="color: #名字颜色"><ruby>魔法少女<rt>魔法少女</rt></ruby> <ruby>名字中文<rt>名字日文</rt></ruby></span><br>
+<span style="color: #结尾颜色"><ruby>结尾中文<rt>结尾日文</rt></ruby></span>
+</songname>
+<唱名输出规范>
+1. 双语要求
+使用<ruby>标签标注中文和日文读音，中文为主体，日文假名用<rt>标注。
+每个中文词语或短语需有对应日文读音。
+不能出现标点符号
+唱名与人的心态，性格能力息息相关
+2. 字体颜色
+每个部分使用不同颜色，增强视觉效果(颜色为随机，自动选择符合唱名的颜色)：
+引子：#4B0082（靛紫，神秘星空）
+核心描述：#FFD700（金色，辉煌陨落）
+名字宣告：#FFB6C1（淡粉，柔美歌声）
+结尾：#32CD32（青绿，生命不息）
+使用<span style="color: #HEXCODE">包裹每行。
+3.分行格式
+每部分独立一行，使用HTML换行（<br>）分隔。
+</唱名输出规范>
+
+输出范例（格式范例）:
+<songname>
+<span style="color: #4B0082"><ruby>殞星<rt>殞星</rt></ruby><ruby>隐没<rt>隠没</rt></ruby><ruby>晨辉<rt>晨輝</rt></ruby>之<ruby>尽头<rt>尽頭</rt></ruby></span><br>
+<span style="color: #FFD700"><ruby>万象<rt>万象</rt></ruby>于<ruby>空虚<rt>空虚</rt></ruby><ruby>沦为<rt>沦</rt></ruby><ruby>灰烬<rt>灰燼</rt></ruby></span><br>
+<span style="color: #FFB6C1"><ruby>魔法少女<rt>魔法少女</rt></ruby> <ruby>Trwwns<rt>トロウンス</rt></ruby></span><br>
+<span style="color: #32CD32"><ruby>歌声<rt>歌声</rt></ruby><ruby>不绝<rt>不絶</rt></ruby>，<ruby>永续<rt>永続</rt></ruby><ruby>天籁<rt>天籟</rt></ruby></span>
+</songname>
+</唱名输出格式详细介绍>

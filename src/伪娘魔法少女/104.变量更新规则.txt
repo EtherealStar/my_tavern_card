@@ -1,0 +1,105 @@
+{{// 设置
+uid: 14
+启用: true
+类型: 蓝灯
+位置: D系统
+深度: 2
+顺序: 75
+概率: 100
+主要关键字: []
+逻辑: 与任意
+可选过滤器: []
+扫描深度: 使用全局
+不可递归: true
+防止进一步递归: true
+延迟到递归: false
+粘性: null
+冷却: null
+延迟: null
+}}
+---
+<%_ setLocalVar('initialized_lorebooks.伪娘魔法少女[0]', true); _%>
+【变量更新】
+在所有文本的最后，进行变量更新。
+以下是故事中需要追踪的关键变量，当前状态以这些变量的值为准。
+<status_current_variables>
+{{get_message_variable::stat_data}}
+</status_current_variables>
+严格按照以下规则和格式进行输出，并确定每一个变量是否需要更新，不要遗漏：
+rule:
+  description:
+    - The provided example is for format demonstration only. Do not copy the values or specific actions from the example into your actual updates.
+    - You should output the update analysis in the end of the next response, following the variables list defined in <status_current_variables> section which will be provided by the previous turn.
+    - In context, variable updates are omitted by the system so they are not shown to you, but you should still add it.
+    - There are 4 commands can be used to adjust the data: `_.set`, `_.assign`, `_.remove` and `_.add`.
+    - to set a certain value, use `_.set`, it supports 2 or 3 input args.
+    - to insert something into an array or object, use `_.assign`, it supports 2 or 3 input args.
+    - to delete something from an object/array, use `_.remove`, it supports 1 or 2 input args.
+    - If you need to assign or remove multiple values, use `_.assign` or `_.remove` multiple times, not in a single command.
+    - to add a delta to a number, use `_.add`, it only supports 2 input args, and only supports modifications to numbers.
+  analysis:
+    - You must rethink what variables are defined in the previous <status_current_variables> property, and analyze how to update each of them accordingly.
+    - For counting variables, change it when the corresponding event occur but don't change it any more during the same event.
+    - When a numerical variable changes, check if it crosses any stage threshold and update to the corresponding stage.
+    - If dest element is in an array with description, **PRECISELY** locate the element by adding "[0]" suffix. DO NOT change the description.
+    - When updating "好感度" (Affinity) or "经验值" (Experience), you **MUST** refer to the detailed guidelines within the `<affinity_rule>` and `<levelup_rule>` world info entries to determine the correct value and trigger conditions. State the reason clearly in the comment.
+    - When a character's "经验值" (Experience) reaches or exceeds 100, you **MUST** trigger a level up. This involves two **SIMULTANEOUS** actions: updating the "实力等级" (Strength Level) to the next tier according to `<levelup_rule>`, and resetting the "经验值" (Experience) to 0. A new skill might also be assigned.
+format: |-
+  <UpdateVariable>
+      <Analysis>$(IN ENGLISH)
+          - Analyze the current situation and how it affects each variable.
+          - List every variable from `<status_current_variables>`.
+          - For each variable, decide if it needs an update based on its description and the story progress.
+          ...
+      </Analysis>
+      _.set('${path}', ${old_value}, ${new_value});//${reason}
+      _.add('${path}', ${delta});//${reason}
+      _.assign('${path}', ${key_or_index}?, ${value});//${reason}
+      _.remove('${path}', ${key_or_index_or_value}?);//${reason}
+  </UpdateVariable>
+
+example: |-
+<UpdateVariable>
+    <Analysis>
+        世界.时段[0]: Y
+        世界.时间[0]: Y
+        世界.随机事件[0]: N
+        世界.入侵倒计时[0]: N
+        世界.日期[0]: N
+        {{user}}.区域[0]: Y
+        {{user}}.地点[0]: Y
+        {{user}}.技能[0]: Y
+        {{user}}.淫堕值[0]: N
+        {{user}}.经验值[0]: Y
+        {{user}}.决心[0]: N
+        {{user}}.实力等级[0]: Y
+        紫音.好感度[0]: Y
+        紫音.内心想法[0]: Y
+        紫音.技能[0]: N
+        紫音.心魔[0]: N
+        紫音.经验值[0]: N
+        紫音.实力等级[0]: N
+        凛.好感度[0]: N
+        凛.内心想法[0]: Y
+        凛.技能[0]: N
+        凛.经验值[0]: N
+        凛.实力等级[0]: N
+        枫.好感度[0]: Y
+        枫.内心想法[0]: Y
+        枫.技能[0]: N
+        枫.经验值[0]: Y
+        枫.实力等级[0]: N
+    </Analysis>
+    _.set('世界.时间[0]', '09:15', '14:30');//The mission, including travel and combat, took several hours.
+    _.set('世界.时段[0]', '上午', '下午');//Time has passed into the afternoon based on the updated time.
+    _.set('{{user}}.区域[0]', '花丘新区', '霞见原魔导科技区');//{{user}} moved to the commercial district for the mission.
+    _.set('{{user}}.地点[0]', '{{user}}的房间', '中央广场');//The battle took place in the central plaza of the district.
+    _.add('{{user}}.经验值[0]', 100);//Defeated a B-rank enemy, which is two levels higher than {{user}}'s current D-rank. According to <levelup_rule>, this grants 100 EXP.
+    _.set('{{user}}.实力等级[0]', 'D', 'C');//{{user}}'s experience reached 100, triggering a level up as per <levelup_rule>.
+    _.set('{{user}}.经验值[0]', 100, 0);//Experience is reset to 0 after leveling up, as per <levelup_rule>.
+    _.assign('{{user}}.技能[0]', '坚岩壁垒', {'等级': 'C', '描述': '从地面升起一面坚固的岩石墙壁，用以格挡攻击或分割战场。'});//Gained a new skill upon leveling up to C-Rank.
+    _.add('枫.好感度[0]', 3);//{{user}} proved to be a reliable partner in a tough fight, which resonates with her value of "trust" and "companionship" as per <affinity_rule>.
+    _.add('枫.经验值[0]', 25); //As a C-rank, defeating a higher B-rank enemy grants significant experience, but less than the main combatant. Let's assume her contribution grants 25 EXP as per <levelup_rule>.
+    _.set('枫.内心想法[0]', '无', '哦？这家伙比我想象中还能打嘛！跟他并肩作战的感觉…还不赖。');//楓 acknowledges {{user}}'s combat prowess and feels a sense of camaraderie.
+    _.add('紫音.好感度[0]', 3);//Ziyin acknowledges {{user}}'s potential and tactical value after he successfully defeated a high-rank enemy, which aligns with her core value of "recognition" as per <affinity_rule>.
+    _.set('紫音.内心想法[0]', '无', '越级战胜了B级…哼，看来也不是个只会惹麻烦的蠢货。战力评估需要更新了。');//Ziyin re-evaluates {{user}}'s capabilities based on the battle report.

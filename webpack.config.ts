@@ -267,6 +267,8 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
     ).concat({ apply: watch_it }, new VueLoaderPlugin()),
     optimization: {
       minimize: true,
+      runtimeChunk: false,
+      splitChunks: false,
       minimizer: [
         argv.mode === 'production'
           ? new TerserPlugin({
@@ -281,61 +283,8 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
               },
             }),
       ],
-      splitChunks: {
-        chunks: 'async',
-        minSize: 20000,
-        minChunks: 1,
-        maxAsyncRequests: 30,
-        maxInitialRequests: 30,
-        cacheGroups: {
-          vendor: {
-            name: 'vendor',
-            test: /[\\/]node_modules[\\/]/,
-            priority: -10,
-          },
-          default: {
-            name: 'default',
-            minChunks: 2,
-            priority: -20,
-            reuseExistingChunk: true,
-          },
-        },
-      },
     },
-    externals: [
-      ({ context, request }, callback) => {
-        if (!context || !request) {
-          return callback();
-        }
-
-        if (
-          request.startsWith('-') ||
-          request.startsWith('.') ||
-          request.startsWith('/') ||
-          request.startsWith('!') ||
-          request.startsWith('http') ||
-          path.isAbsolute(request) ||
-          fs.existsSync(path.join(context, request)) ||
-          fs.existsSync(request)
-        ) {
-          return callback();
-        }
-
-        const builtin = {
-          jquery: '$',
-          lodash: '_',
-          toastr: 'toastr',
-          vue: 'Vue',
-          'vue-router': 'VueRouter',
-          yaml: 'YAML',
-          zod: 'z',
-        };
-        if (request in builtin) {
-          return callback(null, 'var ' + builtin[request as keyof typeof builtin]);
-        }
-        return callback(null, 'module-import https://testingcf.jsdelivr.net/npm/' + request + '/+esm');
-      },
-    ],
+    externals: [],
   });
 }
 

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>同层游玩RPG · 重制版</title>
+    <script src="https://fastly.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+    <!-- Fallbacks for previous externalized builds; safe when bundled as well -->
+    <script src="https://fastly.jsdelivr.net/npm/zod@4.1.5/lib/index.umd.min.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/vue@3.5.21/dist/vue.global.prod.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/vue-router@4.5.1/dist/vue-router.global.prod.js"></script>
+    <script>
+      window.z = window.z || window.Zod || window.zod;
+    </script>
+    <script>
+      // Define Vue feature flags to suppress console warnings.
+      window.__VUE_OPTIONS_API__ = true;
+      window.__VUE_PROD_DEVTOOLS__ = false;
+      window.__VUE_PROD_HYDRATION_MISMATCH_DETAILS__ = false;
+    </script>
+    <script type="importmap">
+    {
+      "imports": {
+        "vue": "https://aistudiocdn.com/vue@^3.5.21",
+        "jquery": "https://aistudiocdn.com/jquery@^3.7.1",
+        "pinia": "https://aistudiocdn.com/pinia@^3.0.3",
+        "@/": "./"
+      }
+    }
+    </script>
+  </head>
+  <body class="min-w-0">
+    <main id="rpg-root" class="tw mx-auto w-full max-w-[850px]">
+      <div id="app" class="rpg-app"></div>
+    </main>
+  </body>
+  <!-- 构建后脚本与样式将自动注入 -->
+</html>

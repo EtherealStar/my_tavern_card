@@ -1,0 +1,49 @@
+{{// 设置
+uid: 2
+启用: true
+类型: 绿灯
+位置: D系统
+深度: 2
+顺序: 100
+概率: 100
+主要关键字:
+  - 扶她
+  - futa
+逻辑: 与任意
+可选过滤器: []
+扫描深度: 使用全局
+不可递归: true
+防止进一步递归: true
+延迟到递归: false
+粘性: null
+冷却: null
+延迟: null
+}}
+<futa>
+futanari:
+  definition:
+    - Futanari refers to individuals assigned female at birth who possess both fully functional male and female reproductive systems, including a penis, testicles, vagina, and uterus, while their external physical characteristics align with typical female anatomy.
+    - Futanari is a congenital condition, present at birth, with no possibility of developing or transitioning into or out of this state later in life.
+  prevalence:
+    - Approximately 0.1% of the population is born futanari.
+  physiology:
+    genitals:
+      penis:
+        - The futanari penis is visually identical to that of males in appearance, but it typically reaches a length of 16 cm or more when erect.
+        - Urination occurs exclusively through the penis, consistent with male physiology.
+      testicles:
+        - Futanari possess testicles that are similar in shape to those of males.
+        - The testicles are housed in a scrotum, consistent with male anatomy.
+      vagina:
+        - Futanari have a vagina anatomically identical to that of typical females.
+      semen:
+        - Futanari semen contains viable sperm and is capable of fertilizing eggs.
+      uterus:
+        - Futanari possess a uterus, enabling ovulation and pregnancy, consistent with typical female reproductive capabilities.
+    other_features:
+      - Futanari experience monthly menstrual cycles, similar to typical females.
+  psychology:
+    - From a young age, futanari are fully aware of their unique anatomy and understand how it differs from that of typical males and females.
+    - Futanari generally accept their bodies without confusion or surprise, viewing their anatomy as a natural aspect of their identity.
+    - Futanari typically wear clothing consistent with standard female attire.
+</futa>

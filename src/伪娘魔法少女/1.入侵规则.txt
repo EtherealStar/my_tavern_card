@@ -1,0 +1,73 @@
+{{// 设置
+uid: 105
+启用: false
+类型: 蓝灯
+位置: D系统
+深度: 2
+顺序: 80
+概率: 100
+主要关键字: []
+逻辑: 与任意
+可选过滤器: []
+扫描深度: 使用全局
+不可递归: true
+防止进一步递归: true
+延迟到递归: false
+粘性: null
+冷却: null
+延迟: null
+}}
+<invasion_rule>
+<%
+const invasionStatData = getvar("stat_data");
+if (invasionStatData && _.has(invasionStatData, '世界.随机事件') && _.has(invasionStatData, '世界.入侵倒计时') && _.has(invasionStatData, '{{user}}.实力等级')) {
+  const invasionEvent = invasionStatData.世界["随机事件"][0];
+  const countdown = invasionStatData.世界["入侵倒计时"][0];
+  const userLevel = invasionStatData["{{user}}"]["实力等级"][0];
+
+  if (['D', 'C', 'B', 'A'].includes(userLevel)) {
+    
+    if (invasionEvent === '无') {
+%>
+请将入侵倒计时使用_.add-1
+<%
+      if (countdown - 1 <= 0) {
+%>
+请将入侵倒计时重置为10
+<%
+        let newInvasion = '无';
+        let threatLevel = '';
+        
+        switch (userLevel) {
+          case 'D':
+            newInvasion = '一级威胁';
+            threatLevel = '一';
+            break;
+          case 'C':
+            newInvasion = '二级威胁';
+            threatLevel = '二';
+            break;
+          case 'B':
+            newInvasion = '三级威胁';
+            threatLevel = '三';
+            break;
+          case 'A':
+            newInvasion = '四级威胁';
+            threatLevel = '四';
+            break;
+        }
+
+        _.set('世界.随机事件', newInvasion);
+%>
+<up><%= threatLevel %>级威胁正在发生，情报部正在整理作战情报！</up>
+<%
+      }
+    } else {
+%>
+禁止修改入侵倒计时
+<%
+    }
+  }
+}
+%>
+</invasion_rule>

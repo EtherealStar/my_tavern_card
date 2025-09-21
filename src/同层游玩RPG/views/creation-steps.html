@@ -1,0 +1,212 @@
+<div class="creation-container">
+  <!-- 难度选择页面 -->
+  <div class="step-page" data-step="difficulty">
+    <div class="step-header">
+      <h2 class="step-title">选择难度</h2>
+      <p class="step-desc">不同难度将影响你的属性点分配</p>
+    </div>
+    <div class="step-content">
+      <div class="difficulty-options">
+        <button class="option-btn btn-diff" data-diff="简单">
+          <div class="option-title">简单</div>
+          <div class="option-desc">30属性点 / 60天命点</div>
+        </button>
+        <button class="option-btn btn-diff" data-diff="普通">
+          <div class="option-title">普通</div>
+          <div class="option-desc">20属性点 / 50天命点</div>
+        </button>
+        <button class="option-btn btn-diff" data-diff="困难">
+          <div class="option-title">困难</div>
+          <div class="option-desc">15属性点 / 40天命点</div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 世界选择页面 -->
+  <div class="step-page" data-step="world">
+    <div class="step-header">
+      <h2 class="step-title">选择世界</h2>
+      <p class="step-desc">选择你想要冒险的世界背景</p>
+    </div>
+    <div class="step-content">
+      <div class="world-options">
+        <button class="option-btn btn-world" data-world="都市">
+          <div class="option-title">都市</div>
+          <div class="option-desc">现代都市生活</div>
+        </button>
+        <button class="option-btn btn-world disabled" disabled data-world="西幻">
+          <div class="option-title">西幻</div>
+          <div class="option-desc">魔法与剑的世界</div>
+          <div class="coming-soon">即将到来</div>
+        </button>
+        <button class="option-btn btn-world disabled" disabled data-world="武侠">
+          <div class="option-title">武侠</div>
+          <div class="option-desc">江湖恩怨情仇</div>
+          <div class="coming-soon">即将到来</div>
+        </button>
+        <button class="option-btn btn-world disabled" disabled data-world="仙侠">
+          <div class="option-title">仙侠</div>
+          <div class="option-desc">修仙问道成仙</div>
+          <div class="coming-soon">即将到来</div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 角色选择页面已移除，直接进入属性分配 -->
+
+  <!-- 属性分配页面 -->
+  <div class="step-page" data-step="attributes">
+    <div class="step-header">
+      <h2 class="step-title">属性分配</h2>
+      <p class="step-desc">剩余点数：<span class="points-left">0</span></p>
+    </div>
+    <div class="step-content attributes-and-background">
+      <!-- 属性分配区域 -->
+      <div class="attributes-section">
+        <h3 class="section-title">基础属性</h3>
+        <div class="attributes-sliders">
+          <div class="attr-slider" data-key="strength">
+            <div class="attr-label">
+              <span class="attr-name">力量</span>
+              <span class="attr-value">0</span>
+            </div>
+            <input type="range" class="slider" min="0" max="30" value="0" data-attr="strength" />
+          </div>
+          <div class="attr-slider" data-key="agility">
+            <div class="attr-label">
+              <span class="attr-name">敏捷</span>
+              <span class="attr-value">0</span>
+            </div>
+            <input type="range" class="slider" min="0" max="30" value="0" data-attr="agility" />
+          </div>
+          <div class="attr-slider" data-key="intelligence">
+            <div class="attr-label">
+              <span class="attr-name">智力</span>
+              <span class="attr-value">0</span>
+            </div>
+            <input type="range" class="slider" min="0" max="30" value="0" data-attr="intelligence" />
+          </div>
+          <div class="attr-slider" data-key="constitution">
+            <div class="attr-label">
+              <span class="attr-name">体质</span>
+              <span class="attr-value">0</span>
+            </div>
+            <input type="range" class="slider" min="0" max="30" value="0" data-attr="constitution" />
+          </div>
+          <div class="attr-slider" data-key="charisma">
+            <div class="attr-label">
+              <span class="attr-name">魅力</span>
+              <span class="attr-value">0</span>
+            </div>
+            <input type="range" class="slider" min="0" max="30" value="0" data-attr="charisma" />
+          </div>
+          <div class="attr-slider" data-key="willpower">
+            <div class="attr-label">
+              <span class="attr-name">意志</span>
+              <span class="attr-value">0</span>
+            </div>
+            <input type="range" class="slider" min="0" max="30" value="0" data-attr="willpower" />
+          </div>
+          <div class="attr-slider" data-key="luck">
+            <div class="attr-label">
+              <span class="attr-name">幸运</span>
+              <span class="attr-value">0</span>
+            </div>
+            <input type="range" class="slider" min="0" max="30" value="0" data-attr="luck" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 出身选择区域 -->
+      <div class="background-section">
+        <h3 class="section-title">选择出身</h3>
+        <p class="section-desc">剩余天命点：<span class="destiny-points-left">0</span></p>
+        <div class="background-grid" id="background-list">
+          <!-- 出身选项将通过JavaScript动态生成 -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 性别和种族选择页面 -->
+  <div class="step-page" data-step="gender-race">
+    <div class="step-header">
+      <h2 class="step-title">性别与种族</h2>
+      <p class="step-desc">选择你的性别和种族</p>
+    </div>
+    <div class="step-content gender-race-content">
+      <!-- 性别选择区域 -->
+      <div class="gender-section">
+        <h3 class="section-title">选择性别</h3>
+        <div class="gender-options">
+          <button class="option-btn btn-gender" data-gender="male">
+            <div class="option-title">男性</div>
+            <div class="option-desc">力量+1</div>
+          </button>
+          <button class="option-btn btn-gender" data-gender="female">
+            <div class="option-title">女性</div>
+            <div class="option-desc">魅力+1</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- 种族选择区域 -->
+      <div class="race-section">
+        <h3 class="section-title">选择种族</h3>
+        <div class="race-options">
+          <button class="option-btn btn-race" data-race="human">
+            <div class="option-title">人类</div>
+            <div class="option-desc">平衡发展</div>
+          </button>
+          <button class="option-btn btn-race" data-race="elf">
+            <div class="option-title">精灵</div>
+            <div class="option-desc">智力+2，敏捷+1</div>
+          </button>
+          <button class="option-btn btn-race" data-race="dwarf">
+            <div class="option-title">矮人</div>
+            <div class="option-desc">体质+2，力量+1</div>
+          </button>
+          <button class="option-btn btn-race" data-race="orc">
+            <div class="option-title">兽人</div>
+            <div class="option-desc">力量+3，智力-1</div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 天赋选择页面 -->
+  <div class="step-page" data-step="talents">
+    <div class="step-header">
+      <h2 class="step-title">选择天赋</h2>
+      <p class="step-desc">剩余天命点：<span class="destiny-points-left">0</span>（可多选）</p>
+    </div>
+    <div class="step-content">
+      <div class="talents-grid" id="talents-list">
+        <!-- 天赋选项将通过JavaScript动态生成 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 导航栏 -->
+  <div class="creation-nav">
+    <button class="nav-btn btn-back-menu">返回主菜单</button>
+
+    <!-- 步骤指示器 -->
+    <div class="step-indicators">
+      <div class="indicator" data-step="difficulty"></div>
+      <div class="indicator" data-step="world"></div>
+      <div class="indicator" data-step="attributes"></div>
+      <div class="indicator" data-step="gender-race"></div>
+      <div class="indicator" data-step="talents"></div>
+    </div>
+
+    <div class="nav-controls">
+      <button class="nav-btn btn-prev" disabled>上一步</button>
+      <button class="nav-btn btn-next" disabled>下一步</button>
+      <button class="nav-btn btn-start-play" style="display: none">开始游戏</button>
+    </div>
+  </div>
+</div>
