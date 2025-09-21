@@ -5,16 +5,25 @@
       "name": "调试酒馆网页(Chrome)",
       "type": "chrome",
       "request": "launch",
+<<<<<<< HEAD
       "preLaunchTask": "开始任务",
       "postDebugTask": "结束任务",
       "url": "http://localhost:8000",
+=======
+      "url": "http://localhost:6622",
+>>>>>>> 962a746de903f20844c9390aa30e420b93282d07
       "disableNetworkCache": true,
       "internalConsoleOptions": "openOnSessionStart",
       "cwd": "${workspaceFolder}",
       "sourceMapPathOverrides": {
+<<<<<<< HEAD
         "webpack://tavern_helper_template/*": "${workspaceFolder}/*",
         "webpack-internal:///*": "${webRoot}/scripts/extensions/third-party/*",
         "webpack:/*": "${webRoot}/scripts/extensions/third-party/*",
+=======
+        "src://tavern_helper_template/*": "${workspaceFolder}/*",
+        "webpack://tavern_helper_template/*": "${workspaceFolder}/*",
+>>>>>>> 962a746de903f20844c9390aa30e420b93282d07
       },
       "skipFiles": [
         "**/jquery*.min.js"
@@ -31,9 +40,14 @@
       "internalConsoleOptions": "openOnSessionStart",
       "cwd": "${workspaceFolder}",
       "sourceMapPathOverrides": {
+<<<<<<< HEAD
         "webpack://tavern_helper_template/*": "${workspaceFolder}/*",
         "webpack-internal:///*": "${webRoot}/scripts/extensions/third-party/*",
         "webpack:/*": "${webRoot}/scripts/extensions/third-party/*",
+=======
+        "src://tavern_helper_template/*": "${workspaceFolder}/*",
+        "webpack://tavern_helper_template/*": "${workspaceFolder}/*",
+>>>>>>> 962a746de903f20844c9390aa30e420b93282d07
       },
       "skipFiles": [
         "**/jquery*.min.js"
