@@ -3,7 +3,7 @@ import type { GameState } from '../models/schemas';
 
 /**
  * WorldbookService - 世界书服务
- * 
+ *
  * 职责：
  * - 管理世界书的创建和操作
  * - 处理游戏状态的存档和读档
@@ -28,11 +28,11 @@ export class WorldbookService {
     if (!this.worldbookName) {
       try {
         this.worldbookName = await getOrCreateChatWorldbook(chatId);
-        
+
         this.eventBus.emit('worldbook:ensured', {
           worldbookName: this.worldbookName,
           chatId,
-          timestamp: new Date()
+          timestamp: new Date(),
         });
 
         console.log('[WorldbookService] 世界书已确保:', this.worldbookName);
@@ -41,7 +41,7 @@ export class WorldbookService {
         this.eventBus.emit('worldbook:error', {
           operation: 'ensureChatWorldbook',
           chatId,
-          error
+          error,
         });
         throw error;
       }
@@ -60,26 +60,22 @@ export class WorldbookService {
       name?: string;
       description?: string;
       overwrite?: boolean;
-    } = {}
+    } = {},
   ): Promise<void> {
     try {
-      const {
-        name = '同层游玩RPG-存档',
-        description = '自动保存的游戏状态',
-        overwrite = true
-      } = options;
+      const { name = '同层游玩RPG-存档', description = '自动保存的游戏状态', overwrite = true } = options;
 
       const worldbookName = await this.ensureChatWorldbook();
-      
+
       // 创建存档条目
       const saveEntry = this.createSaveEntry(state, name, description);
-      
+
       // 获取现有世界书
       const worldbook = await getWorldbook(worldbookName);
-      
+
       // 根据策略处理存档
       const updatedWorldbook = this.applySaveStrategy(worldbook, saveEntry, overwrite);
-      
+
       // 替换世界书
       await replaceWorldbook(worldbookName, updatedWorldbook);
 
@@ -87,18 +83,17 @@ export class WorldbookService {
         state,
         entryName: name,
         worldbookName,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
 
       console.log('[WorldbookService] 游戏状态已保存:', name);
-
     } catch (error) {
       console.error('[WorldbookService] 保存游戏状态失败:', error);
       this.eventBus.emit('worldbook:error', {
         operation: 'saveGameState',
         state,
         options,
-        error
+        error,
       });
       throw error;
     }
@@ -108,23 +103,21 @@ export class WorldbookService {
    * 加载游戏状态
    * @param options 加载选项
    */
-  async loadGameState(options: {
-    name?: string;
-    latest?: boolean;
-  } = {}): Promise<GameState | null> {
+  async loadGameState(
+    options: {
+      name?: string;
+      latest?: boolean;
+    } = {},
+  ): Promise<GameState | null> {
     try {
-      const {
-        name = '同层游玩RPG-存档',
-        latest = true
-      } = options;
+      const { name = '同层游玩RPG-存档', latest = true } = options;
 
       const worldbookName = await this.ensureChatWorldbook();
       const worldbook = await getWorldbook(worldbookName);
-      
+
       // 查找存档条目
-      const saveEntries = worldbook.filter(entry => 
-        entry?.extra?.tag === 'save' && 
-        (name ? entry.name === name : true)
+      const saveEntries = worldbook.filter(
+        entry => entry?.extra?.tag === 'save' && (name ? entry.name === name : true),
       );
 
       if (saveEntries.length === 0) {
@@ -133,7 +126,7 @@ export class WorldbookService {
       }
 
       // 选择要加载的存档
-      const targetEntry = latest 
+      const targetEntry = latest
         ? _.maxBy(saveEntries, entry => entry.uid)
         : saveEntries.find(entry => entry.name === name) || saveEntries[0];
 
@@ -148,18 +141,17 @@ export class WorldbookService {
         gameState,
         entryName: targetEntry.name,
         worldbookName,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
 
       console.log('[WorldbookService] 游戏状态已加载:', targetEntry.name);
       return gameState;
-
     } catch (error) {
       console.error('[WorldbookService] 加载游戏状态失败:', error);
       this.eventBus.emit('worldbook:error', {
         operation: 'loadGameState',
         options,
-        error
+        error,
       });
       return null;
     }
@@ -168,39 +160,40 @@ export class WorldbookService {
   /**
    * 获取所有存档列表
    */
-  async getSaveList(): Promise<Array<{
-    name: string;
-    uid: number;
-    createdAt: Date;
-    description?: string;
-  }>> {
+  async getSaveList(): Promise<
+    Array<{
+      name: string;
+      uid: number;
+      createdAt: Date;
+      description?: string;
+    }>
+  > {
     try {
       const worldbookName = await this.ensureChatWorldbook();
       const worldbook = await getWorldbook(worldbookName);
-      
+
       const saveEntries = worldbook
         .filter(entry => entry?.extra?.tag === 'save')
         .map(entry => ({
           name: entry.name,
           uid: entry.uid,
           createdAt: new Date(entry.uid), // UID通常是时间戳
-          description: entry.extra?.description
+          description: entry.extra?.description,
         }))
         .sort((a, b) => b.uid - a.uid); // 按时间倒序
 
       this.eventBus.emit('worldbook:save-list-retrieved', {
         count: saveEntries.length,
         worldbookName,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
 
       return saveEntries;
-
     } catch (error) {
       console.error('[WorldbookService] 获取存档列表失败:', error);
       this.eventBus.emit('worldbook:error', {
         operation: 'getSaveList',
-        error
+        error,
       });
       return [];
     }
@@ -215,7 +208,7 @@ export class WorldbookService {
     try {
       const worldbookName = await this.ensureChatWorldbook();
       const worldbook = await getWorldbook(worldbookName);
-      
+
       const filteredWorldbook = worldbook.filter(entry => {
         if (entry?.extra?.tag !== 'save') return true;
         if (entry.name !== name) return true;
@@ -224,29 +217,28 @@ export class WorldbookService {
       });
 
       const deleted = filteredWorldbook.length < worldbook.length;
-      
+
       if (deleted) {
         await replaceWorldbook(worldbookName, filteredWorldbook);
-        
+
         this.eventBus.emit('worldbook:save-deleted', {
           name,
           uid,
           worldbookName,
-          timestamp: new Date()
+          timestamp: new Date(),
         });
 
         console.log('[WorldbookService] 存档已删除:', name);
       }
 
       return deleted;
-
     } catch (error) {
       console.error('[WorldbookService] 删除存档失败:', error);
       this.eventBus.emit('worldbook:error', {
         operation: 'deleteSave',
         name,
         uid,
-        error
+        error,
       });
       return false;
     }
@@ -274,7 +266,7 @@ export class WorldbookService {
     try {
       const worldbookName = await this.ensureChatWorldbook();
       const worldbook = await getWorldbook(worldbookName);
-      
+
       const newEntry = {
         name: entry.name,
         enabled: entry.enabled ?? true,
@@ -283,19 +275,19 @@ export class WorldbookService {
           type: 'constant',
           keys: entry.keys || [],
           keys_secondary: entry.keys_secondary || { logic: 'and_any', keys: [] },
-          scan_depth: 1
+          scan_depth: 1,
         },
         position: entry.position || {
           type: 'after_author_note',
           role: 'assistant',
           depth: 0,
-          order: 0
+          order: 0,
         },
         content: entry.content,
         probability: entry.probability ?? 100,
         recursion: { prevent_incoming: true, prevent_outgoing: true, delay_until: null },
         effect: { sticky: null, cooldown: null, delay: null },
-        extra: entry.extra || {}
+        extra: entry.extra || {},
       };
 
       const updatedWorldbook = [...worldbook, newEntry];
@@ -304,17 +296,16 @@ export class WorldbookService {
       this.eventBus.emit('worldbook:entry-added', {
         entry: newEntry,
         worldbookName,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
 
       console.log('[WorldbookService] 世界书条目已添加:', entry.name);
-
     } catch (error) {
       console.error('[WorldbookService] 添加世界书条目失败:', error);
       this.eventBus.emit('worldbook:error', {
         operation: 'addEntry',
         entry,
-        error
+        error,
       });
       throw error;
     }
@@ -325,16 +316,19 @@ export class WorldbookService {
    * @param name 条目名称
    * @param updates 更新内容
    */
-  async updateEntry(name: string, updates: Partial<{
-    content: string;
-    keys: string[];
-    enabled: boolean;
-    probability: number;
-  }>): Promise<boolean> {
+  async updateEntry(
+    name: string,
+    updates: Partial<{
+      content: string;
+      keys: string[];
+      enabled: boolean;
+      probability: number;
+    }>,
+  ): Promise<boolean> {
     try {
       const worldbookName = await this.ensureChatWorldbook();
       const worldbook = await getWorldbook(worldbookName);
-      
+
       const entryIndex = worldbook.findIndex(entry => entry.name === name);
       if (entryIndex === -1) {
         return false;
@@ -354,19 +348,18 @@ export class WorldbookService {
         name,
         updates,
         worldbookName,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
 
       console.log('[WorldbookService] 世界书条目已更新:', name);
       return true;
-
     } catch (error) {
       console.error('[WorldbookService] 更新世界书条目失败:', error);
       this.eventBus.emit('worldbook:error', {
         operation: 'updateEntry',
         name,
         updates,
-        error
+        error,
       });
       return false;
     }
@@ -380,30 +373,29 @@ export class WorldbookService {
     try {
       const worldbookName = await this.ensureChatWorldbook();
       const worldbook = await getWorldbook(worldbookName);
-      
+
       const filteredWorldbook = worldbook.filter(entry => entry.name !== name);
       const deleted = filteredWorldbook.length < worldbook.length;
-      
+
       if (deleted) {
         await replaceWorldbook(worldbookName, filteredWorldbook);
-        
+
         this.eventBus.emit('worldbook:entry-deleted', {
           name,
           worldbookName,
-          timestamp: new Date()
+          timestamp: new Date(),
         });
 
         console.log('[WorldbookService] 世界书条目已删除:', name);
       }
 
       return deleted;
-
     } catch (error) {
       console.error('[WorldbookService] 删除世界书条目失败:', error);
       this.eventBus.emit('worldbook:error', {
         operation: 'deleteEntry',
         name,
-        error
+        error,
       });
       return false;
     }
@@ -429,13 +421,13 @@ export class WorldbookService {
         type: 'constant',
         keys: [],
         keys_secondary: { logic: 'and_any', keys: [] },
-        scan_depth: 1
+        scan_depth: 1,
       },
       position: {
         type: 'after_author_note',
         role: 'assistant',
         depth: 0,
-        order: 0
+        order: 0,
       },
       content: JSON.stringify(state, null, 2),
       probability: 100,
@@ -445,8 +437,8 @@ export class WorldbookService {
         tag: 'save',
         description,
         version: '2.0',
-        createdAt: new Date().toISOString()
-      }
+        createdAt: new Date().toISOString(),
+      },
     };
   }
 
@@ -465,9 +457,7 @@ export class WorldbookService {
       case 'versioned':
         // 保留所有版本，但限制数量
         const maxVersions = 10;
-        const sortedSaves = [...existingSaves, saveEntry]
-          .sort((a, b) => b.uid - a.uid)
-          .slice(0, maxVersions);
+        const sortedSaves = [...existingSaves, saveEntry].sort((a, b) => b.uid - a.uid).slice(0, maxVersions);
         return [...otherEntries, ...sortedSaves];
 
       case 'tagged':
@@ -490,4 +480,3 @@ export class WorldbookService {
     console.log('[WorldbookService] 资源清理完成');
   }
 }
-

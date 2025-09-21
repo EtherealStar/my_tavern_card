@@ -4,7 +4,7 @@ import { StateManager } from '../core/StateManager';
 
 /**
  * BaseController - 基础控制器
- * 
+ *
  * 职责：
  * - 提供控制器的基础功能
  * - 统一管理控制器的生命周期
@@ -70,4 +70,3 @@ export abstract class BaseController {
     return this.stateManager.getState();
   }
 }
-

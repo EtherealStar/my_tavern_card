@@ -1,6 +1,6 @@
 /**
  * ServiceLocator - 服务定位器
- * 
+ *
  * 职责：
  * - 中央服务注册和获取机制
  * - 支持依赖注入和服务生命周期管理
@@ -47,17 +47,17 @@ export class ServiceLocator {
       console.warn(`[ServiceLocator] 覆盖服务: ${key}`);
     }
 
-    this.services.set(key, { 
-      instance: service, 
+    this.services.set(key, {
+      instance: service,
       singleton: true,
-      initialized: true
+      initialized: true,
     });
 
     this.metadata.set(key, {
       name: key,
       registeredAt: new Date(),
       resolveCount: 0,
-      type: 'instance'
+      type: 'instance',
     });
 
     if (this.debug) {
@@ -69,9 +69,9 @@ export class ServiceLocator {
    * 注册服务工厂
    */
   static registerFactory<T>(
-    key: string, 
+    key: string,
     factory: () => T | Promise<T>,
-    options: { singleton?: boolean; dependencies?: string[] } = {}
+    options: { singleton?: boolean; dependencies?: string[] } = {},
   ): void {
     const { singleton = true, dependencies = [] } = options;
 
@@ -83,14 +83,14 @@ export class ServiceLocator {
       factory,
       singleton,
       dependencies,
-      initialized: false
+      initialized: false,
     });
 
     this.metadata.set(key, {
       name: key,
       registeredAt: new Date(),
       resolveCount: 0,
-      type: singleton ? 'singleton' : 'factory'
+      type: singleton ? 'singleton' : 'factory',
     });
 
     if (this.debug) {
@@ -127,10 +127,10 @@ export class ServiceLocator {
 
       // 解析依赖
       const dependencies = this.resolveDependencies(definition.dependencies || []);
-      
+
       try {
         const instance = definition.factory();
-        
+
         // 如果是Promise，需要特殊处理
         if (instance instanceof Promise) {
           throw new Error(`[ServiceLocator] 异步工厂暂不支持同步解析: ${key}`);
@@ -181,7 +181,7 @@ export class ServiceLocator {
 
       // 解析依赖
       const dependencies = await this.resolveDependenciesAsync(definition.dependencies || []);
-      
+
       try {
         const instance = await definition.factory();
 
@@ -239,13 +239,12 @@ export class ServiceLocator {
     serviceDetails: ServiceMetadata[];
   } {
     const serviceDetails = Array.from(this.metadata.values());
-    const initializedServices = Array.from(this.services.values())
-      .filter(def => def.initialized).length;
+    const initializedServices = Array.from(this.services.values()).filter(def => def.initialized).length;
 
     return {
       totalServices: this.services.size,
       initializedServices,
-      serviceDetails
+      serviceDetails,
     };
   }
 
@@ -258,7 +257,7 @@ export class ServiceLocator {
     }
 
     const definition = this.services.get(key);
-    
+
     // 如果服务有清理方法，调用它
     if (definition?.instance && typeof definition.instance === 'object') {
       const service = definition.instance as any;
@@ -324,19 +323,21 @@ export class ServiceLocator {
    */
   static printDebugInfo(): void {
     console.group('[ServiceLocator] 调试信息');
-    
+
     const stats = this.getStatistics();
     console.log('总服务数:', stats.totalServices);
     console.log('已初始化服务数:', stats.initializedServices);
-    
-    console.table(stats.serviceDetails.map(meta => ({
-      服务名: meta.name,
-      类型: meta.type,
-      注册时间: meta.registeredAt.toLocaleString(),
-      解析次数: meta.resolveCount,
-      最后解析: meta.lastResolvedAt?.toLocaleString() || '从未'
-    })));
-    
+
+    console.table(
+      stats.serviceDetails.map(meta => ({
+        服务名: meta.name,
+        类型: meta.type,
+        注册时间: meta.registeredAt.toLocaleString(),
+        解析次数: meta.resolveCount,
+        最后解析: meta.lastResolvedAt?.toLocaleString() || '从未',
+      })),
+    );
+
     console.groupEnd();
   }
 }

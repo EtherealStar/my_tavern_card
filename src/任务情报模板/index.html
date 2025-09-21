@@ -20,8 +20,11 @@
       border-radius: 25px;
       position: relative;
       overflow: hidden;
-      transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.4s cubic-bezier(0.25, 0.8, 0.25, 1),
-        border-color 0.4s ease, background 0.4s ease;
+      transition:
+        transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1),
+        box-shadow 0.4s cubic-bezier(0.25, 0.8, 0.25, 1),
+        border-color 0.4s ease,
+        background 0.4s ease;
       box-shadow: 0 10px 30px rgba(217, 126, 129, 0.1);
       border: 2px solid #f9d9e3;
     }
@@ -30,7 +33,9 @@
     #magical-mission-container .mission-card:hover {
       transform: translateY(-12px) scale(1.02);
       border-color: #f7c5d4;
-      box-shadow: 0 20px 40px rgba(217, 126, 129, 0.2), 0 0 25px 5px rgba(240, 150, 153, 0.7);
+      box-shadow:
+        0 20px 40px rgba(217, 126, 129, 0.2),
+        0 0 25px 5px rgba(240, 150, 153, 0.7);
     }
 
     /* 顶部缎带 + 菱形装饰（伪元素，不改DOM结构） */
@@ -166,7 +171,6 @@
       background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
       animation: badgeShine 3s ease-in-out infinite;
     }
-
 
     #magical-mission-container .mission-info-section {
       padding: 30px;

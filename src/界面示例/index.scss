@@ -30,7 +30,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(145, 125, 138, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.4) inset,
+  box-shadow:
+    0 4px 12px rgba(145, 125, 138, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.4) inset,
     0 -3px 3px rgba(255, 255, 255, 0.25) inset;
   backdrop-filter: blur(13px);
   -webkit-backdrop-filter: blur(13px);
@@ -51,14 +53,18 @@ body {
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(145, 125, 138, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.5) inset,
+    box-shadow:
+      0 6px 15px rgba(145, 125, 138, 0.2),
+      0 0 0 1px rgba(255, 255, 255, 0.5) inset,
       0 -3px 3px rgba(255, 255, 255, 0.35) inset;
     background: linear-gradient(135deg, rgba(255, 235, 240, 0.7), rgba(255, 202, 215, 0.7));
   }
 
   &:active {
     transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(145, 125, 138, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+    box-shadow:
+      0 2px 8px rgba(145, 125, 138, 0.15),
+      0 0 0 1px rgba(255, 255, 255, 0.4) inset;
   }
 
   @media (max-width: 999px) {

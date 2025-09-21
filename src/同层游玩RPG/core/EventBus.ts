@@ -1,6 +1,6 @@
 /**
  * EventBus - 事件总线
- * 
+ *
  * 职责：
  * - 组件间松耦合通信机制
  * - 支持命名空间和通配符事件
@@ -35,7 +35,7 @@ export class EventBus {
       debug: false,
       maxListeners: 100,
       enableNamespaces: true,
-      ...options
+      ...options,
     };
 
     if (this.options.debug) {
@@ -112,7 +112,7 @@ export class EventBus {
 
     // 获取所有匹配的监听器
     const matchingListeners = this.getMatchingListeners(event);
-    
+
     if (matchingListeners.length === 0 && this.options.debug) {
       console.debug(`[EventBus] 没有监听器处理事件: ${event}`);
       return;
@@ -120,7 +120,7 @@ export class EventBus {
 
     // 执行所有监听器
     const promises: Promise<void>[] = [];
-    
+
     for (const { listener, isOnce } of matchingListeners) {
       try {
         const result = listener(payload);
@@ -157,7 +157,7 @@ export class EventBus {
 
     this.updateEmitMetadata(event);
     const matchingListeners = this.getMatchingListeners(event);
-    
+
     for (const { listener, isOnce } of matchingListeners) {
       try {
         listener(payload);
@@ -178,7 +178,7 @@ export class EventBus {
       this.listeners.delete(event);
       this.onceListeners.delete(event);
       this.metadata.delete(event);
-      
+
       if (this.options.debug) {
         console.debug(`[EventBus] 移除所有监听器: ${event}`);
       }
@@ -186,7 +186,7 @@ export class EventBus {
       this.listeners.clear();
       this.onceListeners.clear();
       this.metadata.clear();
-      
+
       if (this.options.debug) {
         console.debug('[EventBus] 移除所有监听器');
       }
@@ -226,7 +226,7 @@ export class EventBus {
     return {
       totalEvents: this.metadata.size,
       totalListeners,
-      eventDetails
+      eventDetails,
     };
   }
 
@@ -245,21 +245,23 @@ export class EventBus {
    */
   printDebugInfo(): void {
     console.group('[EventBus] 调试信息');
-    
+
     const stats = this.getStatistics();
     console.log('总事件数:', stats.totalEvents);
     console.log('总监听器数:', stats.totalListeners);
-    
+
     if (stats.eventDetails.length > 0) {
-      console.table(stats.eventDetails.map(meta => ({
-        事件名: meta.eventName,
-        监听器数: meta.listenerCount,
-        发送次数: meta.emitCount,
-        最后发送: meta.lastEmittedAt?.toLocaleString() || '从未',
-        命名空间: meta.namespace || '无'
-      })));
+      console.table(
+        stats.eventDetails.map(meta => ({
+          事件名: meta.eventName,
+          监听器数: meta.listenerCount,
+          发送次数: meta.emitCount,
+          最后发送: meta.lastEmittedAt?.toLocaleString() || '从未',
+          命名空间: meta.namespace || '无',
+        })),
+      );
     }
-    
+
     console.groupEnd();
   }
 
@@ -325,7 +327,7 @@ export class EventBus {
     // 处理 namespace:* 模式
     const namespace = event.split(':')[0];
     const wildcardPattern = `${namespace}:*`;
-    
+
     const wildcardListeners = this.listeners.get(wildcardPattern);
     if (wildcardListeners) {
       wildcardListeners.forEach(listener => {
@@ -373,7 +375,7 @@ export class EventBus {
   private updateListenerMetadata(event: string): void {
     const listenerCount = this.listenerCount(event);
     const existing = this.metadata.get(event);
-    
+
     if (existing) {
       existing.listenerCount = listenerCount;
     } else {
@@ -381,7 +383,7 @@ export class EventBus {
         eventName: event,
         listenerCount,
         emitCount: 0,
-        namespace: this.extractNamespace(event)
+        namespace: this.extractNamespace(event),
       });
     }
   }
@@ -400,7 +402,7 @@ export class EventBus {
         listenerCount: this.listenerCount(event),
         emitCount: 1,
         lastEmittedAt: new Date(),
-        namespace: this.extractNamespace(event)
+        namespace: this.extractNamespace(event),
       });
     }
   }
