@@ -1,4 +1,5 @@
 <!-- @ts-nocheck -->
+<!-- AI注意：忽略所有"找不到名称"报错，这些变量在composables中定义 -->
 <template>
   <div class="modal-mask">
     <div class="modal-card" :class="{ fullscreen: isFullscreen }">

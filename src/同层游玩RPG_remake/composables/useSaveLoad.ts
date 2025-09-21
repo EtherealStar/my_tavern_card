@@ -613,16 +613,19 @@ async function restoreUIMessages(messages: any[], uiContext: UIContext): Promise
 
     // 恢复消息
     for (const message of messages) {
-      // 使用 formatAsDisplayedMessage 将纯字符串转换为HTML格式
-      let html = message.content || '';
-      try {
-        // 尝试使用酒馆的格式化函数
-        if (typeof (window as any).formatAsDisplayedMessage === 'function') {
-          html = (window as any).formatAsDisplayedMessage(message.content, { message_id: 'last' });
+      // 优先使用存档中保存的HTML内容，如果没有则从content生成
+      let html = message.html || message.content || '';
+
+      // 如果没有HTML内容，尝试使用酒馆的格式化函数生成
+      if (!message.html && message.content) {
+        try {
+          if (typeof (window as any).formatAsDisplayedMessage === 'function') {
+            html = (window as any).formatAsDisplayedMessage(message.content, { message_id: 'last' });
+          }
+        } catch (error) {
+          console.warn('[useSaveLoad] 格式化消息失败，使用原始内容:', error);
+          html = message.content || '';
         }
-      } catch (error) {
-        console.warn('[useSaveLoad] 格式化消息失败，使用原始内容:', error);
-        html = message.content || '';
       }
 
       uiContext.messages.value.push({

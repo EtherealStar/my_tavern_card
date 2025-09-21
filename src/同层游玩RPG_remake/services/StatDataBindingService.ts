@@ -15,7 +15,7 @@ import { inject, injectable } from 'inversify';
 import { z } from 'zod';
 import { EventBus } from '../core/EventBus';
 import { TYPES } from '../core/ServiceIdentifiers';
-import { CHINESE_ATTRIBUTE_NAMES } from '../models/CreationSchemas';
+import { ATTRIBUTE_NAME_MAP, CHINESE_ATTRIBUTE_NAMES } from '../models/CreationSchemas';
 // SafeValueHelper 已移除，统一使用 MVU 框架
 
 // 导入 MVU 相关类型
@@ -87,6 +87,17 @@ export class StatDataBindingService {
   private readonly attrOrder: AttrCN[] = CHINESE_ATTRIBUTE_NAMES as AttrCN[];
   private unsubscribeMvuEvents?: () => void;
   private unsubscribeBus?: () => void;
+
+  // 中文属性名到英文属性名的反向映射
+  private readonly chineseToEnglishMap: Record<string, string> = {
+    力量: 'strength',
+    敏捷: 'agility',
+    智力: 'intelligence',
+    体质: 'constitution',
+    魅力: 'charisma',
+    意志: 'willpower',
+    幸运: 'luck',
+  };
 
   constructor(@inject(TYPES.EventBus) private eventBus: EventBus) {
     // MVU 相关初始化延迟到 MVU 服务启动后进行
@@ -343,6 +354,7 @@ export class StatDataBindingService {
 
   /**
    * 获取基础属性
+   * 支持英文属性名到中文属性名的映射
    */
   public getBaseAttributes(): Record<string, number> {
     const baseAttrs = this.getAttributeValue('base_attributes', {});
@@ -350,7 +362,16 @@ export class StatDataBindingService {
 
     for (const [key, value] of Object.entries(baseAttrs)) {
       const numValue = Number(value);
-      result[key] = Number.isFinite(numValue) ? numValue : 0;
+      const finalValue = Number.isFinite(numValue) ? numValue : 0;
+
+      // 如果key是英文属性名，转换为中文属性名
+      const chineseKey = this.getChineseAttributeName(key);
+      result[chineseKey] = finalValue;
+
+      // 同时保留英文key，确保向后兼容
+      if (chineseKey !== key) {
+        result[key] = finalValue;
+      }
     }
 
     return result;
@@ -358,6 +379,7 @@ export class StatDataBindingService {
 
   /**
    * 获取当前属性
+   * 支持英文属性名到中文属性名的映射
    */
   public getCurrentAttributes(): Record<string, number> {
     const currentAttrs = this.getAttributeValue('current_attributes', {});
@@ -365,7 +387,16 @@ export class StatDataBindingService {
 
     for (const [key, value] of Object.entries(currentAttrs)) {
       const numValue = Number(value);
-      result[key] = Number.isFinite(numValue) ? numValue : 0;
+      const finalValue = Number.isFinite(numValue) ? numValue : 0;
+
+      // 如果key是英文属性名，转换为中文属性名
+      const chineseKey = this.getChineseAttributeName(key);
+      result[chineseKey] = finalValue;
+
+      // 同时保留英文key，确保向后兼容
+      if (chineseKey !== key) {
+        result[key] = finalValue;
+      }
     }
 
     return result;
@@ -938,7 +969,18 @@ export class StatDataBindingService {
   public async getBaseAttribute(attributeName: string, defaultValue: number = 10): Promise<number> {
     try {
       const baseAttributes = await this.getMvuBaseAttributes();
-      const value = baseAttributes[attributeName];
+
+      // 首先尝试直接使用传入的属性名
+      let value = baseAttributes[attributeName];
+
+      // 如果直接获取失败，尝试将中文属性名转换为英文属性名
+      if (value === undefined) {
+        const englishName = this.getEnglishAttributeName(attributeName);
+        if (englishName !== attributeName) {
+          value = baseAttributes[englishName];
+        }
+      }
+
       return Number.isFinite(value) ? value : defaultValue;
     } catch (error) {
       console.error(`[StatDataBindingService] 获取基础属性 ${attributeName} 失败:`, error);
@@ -961,7 +1003,18 @@ export class StatDataBindingService {
   public async getCurrentAttribute(attributeName: string, defaultValue: number = 10): Promise<number> {
     try {
       const currentAttributes = await this.getMvuCurrentAttributes();
-      const value = currentAttributes[attributeName];
+
+      // 首先尝试直接使用传入的属性名
+      let value = currentAttributes[attributeName];
+
+      // 如果直接获取失败，尝试将中文属性名转换为英文属性名
+      if (value === undefined) {
+        const englishName = this.getEnglishAttributeName(attributeName);
+        if (englishName !== attributeName) {
+          value = currentAttributes[englishName];
+        }
+      }
+
       return Number.isFinite(value) ? value : defaultValue;
     } catch (error) {
       console.error(`[StatDataBindingService] 获取当前属性 ${attributeName} 失败:`, error);
@@ -2066,6 +2119,60 @@ export class StatDataBindingService {
   }
 
   /**
+   * 设置用户性别
+   * @param gender 性别值
+   * @param reason 设置原因（用于日志记录）
+   * @returns 是否设置成功
+   *
+   * @example
+   * ```typescript
+   * const success = await statDataService.setGender('女性', '角色创建');
+   * if (success) {
+   *   console.log('性别设置成功');
+   * }
+   * ```
+   */
+  public async setGender(gender: string, reason?: string): Promise<boolean> {
+    try {
+      const success = await this.setStatDataField('gender', gender, reason || '设置用户性别');
+      if (success) {
+        this.eventBus.emit('character:gender_changed', { gender, timestamp: new Date() });
+      }
+      return success;
+    } catch (error) {
+      console.error('[StatDataBindingService] 设置用户性别失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 设置用户种族
+   * @param race 种族值
+   * @param reason 设置原因（用于日志记录）
+   * @returns 是否设置成功
+   *
+   * @example
+   * ```typescript
+   * const success = await statDataService.setRace('灵族', '角色创建');
+   * if (success) {
+   *   console.log('种族设置成功');
+   * }
+   * ```
+   */
+  public async setRace(race: string, reason?: string): Promise<boolean> {
+    try {
+      const success = await this.setStatDataField('race', race, reason || '设置用户种族');
+      if (success) {
+        this.eventBus.emit('character:race_changed', { race, timestamp: new Date() });
+      }
+      return success;
+    } catch (error) {
+      console.error('[StatDataBindingService] 设置用户种族失败:', error);
+      return false;
+    }
+  }
+
+  /**
    * 获取角色基本信息
    * @returns 包含性别、种族、年龄的角色信息对象
    *
@@ -2349,11 +2456,34 @@ export class StatDataBindingService {
   // ==================== 私有辅助方法 ====================
 
   /**
+   * 将中文属性名转换为英文属性名
+   */
+  private getEnglishAttributeName(chineseName: string): string {
+    return this.chineseToEnglishMap[chineseName] || chineseName;
+  }
+
+  /**
+   * 将英文属性名转换为中文属性名
+   */
+  private getChineseAttributeName(englishName: string): string {
+    return ATTRIBUTE_NAME_MAP[englishName as keyof typeof ATTRIBUTE_NAME_MAP] || englishName;
+  }
+
+  /**
    * 检查是否是角色创建时的属性数据
    */
   private _isCharacterCreationAttributes(attributes: Record<string, any>): boolean {
-    // 检查是否包含中文属性名（角色创建时使用中文属性名）
-    return CHINESE_ATTRIBUTE_NAMES.some(name => Object.prototype.hasOwnProperty.call(attributes, name));
+    // 检查是否包含英文属性名（角色创建时使用英文属性名）
+    const ENGLISH_ATTRIBUTE_NAMES = [
+      'strength',
+      'agility',
+      'intelligence',
+      'constitution',
+      'charisma',
+      'willpower',
+      'luck',
+    ];
+    return ENGLISH_ATTRIBUTE_NAMES.some(name => Object.prototype.hasOwnProperty.call(attributes, name));
   }
 
   // _convertToMvuFormat 方法已移除，MVU 框架会自动处理格式转换
@@ -2449,6 +2579,8 @@ export class StatDataBindingService {
  * - getGender(defaultValue) - 获取用户性别
  * - getRace(defaultValue) - 获取用户种族
  * - getAge(defaultValue) - 获取用户年龄
+ * - setGender(gender, reason) - 设置用户性别
+ * - setRace(race, reason) - 设置用户种族
  * - getCharacterInfo() - 获取角色基本信息（包含性别、种族、年龄）
  *
  * ### 9. 综合信息函数
@@ -2516,6 +2648,10 @@ export class StatDataBindingService {
  * const race = await statDataService.getRace();
  * const age = await statDataService.getAge();
  * console.log(`角色信息: ${gender} ${race}, ${age}岁`);
+ *
+ * // 设置角色基本信息
+ * await statDataService.setGender('女性', '角色创建');
+ * await statDataService.setRace('灵族', '角色创建');
  *
  * // 获取完整的角色信息
  * const characterInfo = await statDataService.getCharacterInfo();

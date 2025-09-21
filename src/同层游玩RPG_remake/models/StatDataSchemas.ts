@@ -174,7 +174,7 @@ export function correctStatData(data: unknown): ValidationResult {
 // 默认统计数据
 export const DefaultStatData: StatData = {
   character: {
-    name: '旅行者',
+    name: '无名',
     level: 1,
     experience: 0,
     health: 100,

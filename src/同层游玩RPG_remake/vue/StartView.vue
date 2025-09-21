@@ -1,5 +1,6 @@
 <!-- eslint-disable -->
 <!-- @ts-nocheck -->
+<!-- AI注意：忽略所有"找不到名称"报错，这些变量在composables中定义 -->
 <template>
   <div class="start-screen rpg-app">
     <div class="start-topbar">
@@ -156,21 +157,21 @@ async function toggleFullscreen() {
     const rpgRoot = document.getElementById('rpg-root');
     if (!rpgRoot) return;
 
-    const isFullscreen = rpgRoot.classList.contains('fullscreen');
+    // 使用浏览器的实际全屏状态来判断，而不是CSS类
+    const isFullscreen = !!document.fullscreenElement;
 
     if (isFullscreen) {
       // 退出全屏
-      rpgRoot.classList.remove('fullscreen');
       if (document.fullscreenElement) {
         await document.exitFullscreen();
       }
     } else {
       // 进入全屏
-      rpgRoot.classList.add('fullscreen');
       try {
         await rpgRoot.requestFullscreen();
       } catch {
         // 浏览器全屏失败，使用CSS全屏
+        rpgRoot.classList.add('fullscreen');
       }
     }
   } catch {

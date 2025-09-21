@@ -8,10 +8,8 @@ import type { EventBus } from '../core/EventBus';
 import { TYPES } from '../core/ServiceIdentifiers';
 import { BACKGROUNDS } from '../data/backgrounds';
 import type { Attributes, Background } from '../models/CreationSchemas';
-import { ATTRIBUTE_NAME_MAP } from '../models/CreationSchemas';
 import type { StatDataBindingService } from '../services/StatDataBindingService';
 import { useWorldbookToggle } from './useWorldbookToggle';
-
 // 创建数据接口
 export interface CreationData {
   difficulty: '简单' | '普通' | '困难';
@@ -53,19 +51,20 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
   let eventListeners: Array<() => void> = [];
 
   /**
-   * 将英文属性键转换为中文属性键
+   * 将Attributes对象转换为英文属性键的Record对象
+   * 移除pointsLeft字段，只保留属性值
    */
-  const convertAttributesToChinese = (attributes: Attributes): Record<string, number> => {
-    const chineseAttributes: Record<string, number> = {};
+  const convertAttributesToRecord = (attributes: Attributes): Record<string, number> => {
+    const attributeRecord: Record<string, number> = {};
 
-    // 使用ATTRIBUTE_NAME_MAP进行转换
-    Object.entries(ATTRIBUTE_NAME_MAP).forEach(([englishKey, chineseKey]) => {
-      if (attributes[englishKey as keyof Attributes] !== undefined) {
-        chineseAttributes[chineseKey] = attributes[englishKey as keyof Attributes];
+    // 直接使用英文属性名，排除pointsLeft字段
+    Object.entries(attributes).forEach(([key, value]) => {
+      if (key !== 'pointsLeft' && typeof value === 'number') {
+        attributeRecord[key] = value;
       }
     });
 
-    return chineseAttributes;
+    return attributeRecord;
   };
 
   /**
@@ -77,12 +76,11 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
   ): Record<string, number> => {
     const finalAttributes = { ...baseAttributes };
 
-    // 应用出身的属性加成
+    // 应用出身的属性加成，直接使用英文属性名
     if (background.attributeBonus) {
       Object.entries(background.attributeBonus).forEach(([attributeKey, bonus]) => {
-        const chineseKey = ATTRIBUTE_NAME_MAP[attributeKey as keyof typeof ATTRIBUTE_NAME_MAP];
-        if (chineseKey && finalAttributes[chineseKey] !== undefined) {
-          finalAttributes[chineseKey] += bonus;
+        if (finalAttributes[attributeKey] !== undefined) {
+          finalAttributes[attributeKey] += bonus;
         }
       });
     }
@@ -95,11 +93,11 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
    */
   const calculateFinalAttributes = (attributes: Attributes, background: Background): Record<string, number> => {
     try {
-      // 1. 转换为中文属性键
-      const chineseAttributes = convertAttributesToChinese(attributes);
+      // 1. 转换为英文属性键Record对象
+      const englishAttributes = convertAttributesToRecord(attributes);
 
       // 2. 应用出身加成
-      const finalAttributes = calculateBackgroundBonus(chineseAttributes, background);
+      const finalAttributes = calculateBackgroundBonus(englishAttributes, background);
 
       return finalAttributes;
     } catch (error) {
@@ -118,13 +116,18 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
     }
 
     try {
+      console.log('[useCharacterCreation] 准备应用属性到MVU变量:', attributes);
+
       // 使用StatDataBindingService的setAttributes方法
       // 该方法会自动检测角色创建数据并设置base_attributes和current_attributes
       const results = await statDataBinding.setAttributes(attributes, 'character_creation');
 
+      console.log('[useCharacterCreation] 属性应用结果:', results);
+
       const success = results.every(result => result === true);
 
       if (success) {
+        console.log('[useCharacterCreation] 属性应用成功');
         return true;
       } else {
         console.error('[useCharacterCreation] 部分属性应用失败:', results);
@@ -141,6 +144,34 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
    */
   const findBackgroundByName = (backgroundName: string): Background | null => {
     return BACKGROUNDS.find(bg => bg.name === backgroundName) || null;
+  };
+
+  /**
+   * 设置角色身份信息（性别和种族）
+   */
+  const setCharacterIdentity = async (gender: string, race: string): Promise<void> => {
+    if (!statDataBinding) {
+      console.error('[useCharacterCreation] StatDataBindingService 不可用');
+      return;
+    }
+
+    try {
+      // 设置性别
+      const genderSuccess = await statDataBinding.setGender(gender, '角色创建');
+      if (!genderSuccess) {
+        console.warn('[useCharacterCreation] 性别设置失败');
+      }
+
+      // 设置种族
+      const raceSuccess = await statDataBinding.setRace(race, '角色创建');
+      if (!raceSuccess) {
+        console.warn('[useCharacterCreation] 种族设置失败');
+      }
+
+      console.log('[useCharacterCreation] 角色身份设置完成:', { gender, race });
+    } catch (error) {
+      console.error('[useCharacterCreation] 设置角色身份失败:', error);
+    }
   };
 
   /**
@@ -174,9 +205,11 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
         const finalAttributes = calculateFinalAttributes(data.attributes, defaultBackground);
 
         // 3. 应用到MVU变量
-        const success = await applyToMvuVariables(finalAttributes);
+        const attributesSuccess = await applyToMvuVariables(finalAttributes);
 
-        if (success) {
+        if (attributesSuccess) {
+          // 4. 设置性别和种族
+          await setCharacterIdentity(data.gender, data.race);
           return true;
         } else {
           creationError.value = '属性应用失败';
@@ -188,10 +221,13 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
       const finalAttributes = calculateFinalAttributes(data.attributes, background);
 
       // 3. 应用到MVU变量
-      const success = await applyToMvuVariables(finalAttributes);
+      const attributesSuccess = await applyToMvuVariables(finalAttributes);
 
-      if (success) {
-        // 4. 应用出身世界书开关
+      if (attributesSuccess) {
+        // 4. 设置性别和种族
+        await setCharacterIdentity(data.gender, data.race);
+
+        // 5. 应用出身世界书开关
         if (background.id) {
           try {
             const result = await applyBackgroundToggles(background.id);

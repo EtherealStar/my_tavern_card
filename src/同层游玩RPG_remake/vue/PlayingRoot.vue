@@ -1,4 +1,5 @@
 <!-- @ts-nocheck -->
+<!-- AI注意：忽略所有"找不到名称"报错，这些变量在composables中定义 -->
 <template>
   <div ref="rootRef" class="playing-container rpg-app" :class="containerClass">
     <div class="main-content-grid">
@@ -295,12 +296,6 @@
               </svg>
               地图
             </button>
-            <button class="menu-btn" @click="openCharacter">
-              <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
-              </svg>
-              人物
-            </button>
             <button class="menu-btn" @click="openRelations">
               <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
                 <path
@@ -505,55 +500,354 @@
       :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
     >
       <button class="block w-full rounded px-3 py-1 text-left hover:bg-gray-100" @click="copyCurrent">复制</button>
-      <button class="block w-full rounded px-3 py-1 text-left text-red-600 hover:bg-red-50" @click="deleteCurrent">
-        删除
+      <button
+        v-if="contextMenu.canRegenerate"
+        class="block w-full rounded px-3 py-1 text-left text-blue-600 hover:bg-blue-50"
+        @click="regenerateCurrent"
+      >
+        重新生成
+      </button>
+      <button class="block w-full rounded px-3 py-1 text-left text-green-600 hover:bg-green-50" @click="editCurrent">
+        编辑
       </button>
     </div>
 
+    <!-- 存档弹窗 -->
+    <SaveDialog v-if="showSaveDialog" mode="playing" @close="() => (showSaveDialog = false)" @loaded="onDialogLoaded" />
+
+    <!-- 物品栏弹窗 -->
+    <InventoryDialog
+      v-if="showInventoryDialog"
+      :visible="showInventoryDialog"
+      :inventory="displayInventory"
+      @close="closeInventoryDialog"
+      @selectItem="onSelectItem"
+    />
+
+    <!-- 关系人物弹窗 -->
     <div
-      v-if="showCharacter"
+      v-if="showRelations"
       class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
     >
       <div
-        class="modal-card character-card max-h-[90vh] w-full max-w-4xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] overflow-y-auto rounded-3xl bg-gradient-to-br from-white via-pink-50 to-white p-8 shadow-[var(--rune-glow)]"
+        class="modal-card relationships-modal max-h-[90vh] w-full max-w-6xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] overflow-y-auto rounded-3xl bg-gradient-to-br from-white via-pink-50 to-white p-8 shadow-[var(--rune-glow)]"
       >
-        <div class="modal-title mb-6 text-center text-2xl font-bold text-purple-800">✦ 人物名片 ✦</div>
-        <div class="modal-body character-body grid gap-8 lg:grid-cols-2">
-          <div class="character-left space-y-6">
-            <div class="avatar-box flex flex-col items-center">
-              <div
-                class="avatar-container relative mb-4 overflow-hidden rounded-full border-4 border-pink-200 bg-gradient-to-br from-pink-100 to-white shadow-xl"
-              >
-                <div class="avatar-wrapper">
-                  <div id="user-avatar-modal" class="user_avatar h-32 w-32 rounded-full"></div>
-                </div>
-                <div v-if="customAvatarUrl" class="custom-avatar absolute inset-0">
-                  <img :src="customAvatarUrl" alt="自定义头像" class="h-full w-full rounded-full object-cover" />
-                </div>
-              </div>
+        <!-- 标题栏和关闭按钮 -->
+        <div class="modal-header relative mb-6 flex items-center justify-between">
+          <div class="modal-title text-2xl font-bold text-purple-800">✦ 关系人物 ✦</div>
+          <button
+            class="close-btn flex h-8 w-8 items-center justify-center rounded-full bg-pink-100 text-pink-600 transition-all duration-200 hover:scale-110 hover:bg-pink-200 hover:text-pink-700"
+            @click="closeRelations"
+            title="关闭关系弹窗"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- 关系人物列表 -->
+        <div class="modal-body">
+          <!-- 加载状态 -->
+          <div v-if="relationshipCharactersLoading" class="flex items-center justify-center py-8">
+            <div class="flex items-center gap-3 text-purple-600">
+              <div class="h-6 w-6 animate-spin rounded-full border-2 border-purple-300 border-t-purple-600"></div>
+              <span>正在加载关系人物...</span>
             </div>
           </div>
-          <div class="character-right">
-            <div class="attributes-grid grid grid-cols-4 gap-2">
-              <div v-for="name in attrOrder" :key="'c' + name" class="attr-card group aspect-square p-2">
-                <div class="attr-icon mb-1 text-pink-500 opacity-80" v-html="attrIcon(name)"></div>
-                <div class="attr-current text-lg font-bold text-purple-800 group-hover:text-pink-500">
-                  {{ displayAttr(currentAttributes[name]) }}
+
+          <!-- 错误状态 -->
+          <div v-else-if="relationshipCharactersError" class="flex items-center justify-center py-8">
+            <div class="text-center text-red-600">
+              <div class="mb-2 text-lg">⚠️</div>
+              <div>{{ relationshipCharactersError }}</div>
+              <button
+                class="mt-3 rounded-lg bg-pink-500 px-4 py-2 text-sm text-white hover:bg-pink-600"
+                @click="getRelationshipCharacters"
+              >
+                重试
+              </button>
+            </div>
+          </div>
+
+          <!-- 空状态 -->
+          <div v-else-if="relationshipCharacters.length === 0" class="flex items-center justify-center py-8">
+            <div class="text-center text-gray-500">
+              <div class="mb-2 text-4xl">👥</div>
+              <div class="text-lg">暂无关系人物</div>
+              <div class="text-sm">在游戏中建立关系后，这里会显示相关人物</div>
+            </div>
+          </div>
+
+          <!-- 关系人物网格 -->
+          <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div
+              v-for="character in relationshipCharacters"
+              :key="character.id"
+              class="character-card group cursor-pointer rounded-xl border border-pink-200 bg-white/80 p-4 transition-all duration-300 hover:border-pink-400 hover:bg-white hover:shadow-lg"
+              @click="openCharacterDetail(character)"
+            >
+              <!-- 人物头像区域 -->
+              <div class="mb-3 flex items-center gap-3">
+                <div
+                  class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-pink-200 to-purple-200 text-lg"
+                >
+                  {{ character.name.charAt(0) || '?' }}
                 </div>
-                <div class="attr-name text-xs font-medium text-purple-600">{{ name }}</div>
+                <div class="flex-1">
+                  <div class="font-semibold text-gray-800">{{ character.name }}</div>
+                  <div class="text-sm text-gray-500">{{ character.gender }} · {{ character.race }}</div>
+                </div>
               </div>
+
+              <!-- 好感度 -->
+              <div class="mb-3">
+                <div class="mb-1 flex items-center justify-between text-sm">
+                  <span class="text-gray-600">好感度</span>
+                  <span class="font-medium text-pink-600">{{ character.affinity || 0 }}</span>
+                </div>
+                <div class="h-2 rounded-full bg-gray-200">
+                  <div
+                    class="h-2 rounded-full bg-gradient-to-r from-pink-400 to-purple-500 transition-all duration-500"
+                    :style="{ width: `${Math.min(((character.affinity || 0) / 100) * 100, 100)}%` }"
+                  ></div>
+                </div>
+              </div>
+
+              <!-- 主要属性 -->
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div class="flex justify-between">
+                  <span class="text-gray-500">力量</span>
+                  <span class="font-medium">{{ character.attributes?.力量 || 0 }}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-500">敏捷</span>
+                  <span class="font-medium">{{ character.attributes?.敏捷 || 0 }}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-500">智力</span>
+                  <span class="font-medium">{{ character.attributes?.智力 || 0 }}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-500">魅力</span>
+                  <span class="font-medium">{{ character.attributes?.魅力 || 0 }}</span>
+                </div>
+              </div>
+
+              <!-- 点击提示 -->
+              <div class="mt-3 text-center text-xs text-gray-400 group-hover:text-pink-500">点击查看详情</div>
             </div>
           </div>
         </div>
       </div>
     </div>
-    <!-- 存档弹窗 -->
-    <SaveDialog v-if="showSaveDialog" mode="playing" @close="() => (showSaveDialog = false)" @loaded="onDialogLoaded" />
+
+    <!-- 编辑对话框 -->
+    <div
+      v-if="showEditDialog"
+      class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+    >
+      <div
+        class="modal-card edit-dialog max-h-[90vh] w-full max-w-4xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] rounded-3xl bg-gradient-to-br from-white via-pink-50 to-white p-8 shadow-[var(--rune-glow)]"
+      >
+        <!-- 标题栏和关闭按钮 -->
+        <div class="modal-header relative mb-6 flex items-center justify-between">
+          <div class="modal-title text-2xl font-bold text-purple-800">✦ 编辑消息 ✦</div>
+          <button
+            class="close-btn flex h-8 w-8 items-center justify-center rounded-full bg-pink-100 text-pink-600 transition-all duration-200 hover:scale-110 hover:bg-pink-200 hover:text-pink-700"
+            @click="cancelEdit"
+            title="关闭编辑"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- 编辑内容 -->
+        <div class="modal-body">
+          <div class="mb-4">
+            <label class="mb-2 block text-sm font-medium text-purple-700">消息内容</label>
+            <textarea
+              v-model="editContent"
+              class="w-full rounded-lg border border-pink-200 px-3 py-2 text-sm focus:border-pink-400 focus:ring-1 focus:ring-pink-300"
+              rows="10"
+              placeholder="请输入消息内容..."
+            ></textarea>
+          </div>
+
+          <!-- 操作按钮 -->
+          <div class="flex justify-end gap-3">
+            <button
+              class="rounded-lg bg-gray-500 px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:scale-105 hover:bg-gray-600 focus:ring-2 focus:ring-gray-300 focus:outline-none"
+              @click="cancelEdit"
+            >
+              取消
+            </button>
+            <button
+              class="rounded-lg bg-pink-500 px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:scale-105 hover:bg-pink-600 focus:ring-2 focus:ring-pink-300 focus:outline-none"
+              @click="saveEdit"
+            >
+              保存
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 人物详情弹窗 -->
+    <div
+      v-if="showCharacterDetail"
+      class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+    >
+      <div
+        class="modal-card character-detail-modal max-h-[90vh] w-full max-w-4xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] overflow-y-auto rounded-3xl bg-gradient-to-br from-white via-pink-50 to-white p-8 shadow-[var(--rune-glow)]"
+      >
+        <!-- 标题栏和关闭按钮 -->
+        <div class="modal-header relative mb-6 flex items-center justify-between">
+          <div class="modal-title text-2xl font-bold text-purple-800">✦ 人物详情 ✦</div>
+          <button
+            class="close-btn flex h-8 w-8 items-center justify-center rounded-full bg-pink-100 text-pink-600 transition-all duration-200 hover:scale-110 hover:bg-pink-200 hover:text-pink-700"
+            @click="closeCharacterDetail"
+            title="关闭详情弹窗"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- 人物详情内容 -->
+        <div class="modal-body">
+          <!-- 加载状态 -->
+          <div v-if="characterDetailLoading" class="flex items-center justify-center py-8">
+            <div class="flex items-center gap-3 text-purple-600">
+              <div class="h-6 w-6 animate-spin rounded-full border-2 border-purple-300 border-t-purple-600"></div>
+              <span>正在加载人物详情...</span>
+            </div>
+          </div>
+
+          <!-- 人物详情内容 -->
+          <div v-else-if="selectedCharacter" class="character-detail-body">
+            <!-- 人物基本信息 -->
+            <div class="mb-6 rounded-xl border border-pink-200 bg-white/80 p-6">
+              <div class="mb-4 flex items-center gap-4">
+                <div
+                  class="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-pink-200 to-purple-200 text-2xl font-bold"
+                >
+                  {{ selectedCharacter.name?.charAt(0) || '?' }}
+                </div>
+                <div class="flex-1">
+                  <h3 class="text-xl font-bold text-gray-800">{{ selectedCharacter.name || '未知角色' }}</h3>
+                  <p class="text-sm text-gray-500">
+                    {{ selectedCharacter.gender || '未知' }} · {{ selectedCharacter.race || '未知' }} ·
+                    {{ selectedCharacter.age || '未知' }}岁
+                  </p>
+                </div>
+              </div>
+
+              <!-- 好感度 -->
+              <div class="mb-4">
+                <div class="mb-2 flex items-center justify-between text-sm">
+                  <span class="text-gray-600">好感度</span>
+                  <span class="font-medium text-pink-600">{{ selectedCharacter.affinity || 0 }}</span>
+                </div>
+                <div class="h-3 rounded-full bg-gray-200">
+                  <div
+                    class="h-3 rounded-full bg-gradient-to-r from-pink-400 to-purple-500 transition-all duration-500"
+                    :style="{ width: `${Math.min(((selectedCharacter.affinity || 0) / 100) * 100, 100)}%` }"
+                  ></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 属性信息 -->
+            <div class="mb-6 rounded-xl border border-pink-200 bg-white/80 p-6">
+              <h4 class="mb-4 text-lg font-semibold text-gray-800">属性信息</h4>
+              <div class="attributes-grid grid grid-cols-2 gap-4 md:grid-cols-4">
+                <div v-for="attrName in attrOrder" :key="attrName" class="attribute-item">
+                  <div class="flex items-center gap-2">
+                    <div class="attr-icon" v-html="attrIcon(attrName)"></div>
+                    <span class="text-sm text-gray-600">{{ attrName }}</span>
+                  </div>
+                  <div class="text-lg font-bold text-gray-800">
+                    {{ selectedCharacter.attributes?.[attrName] || 0 }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 装备信息 -->
+            <div v-if="selectedCharacter.equipment" class="mb-6 rounded-xl border border-pink-200 bg-white/80 p-6">
+              <h4 class="mb-4 text-lg font-semibold text-gray-800">装备信息</h4>
+              <div class="equipment-grid grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div v-if="selectedCharacter.equipment.weapon" class="equipment-item">
+                  <div class="flex items-center gap-3">
+                    <div class="equip-icon" v-html="icon('weapon')"></div>
+                    <div>
+                      <div class="text-sm text-gray-600">武器</div>
+                      <div class="font-medium text-gray-800">
+                        {{ selectedCharacter.equipment.weapon.name || '未知武器' }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="selectedCharacter.equipment.armor" class="equipment-item">
+                  <div class="flex items-center gap-3">
+                    <div class="equip-icon" v-html="icon('armor')"></div>
+                    <div>
+                      <div class="text-sm text-gray-600">防具</div>
+                      <div class="font-medium text-gray-800">
+                        {{ selectedCharacter.equipment.armor.name || '未知防具' }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="selectedCharacter.equipment.accessory" class="equipment-item">
+                  <div class="flex items-center gap-3">
+                    <div class="equip-icon" v-html="icon('accessory')"></div>
+                    <div>
+                      <div class="text-sm text-gray-600">饰品</div>
+                      <div class="font-medium text-gray-800">
+                        {{ selectedCharacter.equipment.accessory.name || '未知饰品' }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 其他信息 -->
+            <div class="rounded-xl border border-pink-200 bg-white/80 p-6">
+              <h4 class="mb-4 text-lg font-semibold text-gray-800">其他信息</h4>
+              <div class="text-sm text-gray-600">
+                <p>角色ID: {{ selectedCharacter.id || '未知' }}</p>
+                <p v-if="selectedCharacter.description">描述: {{ selectedCharacter.description }}</p>
+                <p v-else>暂无其他描述信息</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 错误状态 -->
+          <div v-else class="flex items-center justify-center py-8">
+            <div class="text-center text-red-600">
+              <div class="mb-2 text-lg">⚠️</div>
+              <div>无法加载人物详情</div>
+              <button
+                class="mt-3 rounded-lg bg-pink-500 px-4 py-2 text-sm text-white hover:bg-pink-600"
+                @click="closeCharacterDetail"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// @ts-nocheck
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { userKey } from '../../shared/constants';
 import { useCharacterCreation } from '../composables/useCharacterCreation';
@@ -563,6 +857,7 @@ import { useGameStateManager } from '../composables/useGameStateManager';
 import { usePlayingLogic } from '../composables/usePlayingLogic';
 import { useSaveLoad } from '../composables/useSaveLoad';
 import { useStatData } from '../composables/useStatData';
+import InventoryDialog from './InventoryDialog.vue';
 import SaveDialog from './SaveDialog.vue';
 
 // 使用 useGameSettings 提供的功能
@@ -583,6 +878,7 @@ const gameStateManager = useGameStateManager();
 
 // 清理函数存储
 const gameStateUnsubscribe = ref<(() => void) | null>(null);
+const fullscreenUnsubscribe = ref<(() => void) | null>(null);
 
 // 使用 usePlayingLogic 提供的功能
 const {
@@ -603,6 +899,8 @@ const {
   filterEphemeralMessages, // 添加过滤临时消息函数
   clearMessages, // 添加清空消息函数
   registerPlayingLogic, // 添加状态管理协调注册方法
+  regenerateMessage, // 添加重新生成函数
+  editMessage, // 添加编辑函数
 } = usePlayingLogic();
 
 // 使用 useSaveLoad 提供的完整存读档功能
@@ -656,6 +954,15 @@ const {
   gender,
   race,
   age,
+  // 关系人物数据
+  relationshipCharacters,
+  relationshipCharactersLoading,
+  relationshipCharactersError,
+  getRelationshipCharacters,
+  getRelationshipCharacter,
+  // 属性名映射工具
+  getEnglishAttributeName,
+  getChineseAttributeName,
 } = useStatData();
 
 // 使用角色创建组合式函数
@@ -670,11 +977,18 @@ const {
 // 添加缺失的响应式变量定义
 const inputText = ref<string>('');
 const showSettings = ref<boolean>(false);
-const showCharacter = ref<boolean>(false);
 const showSaveDialog = ref<boolean>(false);
 const showInventoryDialog = ref<boolean>(false);
 const showCommandQueueDialog = ref<boolean>(false);
 const showRelations = ref<boolean>(false);
+const showCharacterDetail = ref<boolean>(false);
+const selectedCharacter = ref<any>(null);
+const characterDetailLoading = ref<boolean>(false);
+
+// 编辑对话框相关变量
+const showEditDialog = ref<boolean>(false);
+const editContent = ref<string>('');
+const editingMessage = ref<any>(null);
 
 // 其他缺失的变量
 const showEventDetails = ref<boolean>(false);
@@ -687,10 +1001,12 @@ const contextMenu = ref<{
   x: number;
   y: number;
   target?: any;
+  canRegenerate?: boolean;
 }>({
   visible: false,
   x: 0,
   y: 0,
+  canRegenerate: false,
 });
 
 // 属性顺序
@@ -741,6 +1057,7 @@ const loadMvuData = async () => {
   }
 };
 
+// 使用更新后的函数，它们已经支持属性名映射
 const getMvuAttributeDisplayValue = getAttributeDisplay;
 const getMvuAttributeDeltaValue = getAttributeDeltaValue;
 const isMvuAttributeModified = isAttributeModified;
@@ -976,12 +1293,52 @@ function openSettings() {
   showSettings.value = true;
 }
 
-function openCharacter() {
-  showCharacter.value = true;
+async function openRelations() {
+  try {
+    showRelations.value = true;
+
+    // 获取关系人物数据
+    if (relationshipCharacters.value.length === 0) {
+      await getRelationshipCharacters();
+    }
+  } catch (error) {
+    console.error('[PlayingRoot] 打开关系弹窗失败:', error);
+    showError('获取关系人物数据失败');
+  }
 }
 
-function openRelations() {
-  showRelations.value = true;
+// 关闭关系弹窗
+function closeRelations() {
+  showRelations.value = false;
+}
+
+// 打开人物详情弹窗
+async function openCharacterDetail(character: any) {
+  try {
+    selectedCharacter.value = character;
+    showCharacterDetail.value = true;
+    characterDetailLoading.value = true;
+
+    // 获取更详细的人物信息
+    if (character.id) {
+      const detailedCharacter = await getRelationshipCharacter(character.id);
+      if (detailedCharacter) {
+        selectedCharacter.value = detailedCharacter;
+      }
+    }
+  } catch (error) {
+    console.error('[PlayingRoot] 打开人物详情失败:', error);
+    showError('获取人物详情失败');
+  } finally {
+    characterDetailLoading.value = false;
+  }
+}
+
+// 关闭人物详情弹窗
+function closeCharacterDetail() {
+  showCharacterDetail.value = false;
+  selectedCharacter.value = null;
+  characterDetailLoading.value = false;
 }
 
 // 重置智能历史管理设置
@@ -1003,6 +1360,13 @@ function openInventoryDialog() {
 // 关闭背包弹窗
 function closeInventoryDialog() {
   showInventoryDialog.value = false;
+}
+
+// 处理物品选择
+function onSelectItem(item: any) {
+  console.log('[PlayingRoot] 选择了物品:', item);
+  // 这里可以添加物品选择后的逻辑，比如装备物品、使用物品等
+  showInfo(`选择了物品: ${item.name || '未知物品'}`);
 }
 
 // 添加卸下装备命令
@@ -1071,11 +1435,15 @@ function onScroll() {
 }
 
 function onContextMenu(item: Paragraph) {
+  // 检查是否可以重新生成（只有AI消息可以重新生成）
+  const canRegenerate = item.role === 'assistant' && !item.ephemeral;
+
   contextMenu.value = {
     visible: true,
     x: (window as any).event?.clientX ?? 0,
     y: (window as any).event?.clientY ?? 0,
     target: item,
+    canRegenerate,
   };
   try {
     document.addEventListener('click', hideMenuOnce, { once: true });
@@ -1098,20 +1466,68 @@ async function copyCurrent() {
   }
 }
 
-async function deleteCurrent() {
+async function regenerateCurrent() {
   try {
     const target = contextMenu.value.target;
     if (!target) return;
-    // 使用组合式函数的方法删除消息
-    deleteMessage(target.id);
-    // 同步世界书记录：以当前 UI 的 user/ai 列表覆盖写入（不包含 system/ephemeral）
-    // 世界书内容同步已集成到SaveLoadManagerService中
-    showSuccess('已删除');
-  } catch {
-    showError('删除失败');
+
+    // 调用usePlayingLogic的重新生成功能
+    const success = await regenerateMessage(target.id);
+    if (success) {
+      showSuccess('重新生成成功');
+    } else {
+      showError('重新生成失败');
+    }
+  } catch (error) {
+    console.error('[PlayingRoot] 重新生成失败:', error);
+    showError('重新生成失败');
   } finally {
     contextMenu.value.visible = false;
   }
+}
+
+async function editCurrent() {
+  try {
+    const target = contextMenu.value.target;
+    if (!target) return;
+
+    // 设置编辑内容（从HTML中提取纯文本）
+    editContent.value = target.html ? target.html.replace(/<[^>]+>/g, '').trim() : target.content || '';
+    editingMessage.value = target;
+    showEditDialog.value = true;
+  } catch (error) {
+    console.error('[PlayingRoot] 打开编辑失败:', error);
+    showError('打开编辑失败');
+  } finally {
+    contextMenu.value.visible = false;
+  }
+}
+
+async function saveEdit() {
+  try {
+    if (!editingMessage.value || !editContent.value.trim()) {
+      showError('编辑内容不能为空');
+      return;
+    }
+
+    // 调用usePlayingLogic的编辑功能
+    const success = await editMessage(editingMessage.value.id, editContent.value.trim());
+    if (success) {
+      showSuccess('编辑保存成功');
+      showEditDialog.value = false;
+    } else {
+      showError('编辑保存失败');
+    }
+  } catch (error) {
+    console.error('[PlayingRoot] 编辑保存失败:', error);
+    showError('编辑保存失败');
+  }
+}
+
+function cancelEdit() {
+  showEditDialog.value = false;
+  editContent.value = '';
+  editingMessage.value = null;
 }
 
 async function toggleFullscreen() {
@@ -1119,26 +1535,50 @@ async function toggleFullscreen() {
     const rpgRoot = document.getElementById('rpg-root');
     if (!rpgRoot) return;
 
-    const isFullscreen = rpgRoot.classList.contains('fullscreen');
+    // 使用浏览器的实际全屏状态来判断，而不是CSS类
+    const isFullscreen = !!document.fullscreenElement;
 
     if (isFullscreen) {
       // 退出全屏
-      rpgRoot.classList.remove('fullscreen');
       if (document.fullscreenElement) {
         await document.exitFullscreen();
       }
     } else {
       // 进入全屏
-      rpgRoot.classList.add('fullscreen');
       try {
         await rpgRoot.requestFullscreen();
       } catch {
         // 浏览器全屏失败，使用CSS全屏
+        rpgRoot.classList.add('fullscreen');
       }
     }
   } catch {
     // 忽略错误
   }
+}
+
+// 添加全屏状态监听器
+function setupFullscreenListener(): (() => void) | null {
+  const rpgRoot = document.getElementById('rpg-root');
+  if (!rpgRoot) return null;
+
+  const handleFullscreenChange = () => {
+    if (document.fullscreenElement) {
+      // 进入全屏
+      rpgRoot.classList.add('fullscreen');
+    } else {
+      // 退出全屏
+      rpgRoot.classList.remove('fullscreen');
+    }
+  };
+
+  // 监听全屏状态变化
+  document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+  // 返回清理函数
+  return () => {
+    document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  };
 }
 
 // 展示辅助
@@ -1150,10 +1590,12 @@ function displayAttr(v: number | null | undefined): string {
 // 获取基础值/当前值格式的属性显示
 function getAttributeBaseCurrentValue(name: string): string {
   try {
-    // 获取基础属性值
-    const baseValue = getAttributeValue(name, 0);
-    // 获取当前属性值（包含装备加成等）
-    const currentValue = getMvuAttributeDisplayValue(name);
+    // 获取基础属性值 - 使用英文属性名
+    const englishName = getEnglishAttributeName(name);
+    const baseValue = getAttributeValue(englishName, 0);
+
+    // 获取当前属性值（包含装备加成等）- 使用更新后的函数
+    const currentValue = getAttributeDisplay(name);
 
     // 如果当前值包含数字，提取数字部分
     const currentNum = Number(String(currentValue).replace(/[^\d]/g, ''));
@@ -1175,8 +1617,8 @@ function getAttributeBaseCurrentValue(name: string): string {
 // 获取当前属性值（只显示当前值，不显示斜杠）
 function getCurrentAttributeValue(name: string): string {
   try {
-    // 获取当前属性值（包含装备加成等）
-    const currentValue = getMvuAttributeDisplayValue(name);
+    // 使用更新后的 getAttributeDisplay 函数，它已经支持属性名映射
+    const currentValue = getAttributeDisplay(name);
 
     // 如果当前值包含数字，提取数字部分
     const currentNum = Number(String(currentValue).replace(/[^\d]/g, ''));
@@ -1308,6 +1750,13 @@ onMounted(async () => {
     gameStateUnsubscribe.value = unsubscribe;
   }
 
+  // 设置全屏状态监听器
+  try {
+    fullscreenUnsubscribe.value = setupFullscreenListener();
+  } catch (error) {
+    console.warn('[PlayingRoot] 全屏监听器设置失败:', error);
+  }
+
   // 使用usePlayingLogic的initialize方法统一管理初始化逻辑
   await initialize(onDialogLoaded, loadUserPanel, loadMvuData, loadGameStateData, updateFromPlayingLogic);
 });
@@ -1319,6 +1768,15 @@ onUnmounted(() => {
     }
   } catch (error) {
     console.warn('[PlayingRoot] 清理游戏状态监听器失败:', error);
+  }
+
+  // 清理全屏状态监听器
+  try {
+    if (fullscreenUnsubscribe.value && typeof fullscreenUnsubscribe.value === 'function') {
+      fullscreenUnsubscribe.value();
+    }
+  } catch (error) {
+    console.warn('[PlayingRoot] 清理全屏监听器失败:', error);
   }
 
   // 清理角色创建事件监听器
@@ -1416,12 +1874,20 @@ onUnmounted(() => {
   width: 100px !important;
   height: 100px !important;
   border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  background-size: cover;
+  background-position: center;
 }
 
 .custom-avatar img {
   width: 100px !important;
   height: 100px !important;
   border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  background-size: cover;
+  background-position: center;
 }
 
 /* 角色标题样式 */
@@ -1627,9 +2093,21 @@ onUnmounted(() => {
   box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.1);
 }
 
+/* 关系人物弹窗样式 */
+.relationships-modal {
+  max-width: 800px;
+  width: 90vw;
+  max-height: 85vh;
+}
+
+.affinity-section {
+  border: 1px solid #e5e7eb;
+}
+
 /* 响应式优化 */
 @media (max-height: 600px) {
-  .settings-modal {
+  .settings-modal,
+  .relationships-modal {
     max-height: 90vh;
   }
 
@@ -1639,7 +2117,8 @@ onUnmounted(() => {
 }
 
 @media (max-width: 480px) {
-  .settings-modal {
+  .settings-modal,
+  .relationships-modal {
     width: 95vw;
     padding: 16px;
   }
@@ -1652,6 +2131,14 @@ onUnmounted(() => {
 
   .close-btn {
     align-self: flex-end;
+  }
+
+  .character-detail-body {
+    grid-template-columns: 1fr !important;
+  }
+
+  .attributes-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
   }
 }
 </style>

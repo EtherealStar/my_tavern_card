@@ -17,6 +17,7 @@
 
 import { computed, inject, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { TYPES } from '../core/ServiceIdentifiers';
+import { ATTRIBUTE_NAME_MAP } from '../models/CreationSchemas';
 import type { GameState } from '../models/GameState';
 import { GamePhase } from '../models/GameState';
 import type { StatDataBindingService } from '../services/StatDataBindingService';
@@ -27,6 +28,32 @@ export function useStatData() {
   if (!statDataBinding) {
     throw new Error('StatDataBindingService not found. Make sure it is provided in the Vue app.');
   }
+
+  // ==================== 属性名映射工具 ====================
+  // 中文属性名到英文属性名的反向映射
+  const CHINESE_TO_ENGLISH_ATTRIBUTE_MAP: Record<string, string> = {
+    力量: 'strength',
+    敏捷: 'agility',
+    智力: 'intelligence',
+    体质: 'constitution',
+    魅力: 'charisma',
+    意志: 'willpower',
+    幸运: 'luck',
+  };
+
+  /**
+   * 将中文属性名转换为英文属性名
+   */
+  const getEnglishAttributeName = (chineseName: string): string => {
+    return CHINESE_TO_ENGLISH_ATTRIBUTE_MAP[chineseName] || chineseName;
+  };
+
+  /**
+   * 将英文属性名转换为中文属性名
+   */
+  const getChineseAttributeName = (englishName: string): string => {
+    return ATTRIBUTE_NAME_MAP[englishName as keyof typeof ATTRIBUTE_NAME_MAP] || englishName;
+  };
 
   // ==================== 纯ref数据存储 ====================
   // 使用ref存储所有数据，通过事件直接更新，确保Vue立即重新渲染
@@ -81,6 +108,13 @@ export function useStatData() {
     race: '未知',
     age: 16,
   });
+
+  // ==================== 关系人物数据 ====================
+  // 使用reactive管理关系人物信息，通过事件直接更新
+
+  const relationshipCharacters = ref<any[]>([]);
+  const relationshipCharactersLoading = ref(false);
+  const relationshipCharactersError = ref<string | null>(null);
 
   // 计算属性：检查随机事件是否活跃
   const isRandomEventActive = ref(false);
@@ -229,16 +263,187 @@ export function useStatData() {
     return (await statDataBinding?.getCharacterInfo()) || { gender: '未知', race: '未知', age: 16 };
   };
 
+  // ==================== 关系人物数据获取方法 ====================
+
+  /**
+   * 获取所有关系人物列表
+   */
+  const getRelationshipCharacters = async (): Promise<any[]> => {
+    try {
+      relationshipCharactersLoading.value = true;
+      relationshipCharactersError.value = null;
+
+      // 从MVU变量中获取关系人物数据
+      const relationships = (await statDataBinding?.getMvuRelationships()) || {};
+      const characters: any[] = [];
+
+      // 遍历关系数据，提取人物信息
+      for (const [characterId, relationshipData] of Object.entries(relationships)) {
+        if (relationshipData && typeof relationshipData === 'object') {
+          // 获取人物基础信息
+          const charInfo = await getCharacterBasicInfo(characterId);
+
+          // 获取人物属性
+          const charAttributes = await getCharacterAttributes(characterId);
+
+          // 获取人物装备
+          const charEquipment = await getCharacterEquipment(characterId);
+
+          // 获取好感度
+          const affinity = await getMvuAffinity(characterId);
+
+          characters.push({
+            id: characterId,
+            name: charInfo.name || `角色${characterId}`,
+            gender: charInfo.gender || '未知',
+            race: charInfo.race || '未知',
+            age: charInfo.age || 16,
+            attributes: charAttributes,
+            equipment: charEquipment,
+            affinity,
+            relationshipData,
+          });
+        }
+      }
+
+      relationshipCharacters.value = characters;
+      return characters;
+    } catch (error) {
+      console.error('[useStatData] 获取关系人物列表失败:', error);
+      relationshipCharactersError.value = '获取关系人物列表失败';
+      return [];
+    } finally {
+      relationshipCharactersLoading.value = false;
+    }
+  };
+
+  /**
+   * 获取特定关系人物详情
+   */
+  const getRelationshipCharacter = async (characterId: string | number): Promise<any | null> => {
+    try {
+      // 先尝试从缓存中获取
+      const cached = relationshipCharacters.value.find(char => char.id === characterId);
+      if (cached) {
+        return cached;
+      }
+
+      // 如果缓存中没有，则重新获取
+      const charInfo = await getCharacterBasicInfo(characterId);
+      const charAttributes = await getCharacterAttributes(characterId);
+      const charEquipment = await getCharacterEquipment(characterId);
+      const affinity = await getMvuAffinity(characterId);
+
+      return {
+        id: characterId,
+        name: charInfo.name || `角色${characterId}`,
+        gender: charInfo.gender || '未知',
+        race: charInfo.race || '未知',
+        age: charInfo.age || 16,
+        attributes: charAttributes,
+        equipment: charEquipment,
+        affinity,
+      };
+    } catch (error) {
+      console.error('[useStatData] 获取关系人物详情失败:', error);
+      return null;
+    }
+  };
+
+  /**
+   * 获取人物基础信息
+   */
+  const getCharacterBasicInfo = async (characterId: string | number): Promise<any> => {
+    try {
+      // 通过MVU变量获取人物基础信息
+      const name = (await statDataBinding?.getAttributeValue(`character.${characterId}.name`, '')) || '';
+      const gender = (await statDataBinding?.getAttributeValue(`character.${characterId}.gender`, '')) || '';
+      const race = (await statDataBinding?.getAttributeValue(`character.${characterId}.race`, '')) || '';
+      const age = (await statDataBinding?.getAttributeValue(`character.${characterId}.age`, 16)) || 16;
+
+      return { name, gender, race, age };
+    } catch (error) {
+      console.error('[useStatData] 获取人物基础信息失败:', error);
+      return { name: '', gender: '未知', race: '未知', age: 16 };
+    }
+  };
+
+  /**
+   * 获取人物属性
+   */
+  const getCharacterAttributes = async (characterId: string | number): Promise<Record<string, number>> => {
+    try {
+      const attributes: Record<string, number> = {};
+      const attrNames = ['力量', '敏捷', '智力', '体质', '魅力', '幸运', '意志'];
+
+      for (const attrName of attrNames) {
+        const value = (await statDataBinding?.getAttributeValue(`character.${characterId}.${attrName}`, 0)) || 0;
+        attributes[attrName] = Number(value);
+      }
+
+      return attributes;
+    } catch (error) {
+      console.error('[useStatData] 获取人物属性失败:', error);
+      return {};
+    }
+  };
+
+  /**
+   * 获取人物装备
+   */
+  const getCharacterEquipment = async (characterId: string | number): Promise<any> => {
+    try {
+      const weapon = await statDataBinding?.getAttributeValue(`character.${characterId}.equipment.weapon`, null);
+      const armor = await statDataBinding?.getAttributeValue(`character.${characterId}.equipment.armor`, null);
+      const accessory = await statDataBinding?.getAttributeValue(`character.${characterId}.equipment.accessory`, null);
+
+      return { weapon, armor, accessory };
+    } catch (error) {
+      console.error('[useStatData] 获取人物装备失败:', error);
+      return { weapon: null, armor: null, accessory: null };
+    }
+  };
+
+  /**
+   * 获取人物背包
+   */
+  const getCharacterInventory = async (characterId: string | number): Promise<any> => {
+    try {
+      const weapons =
+        (await statDataBinding?.getAttributeValue(`character.${characterId}.inventory.weapons`, [])) || [];
+      const armors = (await statDataBinding?.getAttributeValue(`character.${characterId}.inventory.armors`, [])) || [];
+      const accessories =
+        (await statDataBinding?.getAttributeValue(`character.${characterId}.inventory.accessories`, [])) || [];
+      const others = (await statDataBinding?.getAttributeValue(`character.${characterId}.inventory.others`, [])) || [];
+
+      return { weapons, armors, accessories, others };
+    } catch (error) {
+      console.error('[useStatData] 获取人物背包失败:', error);
+      return { weapons: [], armors: [], accessories: [], others: [] };
+    }
+  };
+
   // 游戏状态数据加载方法已恢复，用于异步数据获取
 
   // ==================== 显示相关函数 ====================
 
   /**
    * 获取属性显示值（同步版本）
+   * 支持中文属性名到英文属性名的映射
    */
   const getAttributeDisplay = (attributeName: string): string => {
     try {
-      const value = currentAttributes.value[attributeName];
+      // 首先尝试直接使用传入的属性名
+      let value = currentAttributes.value[attributeName];
+
+      // 如果直接获取失败，尝试将中文属性名转换为英文属性名
+      if (value === undefined) {
+        const englishName = getEnglishAttributeName(attributeName);
+        if (englishName !== attributeName) {
+          value = currentAttributes.value[englishName];
+        }
+      }
+
       return value !== undefined ? String(value) : '—';
     } catch (err) {
       return '—';
@@ -255,11 +460,23 @@ export function useStatData() {
 
   /**
    * 检查属性是否被修改
+   * 支持中文属性名到英文属性名的映射
    */
   const isAttributeModified = (attributeName: string): boolean => {
     try {
-      const base = baseAttributes.value[attributeName];
-      const current = currentAttributes.value[attributeName];
+      // 首先尝试直接使用传入的属性名
+      let base = baseAttributes.value[attributeName];
+      let current = currentAttributes.value[attributeName];
+
+      // 如果直接获取失败，尝试将中文属性名转换为英文属性名
+      if (base === undefined || current === undefined) {
+        const englishName = getEnglishAttributeName(attributeName);
+        if (englishName !== attributeName) {
+          base = baseAttributes.value[englishName];
+          current = currentAttributes.value[englishName];
+        }
+      }
+
       return base !== undefined && current !== undefined && base !== current;
     } catch (err) {
       return false;
@@ -268,11 +485,22 @@ export function useStatData() {
 
   /**
    * 获取属性变化值
+   * 支持中文属性名到英文属性名的映射
    */
   const getAttributeDeltaValue = (attributeName: string): string => {
     try {
-      const current = currentAttributes.value[attributeName];
-      const base = baseAttributes.value[attributeName];
+      // 首先尝试直接使用传入的属性名
+      let current = currentAttributes.value[attributeName];
+      let base = baseAttributes.value[attributeName];
+
+      // 如果直接获取失败，尝试将中文属性名转换为英文属性名
+      if (current === undefined || base === undefined) {
+        const englishName = getEnglishAttributeName(attributeName);
+        if (englishName !== attributeName) {
+          current = currentAttributes.value[englishName];
+          base = baseAttributes.value[englishName];
+        }
+      }
 
       if (current !== undefined && base !== undefined) {
         const delta = current - base;
@@ -488,6 +716,11 @@ export function useStatData() {
     race: computed(() => characterInfo.race),
     age: computed(() => characterInfo.age),
 
+    // 关系人物数据
+    relationshipCharacters,
+    relationshipCharactersLoading,
+    relationshipCharactersError,
+
     // ==================== 数据操作方法 ====================
     loadGameStateData,
     updateGameState,
@@ -506,6 +739,14 @@ export function useStatData() {
     getRace,
     getAge,
     getCharacterInfo,
+
+    // 关系人物数据获取方法
+    getRelationshipCharacters,
+    getRelationshipCharacter,
+    getCharacterBasicInfo,
+    getCharacterAttributes,
+    getCharacterEquipment,
+    getCharacterInventory,
 
     // 属性显示方法
     getAttributeDisplay,
@@ -537,6 +778,10 @@ export function useStatData() {
 
     // 从usePlayingLogic获取数据更新的接口
     updateFromPlayingLogic,
+
+    // ==================== 属性名映射工具 ====================
+    getEnglishAttributeName,
+    getChineseAttributeName,
   };
 }
 

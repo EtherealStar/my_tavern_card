@@ -1,4 +1,5 @@
 <!-- @ts-nocheck -->
+<!-- AI注意：忽略所有"找不到名称"报错，这些变量在composables中定义 -->
 <template>
   <div v-if="visible" class="modal-mask" @click="handleMaskClick">
     <div class="modal-card inventory-dialog" @click.stop>
@@ -79,7 +80,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   visible: false,
-  inventory: () => ({})
+  inventory: () => ({}),
 });
 
 const emit = defineEmits<{

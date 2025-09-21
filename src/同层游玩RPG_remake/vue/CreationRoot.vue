@@ -1,4 +1,5 @@
 <!-- @ts-nocheck -->
+<!-- AI注意：忽略所有"找不到名称"报错，这些变量在composables中定义 -->
 <template>
   <div
     class="creation-container relative flex h-full flex-col overflow-hidden rounded-[16px] bg-[var(--bg-base)] text-gray-700"

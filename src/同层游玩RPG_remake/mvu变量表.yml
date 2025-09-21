@@ -1,19 +1,22 @@
-
-日期: 2025-01-01
-时间: 06:00
-<user>所处地点: 未知
-<user>性别: 未知
-<user>种族: 未知
-<user>年龄: 16
-当前事件: 无
-<user>的基础属性:
-  力量: 10
-  敏捷: 10
-  智力: 10
-  体质: 10
-  魅力: 10
-  幸运: 10
-  意志: 10
+$meta:
+  recursiveExtensible: false
+date: 2025-01-01
+time: 06:00
+location: 未知
+gender: 未知
+race: 未知
+age: 16
+random_event: 无
+base_attributes:
+  $meta:
+    recursiveExtensible: false
+  strength: 10
+  agility: 10
+  intelligence: 10
+  constitution: 10
+  charisma: 10
+  willpower: 10
+  luck: 10
 current_attributes:
   $meta:
     recursiveExtensible: false
@@ -22,8 +25,8 @@ current_attributes:
   intelligence: 10
   constitution: 10
   charisma: 10
-  luck: 10
   willpower: 10
+  luck: 10
 equipment:
   $meta:
     recursiveExtensible: false
