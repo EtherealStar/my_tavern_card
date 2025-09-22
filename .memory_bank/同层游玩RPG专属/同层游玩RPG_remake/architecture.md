@@ -1,12 +1,12 @@
 # 架构与模式（同层游玩RPG_remake）
 
-## 混合模式架构（2025-01-XX 更新）
+## 混合模式架构（2025-09-22 更新）
 
 ### 整体架构概览
 
 项目采用**三层混合模式架构**，分为服务层、组合式函数层和Vue组件层：
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    Vue 组件层 (UI Layer)                    │
 │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
@@ -19,8 +19,8 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                组合式函数层 (Composable Layer)               │
 │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
-│  │   useStatData   │ │ useGameServices │ │ useSaveLoadMgr  │ │
-│  │   useAttributes │ │  useWorldbook   │ │  usePlayingLogic│ │
+│  │   useStatData   │ │ useGameServices │ │ useSaveLoad     │ │
+│  │useGameStateMgr  │ │  useWorldbook   │ │  usePlayingLogic│ │
 │  └─────────────────┘ └─────────────────┘ └─────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -29,10 +29,19 @@
 │                   服务层 (Service Layer)                    │
 │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
 │  │StatDataBinding  │ │  EventBus       │ │  UIService      │ │
-│  │TavernGeneration │ │  Achievement    │ │  SaveLoadMgr    │ │
+│  │SameLayerService │ │  Achievement    │ │  SaveLoadMgr    │ │
 │  └─────────────────┘ └─────────────────┘ └─────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### 核心架构特点
+
+1. **分阶段初始化**: 通过 `GameCoreFactory` 实现四阶段服务初始化
+2. **依赖注入**: 基于 Inversify 的完整 DI 容器，支持服务健康监控
+3. **事件驱动**: 全局 EventBus 支持命名空间和通配符订阅
+4. **响应式数据**: 纯 ref 架构，避免 computed 缓存开销
+5. **状态管理**: 统一的游戏状态管理器，协调所有组合式函数
+6. **MVU集成**: 完全基于 MVU 框架的数据绑定和变量管理
 
 ### 架构原则
 
@@ -40,39 +49,45 @@
 
 **职责**：提供核心业务逻辑和数据访问能力
 
-- 所有服务通过 `ServiceLocator` 管理依赖关系
-- 在 `GameCore.init()` 中统一注册所有服务
-- 服务间依赖通过 `locator.get<T>('serviceName')` 获取
+- 所有服务通过 `ServiceContainer` 管理依赖关系
+- 在 `GameCoreFactory` 中分阶段初始化所有服务
+- 服务间依赖通过 `serviceContainer.get<T>(TYPES.ServiceName)` 获取
 - 保持服务层的解耦和可测试性
-- 使用 Inversify 进行依赖注入管理
+- 使用 Inversify 进行依赖注入管理，支持服务健康监控
 
 **核心服务**：
 
-- **StatDataBindingService**: 统计数据绑定，统一管理MVU变量的读写
-- **EventBus**: 事件总线，支持命名空间和通配符订阅
-- **TavernGenerationService**: 与酒馆API交互，处理同层聊天
+- **StatDataBindingService**: 统计数据绑定，统一管理MVU变量的读写，提供纯ref架构支持
+- **EventBus**: 事件总线，支持命名空间和通配符订阅，全局事件协调
+- **SameLayerService**: 同层聊天服务，整合了原TavernGenerationService功能
 - **UIService**: UI交互服务，提供toastr等提示功能
 - **AchievementService**: 成就系统，观察者模式监听游戏事件
-- **SaveLoadManagerService**: 存档管理，支持IndexedDB和MVU变量
-- **WorldbookSaveService**: 世界书操作，管理游戏世界数据
+- **SaveLoadManagerService**: 存档管理，支持IndexedDB和MVU变量，整合了原多个存档服务
+- **CommandQueueService**: 指令队列管理，支持装备操作延迟执行
+- **GameStateService**: 游戏状态管理，统一管理游戏阶段切换
+- **DomPortalService**: DOM门户服务，管理游戏界面在酒馆中的显示位置
+- **ResponsiveService**: 响应式设计管理，支持移动端适配
 
 #### 组合式函数层（Composable Layer） - 中间适配层
 
 **职责**：封装服务层功能，为Vue组件提供响应式接口
 
-- Vue 组件通过 `inject('serviceName')` 获取服务实例
+- Vue 组件通过 `inject(TYPES.ServiceName)` 获取服务实例
 - 利用 Vue 的响应式系统提供更好的开发体验
-- Composable（`useStatData`、`useGameServices`、`useSaveLoadManager`）封装服务调用
+- 采用纯 ref 架构，避免 computed 缓存开销，确保数据变化时立即重新渲染
 - 通过 `app.provide` 将服务注入到 Vue 应用
-- 支持 Pinia 状态管理
+- 支持 Pinia 状态管理，提供 `useGameStore` 示例
 
 **核心Composables**：
 
-- **useStatData**: 统计数据绑定，提供响应式的属性、装备、背包数据
+- **useStatData**: 统计数据绑定，提供响应式的属性、装备、背包数据，基于MVU框架
+- **useGameStateManager**: 游戏状态管理，统一协调所有组合式函数的状态同步
 - **useGameServices**: 游戏服务统一访问，封装UI、事件、存档等功能
-- **useSaveLoadManager**: 存档管理，提供保存、加载、删除等操作
-- **useWorldbook**: 世界书操作，管理游戏世界配置
+- **useSaveLoad**: 存档管理，整合了原多个存档相关服务，提供保存、加载、删除等操作
+- **useWorldbookToggle**: 世界书操作，管理游戏世界配置和扩展
 - **usePlayingLogic**: 游戏逻辑，处理游戏状态和交互
+- **useCharacterCreation**: 角色创建，管理创建流程的状态和数据
+- **useGameSettings**: 游戏设置，管理游戏配置和用户偏好
 
 #### Vue 组件层（View Layer） - 用户界面层
 
@@ -82,33 +97,47 @@
 - 集成Pinia状态管理
 - 支持Tailwind CSS样式系统
 - 响应式设计，支持移动端适配
+- 基于 `useGameStateManager` 统一状态管理
 
 **核心组件**：
 
-- **App.vue**: 应用根组件，管理Start/Creation/Playing模式切换
-- **StartView.vue**: 游戏开始界面
-- **CreationRoot.vue**: 角色创建流程
-- **PlayingRoot.vue**: 游戏主界面（三栏布局）
-- **SaveDialog.vue**: 存档管理对话框
-- **CommandQueueDialog.vue**: 指令队列对话框
-- **InventoryDialog.vue**: 背包管理对话框
+- **App.vue**: 应用根组件，管理Start/Creation/Playing模式切换，协调所有子组件
+- **StartView.vue**: 游戏开始界面，提供开始游戏、读档、设置等功能
+- **CreationRoot.vue**: 角色创建流程，支持难度选择、世界选择、属性分配等
+- **PlayingRoot.vue**: 游戏主界面（三栏布局），集成聊天、状态栏、操作面板
+- **SaveDialog.vue**: 存档管理对话框，支持手动存档、读档、删除等操作
+- **CommandQueueDialog.vue**: 指令队列对话框，管理装备操作队列
+- **InventoryDialog.vue**: 背包管理对话框，管理物品和装备
 
-### 模块边界（迁移后）
+### 模块边界（2025-09-22）
 
-- 视图层：由 Vue 组件接管（`App.vue` 协调 Start/Creation/Playing 模式；`StartView.vue`、`CreationRoot.vue`、`PlayingRoot.vue` 分别实现三个阶段）。
-- 事件流：通过 EventBus（全局 `globalEventBus`）发布/订阅，如 `game:started`、`game:start-create-vue`、`game:play-start`、`game:back-start`、`playing:action`。
-- 服务注入：`ServiceLocator` 于 `GameCore.init()` 注册，`index.ts` 通过 `app.provide` 注入 `locator/eventBus/ui/tavern/storage/achievement` 到 Vue。
-- 存储：`StorageService` 统一对接 MVU/replaceVariables/localStorage 三层，Vue 组件通过注入对象调用。
-- MVU交互：统一通过 `MvuService` 封装所有 MVU 操作，提供类型安全、错误处理、重试机制和缓存功能。
+- **视图层**：完全由 Vue 组件接管，`App.vue` 协调 Start/Creation/Playing 模式切换
+- **事件流**：通过 EventBus 发布/订阅，支持命名空间和通配符，如 `game:*`、`playing:*`、`creation:*`
+- **服务注入**：`ServiceContainer` 在 `GameCoreFactory` 中分阶段初始化，`index.ts` 通过 `app.provide` 注入所有服务到 Vue
+- **存储**：`SaveLoadManagerService` 统一管理 IndexedDB 和 MVU 变量，Vue 组件通过组合式函数调用
+- **MVU交互**：完全基于 MVU 框架，通过 `StatDataBindingService` 提供类型安全的数据绑定
+- **状态管理**：`useGameStateManager` 统一协调所有组合式函数的状态同步
 
 ## 关键模块
 
-- EventBus：支持命名空间与通配订阅。
-- ServiceLocator：集中注册获取服务，避免直接依赖。
-- GameCore：集中注册服务与生命周期；不再渲染 jQuery 视图，转为协调 Vue 与 jQuery 创建流程（过渡期）。
-- Vue 组件：`StartView.vue`（入口）、`CreationRoot.vue`（创建流程）、`PlayingRoot.vue`（游玩）。
-- jQuery 创建流程（过渡）：`CreationController`/`CreationView` 仍可被触发用于回退；优先走 Vue 版本。
-- MvuService：统一封装所有 MVU 操作，提供类型安全、错误处理、重试机制和缓存功能，替代直接使用 `window.Mvu`。
+### 核心架构模块
+
+- **GameCoreFactory**: 分阶段服务初始化管理器，确保服务依赖关系正确
+- **ServiceContainer**: 基于 Inversify 的完整 DI 容器，支持服务健康监控和依赖管理
+- **EventBus**: 全局事件总线，支持命名空间和通配符订阅，协调各层通信
+- **useGameStateManager**: 游戏状态管理器，统一协调所有组合式函数的状态同步
+
+### 数据管理模块
+
+- **StatDataBindingService**: 统计数据绑定服务，完全基于 MVU 框架，提供纯 ref 架构支持
+- **SaveLoadManagerService**: 存档管理服务，整合了原多个存档相关服务，支持 IndexedDB 和 MVU 变量
+- **SameLayerService**: 同层聊天服务，整合了原 TavernGenerationService 功能
+
+### 用户界面模块
+
+- **Vue 组件系统**: 完全基于 Vue 3 Composition API，支持响应式设计和移动端适配
+- **组合式函数系统**: 提供响应式接口，采用纯 ref 架构，避免 computed 缓存开销
+- **指令队列系统**: 支持装备操作延迟执行，确保 MVU 变量更新与用户输入同步
 
 ## 服务解耦架构（2025-09-11 更新）
 
@@ -193,13 +222,25 @@ const unsubscribe = eventBus.on('stat_data:updated', (data) => {
 - 自动处理变量更新和同步
 - 提供缓存和重试机制
 
-## 服务注册键名
+## 服务注册键名（2025-09-22）
 
-- `eventBus`、`tavern`、`ui`、`storage`、`achievement`（GameCore 中注册；由 `index.ts` provide 到 Vue）。
-- 2025-09-04：新增 `player`（`PlayerService`，提供读取 `<user>` MVU 数据与订阅更新）。
-- 2025-01-XX：新增 `mvu`（`MvuService`，统一封装所有 MVU 操作，替代直接使用 `window.Mvu`）。
-- 2025-01-XX：新增 `commandQueue`（`CommandQueueService`，指令队列管理）。
-- 2025-01-XX：新增 `responsive`（`ResponsiveService`，响应式设计管理）。
+### 核心服务标识符
+
+- **TYPES.EventBus**: 全局事件总线
+- **TYPES.GameCore**: 游戏核心服务
+- **TYPES.UIService**: UI交互服务
+- **TYPES.StatDataBindingService**: 统计数据绑定服务
+- **TYPES.GameStateService**: 游戏状态服务
+- **TYPES.SameLayerService**: 同层聊天服务
+- **TYPES.SaveLoadManagerService**: 存档管理服务
+- **TYPES.AchievementService**: 成就系统服务
+- **TYPES.DomPortalService**: DOM门户服务
+- **TYPES.ResponsiveService**: 响应式设计服务
+- **TYPES.CommandQueueService**: 指令队列服务
+
+### 服务注入方式
+
+所有服务通过 `serviceContainer.get<T>(TYPES.ServiceName)` 获取，并在 `index.ts` 中通过 `app.provide` 注入到 Vue 应用。
 
 ## 存/读档子系统（2025-09-07 / 2025-09-11）
 
@@ -299,38 +340,39 @@ const unsubscribe = eventBus.on('stat_data:updated', (data) => {
 
 详细修复记录见：`src/同层游玩RPG_remake/SERVICE_CONFLICTS_FIX.md`
 
-## 最新架构更新（2025-01-XX）
+## 最新架构更新（2025-09-22）
 
 ### 技术栈升级
 
-- **样式系统**: 从 SCSS 迁移到 Tailwind v4，使用 PostCSS 构建
-- **构建系统**: 支持 JSX/TSX 和 Vue 组件，通过 babel-loader 处理
+- **样式系统**: 使用 Tailwind CSS，支持响应式设计和移动端适配
+- **构建系统**: 支持 Vue 组件和 TypeScript，通过 webpack 构建
 - **状态管理**: 集成 Pinia 状态管理，提供 `stores/game.ts` 示例
-- **类型系统**: 完整的 TypeScript 类型支持，包括 Vue JSX 类型推断
+- **类型系统**: 完整的 TypeScript 类型支持，包括 Vue 组件类型推断
 - **依赖注入**: 基于 Inversify 的完整 DI 容器，支持服务健康监控
 - **服务监控**: ServiceContainer 提供完整的服务健康监控和依赖管理
 
 ### 核心服务架构
 
-#### MvuService（统一MVU操作）
-
-- 提供类型安全的 MVU 操作接口
-- 内置缓存机制和重试逻辑
-- 统一的事件订阅管理
-- 支持批量操作和错误处理
-
 #### StatDataBindingService（统计数据绑定）
 
-- 统一的统计数据访问接口
-- 响应式数据绑定支持
-- 安全的数据访问方法（safeGetValue）
-- 与 Vue Composable 深度集成
+- 完全基于 MVU 框架的统计数据访问接口
+- 提供纯 ref 架构支持，确保数据变化时立即重新渲染
+- 安全的数据访问方法，支持类型安全的数据绑定
+- 与 Vue Composable 深度集成，提供响应式数据绑定
 
-#### 存储系统
+#### SaveLoadManagerService（存档管理）
 
-- **IndexedDB**: 用于存档和设置的持久化存储
-- **MVU变量**: 与酒馆变量系统集成
-- **localStorage**: 本地缓存和临时数据
+- 统一的存档管理接口，整合了原多个存档相关服务
+- 支持 IndexedDB 持久化存储和 MVU 变量集成
+- 提供存档创建、读取、删除、重命名等完整功能
+- 支持自动存档和手动存档，提供存档预览功能
+
+#### SameLayerService（同层聊天）
+
+- 整合了原 TavernGenerationService 功能
+- 支持流式和非流式文本生成
+- 提供同层聊天历史管理和世界书集成
+- 支持智能历史处理和聊天上下文管理
 
 #### 服务健康监控系统
 
@@ -344,23 +386,24 @@ const unsubscribe = eventBus.on('stat_data:updated', (data) => {
 
 #### 主要组件
 
-- `App.vue`: 应用根组件，管理 Start/Creation/Playing 模式切换
-- `StartView.vue`: 游戏开始界面
-- `CreationRoot.vue`: 角色创建流程
-- `PlayingRoot.vue`: 游戏主界面（三栏布局）
-- `LoadingView.vue`: 加载界面，显示初始化进度
-- `CommandQueueDialog.vue`: 指令队列对话框
+- `App.vue`: 应用根组件，管理 Start/Creation/Playing 模式切换，协调所有子组件
+- `StartView.vue`: 游戏开始界面，提供开始游戏、读档、设置等功能
+- `CreationRoot.vue`: 角色创建流程，支持难度选择、世界选择、属性分配等
+- `PlayingRoot.vue`: 游戏主界面（三栏布局），集成聊天、状态栏、操作面板
+- `SaveDialog.vue`: 存档管理对话框，支持手动存档、读档、删除等操作
+- `CommandQueueDialog.vue`: 指令队列对话框，管理装备操作队列
+- `InventoryDialog.vue`: 背包管理对话框，管理物品和装备
 
 #### Composable 系统
 
-- `useStatData`: 统计数据绑定和响应式更新
-- `useAttributes`: 属性管理和显示
-- `useEquipment`: 装备管理
-- `useSaveLoad`: 存档管理
-- `useWorldbook`: 世界书操作
-- `useGameServices`: 游戏服务集成
-- `useSaveManagement`: 存档管理
-- `useCharacterCreation`: 角色创建
+- `useStatData`: 统计数据绑定和响应式更新，基于 MVU 框架
+- `useGameStateManager`: 游戏状态管理，统一协调所有组合式函数的状态同步
+- `useSaveLoad`: 存档管理，整合了原多个存档相关服务
+- `useWorldbookToggle`: 世界书操作，管理游戏世界配置和扩展
+- `useGameServices`: 游戏服务集成，提供统一的服务访问接口
+- `useCharacterCreation`: 角色创建，管理创建流程的状态和数据
+- `usePlayingLogic`: 游戏逻辑，处理游戏状态和交互
+- `useGameSettings`: 游戏设置，管理游戏配置和用户偏好
 
 ### 事件系统
 
@@ -370,6 +413,8 @@ const unsubscribe = eventBus.on('stat_data:updated', (data) => {
 - `playing:*`: 游戏内事件
 - `creation:*`: 创建流程事件
 - `same-layer:*`: 同层聊天事件
+- `command-queue:*`: 指令队列事件
+- `save-load:*`: 存档管理事件
 
 #### 关键事件
 
@@ -377,20 +422,24 @@ const unsubscribe = eventBus.on('stat_data:updated', (data) => {
 - `game:start-create-vue`: 开始创建流程
 - `game:play-start`: 开始游戏
 - `game:back-start`: 返回开始界面
+- `game:transition-start`: 状态切换开始
+- `game:transition-complete`: 状态切换完成
+- `game:transition-failed`: 状态切换失败
 - `same-layer:done`: 同层聊天完成
 - `command-queue:added`: 指令添加到队列
 - `command-queue:executed`: 指令队列执行完成
 - `command-queue:error`: 指令队列执行错误
+- `save-load:error`: 存档操作错误
 
 ### 数据流架构
 
-```
+```text
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   Vue Components │    │   Composable     │    │   Services      │
 │                 │    │                  │    │                 │
 │  - StartView    │◄──►│  - useStatData   │◄──►│  - StatDataBinding│
-│  - CreationRoot │    │  - useGameServices│    │  - EventBus     │
-│  - PlayingRoot  │    │  - useSaveLoadMgr│    │  - UIService    │
+│  - CreationRoot │    │  - useGameStateMgr│    │  - EventBus     │
+│  - PlayingRoot  │    │  - useSaveLoad   │    │  - UIService    │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
          │                       │                       │
          ▼                       ▼                       ▼
@@ -406,36 +455,38 @@ const unsubscribe = eventBus.on('stat_data:updated', (data) => {
 
 ### 前端技术
 
-- **Vue 3**: 组件框架，使用Composition API
-- **Pinia**: 状态管理
-- **Tailwind CSS**: 样式系统
-- **TypeScript**: 类型安全
+- **Vue 3**: 组件框架，使用 Composition API
+- **Pinia**: 状态管理，提供 `useGameStore` 示例
+- **Tailwind CSS**: 样式系统，支持响应式设计
+- **TypeScript**: 类型安全，完整的类型支持
 
 ### 构建工具
 
-- **Webpack**: 模块打包
-- **PostCSS**: CSS处理
-- **Babel**: JavaScript转译
+- **Webpack**: 模块打包，支持 Vue 组件和 TypeScript
+- **PostCSS**: CSS 处理，支持 Tailwind CSS
+- **Babel**: JavaScript 转译
 
 ### 依赖注入
 
-- **Inversify**: 依赖注入容器
-- **ServiceLocator**: 服务定位器模式
+- **Inversify**: 依赖注入容器，支持服务健康监控
+- **ServiceContainer**: 服务容器，管理服务依赖关系
 
 ### 外部集成
 
-- **MVU Framework**: 酒馆变量框架
-- **jQuery**: DOM操作和事件处理
-- **IndexedDB**: 本地存储
-- **Tavern API**: 酒馆交互接口
+- **MVU Framework**: 酒馆变量框架，完全基于 MVU 的数据绑定
+- **jQuery**: DOM 操作和事件处理
+- **IndexedDB**: 本地存储，用于存档和设置
+- **Tavern API**: 酒馆交互接口，通过 SameLayerService 集成
 
 ## 架构优势
 
-1. **分层清晰**: 服务层、组合式函数层、Vue层职责明确
-2. **解耦设计**: 通过EventBus和依赖注入实现松耦合
-3. **响应式**: 基于Vue的响应式系统，数据变化自动更新UI
-4. **类型安全**: 完整的TypeScript类型支持
-5. **可测试**: 服务层独立，便于单元测试
-6. **可扩展**: 模块化设计，易于添加新功能
-7. **性能优化**: 使用纯ref架构，避免computed的缓存开销
-8. **错误处理**: 完善的错误处理和重试机制
+1. **分层清晰**: 服务层、组合式函数层、Vue 层职责明确，边界清晰
+2. **解耦设计**: 通过 EventBus 和依赖注入实现松耦合，易于维护和测试
+3. **响应式**: 基于 Vue 的响应式系统，采用纯 ref 架构，数据变化自动更新 UI
+4. **类型安全**: 完整的 TypeScript 类型支持，包括 Vue 组件类型推断
+5. **可测试**: 服务层独立，便于单元测试和集成测试
+6. **可扩展**: 模块化设计，易于添加新功能和服务
+7. **性能优化**: 使用纯 ref 架构，避免 computed 的缓存开销，确保数据变化时立即重新渲染
+8. **错误处理**: 完善的错误处理和重试机制，支持服务健康监控
+9. **状态管理**: 统一的游戏状态管理器，协调所有组合式函数的状态同步
+10. **服务监控**: 完整的服务健康监控系统，支持依赖关系管理和故障恢复

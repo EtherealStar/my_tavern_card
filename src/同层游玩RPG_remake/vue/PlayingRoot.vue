@@ -84,60 +84,64 @@
             <span v-if="isMvuDataLoaded" class="mvu-indicator" title="MVU 数据已加载"></span>
           </div>
           <div class="equipment-list">
-            <div class="equip-row">
+            <!-- 武器栏位 -->
+            <div
+              class="equip-row"
+              :class="{ equipped: isEquipmentEquipped('weapon'), clickable: true }"
+              @click="openEquipmentDetail('weapon')"
+              title="点击查看装备详情"
+            >
               <div class="equip-icon" v-html="icon('weapon')"></div>
               <div class="equip-info">
                 <div class="equip-name">
-                  {{ equipmentText(mvuEquipment.weapon || equipment.weapon, '武器') }}
-                  <span v-if="mvuEquipment.weapon" class="mvu-data-indicator" title="来自 MVU 数据"></span>
+                  {{ getEquipmentDisplayInfo('weapon').name }}
+                  <span v-if="isEquipmentEquipped('weapon')" class="mvu-data-indicator" title="来自 MVU 数据">📊</span>
                 </div>
-                <div class="equip-actions">
-                  <button
-                    v-if="mvuEquipment.weapon || equipment.weapon"
-                    class="action-btn unequip-btn"
-                    @click="addUnequipCommand('weapon')"
-                    title="卸下武器"
-                  >
-                    卸下
-                  </button>
+                <div class="equip-status">
+                  <span v-if="isEquipmentEquipped('weapon')" class="status-equipped">已装备</span>
+                  <span v-else class="status-unequipped">未装备</span>
                 </div>
               </div>
             </div>
-            <div class="equip-row">
+
+            <!-- 防具栏位 -->
+            <div
+              class="equip-row"
+              :class="{ equipped: isEquipmentEquipped('armor'), clickable: true }"
+              @click="openEquipmentDetail('armor')"
+              title="点击查看装备详情"
+            >
               <div class="equip-icon" v-html="icon('armor')"></div>
               <div class="equip-info">
                 <div class="equip-name">
-                  {{ equipmentText(mvuEquipment.armor || equipment.armor, '防具') }}
-                  <span v-if="mvuEquipment.armor" class="mvu-data-indicator" title="来自 MVU 数据">📊</span>
+                  {{ getEquipmentDisplayInfo('armor').name }}
+                  <span v-if="isEquipmentEquipped('armor')" class="mvu-data-indicator" title="来自 MVU 数据">📊</span>
                 </div>
-                <div class="equip-actions">
-                  <button
-                    v-if="mvuEquipment.armor || equipment.armor"
-                    class="action-btn unequip-btn"
-                    @click="addUnequipCommand('armor')"
-                    title="卸下防具"
-                  >
-                    卸下
-                  </button>
+                <div class="equip-status">
+                  <span v-if="isEquipmentEquipped('armor')" class="status-equipped">已装备</span>
+                  <span v-else class="status-unequipped">未装备</span>
                 </div>
               </div>
             </div>
-            <div class="equip-row">
+
+            <!-- 饰品栏位 -->
+            <div
+              class="equip-row"
+              :class="{ equipped: isEquipmentEquipped('accessory'), clickable: true }"
+              @click="openEquipmentDetail('accessory')"
+              title="点击查看装备详情"
+            >
               <div class="equip-icon" v-html="icon('accessory')"></div>
               <div class="equip-info">
                 <div class="equip-name">
-                  {{ equipmentText(mvuEquipment.accessory || equipment.accessory, '饰品') }}
-                  <span v-if="mvuEquipment.accessory" class="mvu-data-indicator" title="来自 MVU 数据">📊</span>
-                </div>
-                <div class="equip-actions">
-                  <button
-                    v-if="mvuEquipment.accessory || equipment.accessory"
-                    class="action-btn unequip-btn"
-                    @click="addUnequipCommand('accessory')"
-                    title="卸下饰品"
+                  {{ getEquipmentDisplayInfo('accessory').name }}
+                  <span v-if="isEquipmentEquipped('accessory')" class="mvu-data-indicator" title="来自 MVU 数据"
+                    >📊</span
                   >
-                    卸下
-                  </button>
+                </div>
+                <div class="equip-status">
+                  <span v-if="isEquipmentEquipped('accessory')" class="status-equipped">已装备</span>
+                  <span v-else class="status-unequipped">未装备</span>
                 </div>
               </div>
             </div>
@@ -219,7 +223,7 @@
             <button
               class="command-queue-btn relative flex flex-shrink-0 items-center justify-center rounded-xl border-2 border-pink-200 bg-white/90 backdrop-blur-sm transition-all duration-300 hover:border-pink-400 hover:bg-white/95 hover:shadow-[0_0_20px_rgba(255,144,151,0.3)] focus:border-pink-400 focus:bg-white/95 focus:shadow-[0_0_20px_rgba(255,144,151,0.3)] focus:outline-none"
               @click="showCommandQueueDialog = true"
-              :title="`指令队列 (${commandQueueLength})`"
+              :title="`指令队列 (${queueLength})`"
             >
               <svg class="h-6 w-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -231,10 +235,10 @@
               </svg>
               <!-- 队列数量指示器 -->
               <span
-                v-if="commandQueueLength > 0"
+                v-if="queueLength > 0"
                 class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white"
               >
-                {{ commandQueueLength > 9 ? '9+' : commandQueueLength }}
+                {{ queueLength > 9 ? '9+' : queueLength }}
               </span>
             </button>
 
@@ -514,6 +518,22 @@
 
     <!-- 存档弹窗 -->
     <SaveDialog v-if="showSaveDialog" mode="playing" @close="() => (showSaveDialog = false)" @loaded="onDialogLoaded" />
+
+    <!-- 指令队列弹窗 -->
+    <CommandQueueDialog
+      v-if="showCommandQueueDialog"
+      :visible="showCommandQueueDialog"
+      @close="() => (showCommandQueueDialog = false)"
+    />
+
+    <!-- 装备详情弹窗 -->
+    <EquipmentDetailDialog
+      v-if="showEquipmentDetail"
+      :visible="showEquipmentDetail"
+      :equipment-type="selectedEquipmentType"
+      :equipment="selectedEquipment"
+      @close="closeEquipmentDetail"
+    />
 
     <!-- 物品栏弹窗 -->
     <InventoryDialog
@@ -851,12 +871,15 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { userKey } from '../../shared/constants';
 import { useCharacterCreation } from '../composables/useCharacterCreation';
+import { useCommandQueue } from '../composables/useCommandQueue';
 import { useGameServices } from '../composables/useGameServices';
 import { useGameSettings } from '../composables/useGameSettings';
 import { useGameStateManager } from '../composables/useGameStateManager';
 import { usePlayingLogic } from '../composables/usePlayingLogic';
 import { useSaveLoad } from '../composables/useSaveLoad';
 import { useStatData } from '../composables/useStatData';
+import CommandQueueDialog from './CommandQueueDialog.vue';
+import EquipmentDetailDialog from './EquipmentDetailDialog.vue';
 import InventoryDialog from './InventoryDialog.vue';
 import SaveDialog from './SaveDialog.vue';
 
@@ -872,6 +895,21 @@ const {
 
 // 使用 useGameServices 提供的 UI 反馈方法
 const { showSuccess, showError, showWarning, showInfo } = useGameServices();
+
+// 使用指令队列组合式函数
+const {
+  queue: commandQueue,
+  queueLength,
+  isEmpty: isCommandQueueEmpty,
+  isExecuting: isCommandQueueExecuting,
+  executeBeforeMessage,
+  addEquipCommand,
+  addUnequipCommand,
+  addAttributeCommand,
+  addInventoryAddCommand,
+  addInventoryRemoveCommand,
+  setupEventListeners: setupCommandQueueListeners,
+} = useCommandQueue();
 
 // 使用状态管理器
 const gameStateManager = useGameStateManager();
@@ -963,6 +1001,11 @@ const {
   // 属性名映射工具
   getEnglishAttributeName,
   getChineseAttributeName,
+  // 装备详情获取方法
+  getEquipmentDetail,
+  isEquipmentEquipped,
+  getEquipmentDisplayInfo,
+  getEquipmentTypeName,
 } = useStatData();
 
 // 使用角色创建组合式函数
@@ -985,6 +1028,11 @@ const showCharacterDetail = ref<boolean>(false);
 const selectedCharacter = ref<any>(null);
 const characterDetailLoading = ref<boolean>(false);
 
+// 装备详情弹窗相关变量
+const showEquipmentDetail = ref<boolean>(false);
+const selectedEquipmentType = ref<'weapon' | 'armor' | 'accessory'>('weapon');
+const selectedEquipment = ref<any>(null);
+
 // 编辑对话框相关变量
 const showEditDialog = ref<boolean>(false);
 const editContent = ref<string>('');
@@ -992,8 +1040,6 @@ const editingMessage = ref<any>(null);
 
 // 其他缺失的变量
 const showEventDetails = ref<boolean>(false);
-const commandQueueLength = ref<number>(0);
-const commandQueue = ref<any>(null);
 
 // 右键菜单
 const contextMenu = ref<{
@@ -1369,9 +1415,27 @@ function onSelectItem(item: any) {
   showInfo(`选择了物品: ${item.name || '未知物品'}`);
 }
 
-// 添加卸下装备命令
-function addUnequipCommand(type: string) {
-  // 实现卸下装备逻辑
+// 打开装备详情弹窗
+async function openEquipmentDetail(type: 'weapon' | 'armor' | 'accessory') {
+  try {
+    selectedEquipmentType.value = type;
+
+    // 获取装备详情
+    const equipmentDetail = await getEquipmentDetail(type);
+    selectedEquipment.value = equipmentDetail;
+
+    showEquipmentDetail.value = true;
+  } catch (error) {
+    console.error('[PlayingRoot] 打开装备详情失败:', error);
+    showError('获取装备详情失败');
+  }
+}
+
+// 关闭装备详情弹窗
+function closeEquipmentDetail() {
+  showEquipmentDetail.value = false;
+  selectedEquipmentType.value = 'weapon';
+  selectedEquipment.value = null;
 }
 
 // 其他缺失的函数
@@ -1385,33 +1449,13 @@ async function onSend() {
   // 用户发送新一条消息时，清理上一次的临时错误消息
   filterEphemeralMessages();
 
-  // 安全执行指令队列
-  let commandQueueSuccess = true;
-  try {
-    if (commandQueue.value && typeof commandQueue.value.isEmpty === 'function' && !commandQueue.value.isEmpty()) {
-      // 设置执行超时，避免阻塞发送流程
-      const timeoutPromise = new Promise<boolean>((_, reject) => {
-        setTimeout(() => reject(new Error('指令队列执行超时')), 3000);
-      });
-
-      const executePromise = commandQueue.value.executeAll();
-
-      commandQueueSuccess = await Promise.race([executePromise, timeoutPromise]);
-
-      if (commandQueueSuccess) {
-        showSuccess('指令已执行完成');
-      } else {
-        console.warn('[PlayingRoot] 指令队列执行失败');
-        showWarning('部分指令执行失败');
-      }
-    }
-  } catch (error) {
-    console.error('[PlayingRoot] 执行指令队列异常:', error);
-    commandQueueSuccess = false;
-    showWarning('指令队列执行异常');
+  // 先执行指令队列
+  const commandQueueSuccess = await executeBeforeMessage();
+  if (!commandQueueSuccess) {
+    showWarning('部分指令执行失败，但继续发送消息');
   }
 
-  // 无论指令队列是否成功，都继续发送流程
+  // 然后执行原有的消息发送逻辑
   try {
     // 使用统一的生成函数，自动处理MVU数据、消息保存和UI更新
     const success = await generateMessage(text, shouldStream.value);
@@ -1724,6 +1768,10 @@ onMounted(async () => {
     if (typeof registerGameSettings === 'function') {
       registerGameSettings();
     }
+    // 设置指令队列事件监听器
+    if (typeof setupCommandQueueListeners === 'function') {
+      setupCommandQueueListeners();
+    }
   } catch (error) {
     console.warn('[PlayingRoot] 状态管理协调注册失败:', error);
   }
@@ -1802,52 +1850,130 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 0;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.equip-row:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.equip-row.equipped {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.equip-row.equipped:hover {
+  border-color: #059669;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.equip-row.clickable {
+  cursor: pointer;
+}
+
+.equip-row.clickable:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
 }
 
 .equip-info {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .equip-name {
-  flex: 1;
   font-size: 14px;
   color: #374151;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
-.equip-actions {
+.equip-status {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 4px;
 }
 
-.action-btn {
-  padding: 4px 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  background: white;
-  color: #374151;
+.status-equipped {
   font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
+  color: #059669;
+  font-weight: 600;
+  padding: 2px 6px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 4px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
-.action-btn:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+.status-unequipped {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+  padding: 2px 6px;
+  background: rgba(107, 114, 128, 0.1);
+  border-radius: 4px;
+  border: 1px solid rgba(107, 114, 128, 0.2);
 }
 
-.unequip-btn {
-  color: #dc2626;
-  border-color: #fecaca;
+.equip-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  flex-shrink: 0;
 }
 
-.unequip-btn:hover {
-  background: #fef2f2;
-  border-color: #fca5a5;
+.equip-icon svg {
+  width: 18px;
+  height: 18px;
+  color: #6b7280;
+}
+
+.equip-row.equipped .equip-icon {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  border-color: #10b981;
+}
+
+.equip-row.equipped .equip-icon svg {
+  color: #059669;
+}
+
+/* 装备栏位悬停效果 */
+.equip-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.1), rgba(139, 92, 246, 0.1));
+  border-radius: 8px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.equip-row:hover::before {
+  opacity: 1;
+}
+
+.equip-row {
+  position: relative;
 }
 
 /* 指令队列按钮样式 */

@@ -544,6 +544,98 @@ export function useStatData() {
     return (await statDataBinding?.unequipAccessory(reason)) || false;
   };
 
+  // ==================== 装备详情获取方法 ====================
+  // 用于装备详情弹窗显示
+
+  /**
+   * 获取装备详情
+   * @param type 装备类型
+   * @returns 装备详情对象
+   */
+  const getEquipmentDetail = async (type: 'weapon' | 'armor' | 'accessory'): Promise<any> => {
+    try {
+      switch (type) {
+        case 'weapon':
+          return (await statDataBinding?.getEquippedWeapon()) || null;
+        case 'armor':
+          return (await statDataBinding?.getEquippedArmor()) || null;
+        case 'accessory':
+          return (await statDataBinding?.getEquippedAccessory()) || null;
+        default:
+          return null;
+      }
+    } catch (error) {
+      console.error('[useStatData] 获取装备详情失败:', error);
+      return null;
+    }
+  };
+
+  /**
+   * 检查是否装备了指定类型的装备
+   * @param type 装备类型
+   * @returns 是否已装备
+   */
+  const isEquipmentEquipped = (type: 'weapon' | 'armor' | 'accessory'): boolean => {
+    try {
+      const currentEquipment = equipment.value;
+      if (!currentEquipment || typeof currentEquipment !== 'object') {
+        return false;
+      }
+
+      const equippedItem = currentEquipment[type];
+      return equippedItem && equippedItem !== null && typeof equippedItem === 'object';
+    } catch (error) {
+      console.error('[useStatData] 检查装备状态失败:', error);
+      return false;
+    }
+  };
+
+  /**
+   * 获取装备显示信息
+   * @param type 装备类型
+   * @returns 装备显示信息
+   */
+  const getEquipmentDisplayInfo = (
+    type: 'weapon' | 'armor' | 'accessory',
+  ): {
+    name: string;
+    isEquipped: boolean;
+    equipment: any;
+  } => {
+    try {
+      const currentEquipment = equipment.value;
+      const equippedItem = currentEquipment?.[type];
+      const isEquipped = equippedItem && equippedItem !== null && typeof equippedItem === 'object';
+
+      return {
+        name: isEquipped ? equippedItem.name || '未知装备' : `未装备${getEquipmentTypeName(type)}`,
+        isEquipped,
+        equipment: isEquipped ? equippedItem : null,
+      };
+    } catch (error) {
+      console.error('[useStatData] 获取装备显示信息失败:', error);
+      return {
+        name: `未装备${getEquipmentTypeName(type)}`,
+        isEquipped: false,
+        equipment: null,
+      };
+    }
+  };
+
+  /**
+   * 获取装备类型的中文名称
+   * @param type 装备类型
+   * @returns 中文名称
+   */
+  const getEquipmentTypeName = (type: 'weapon' | 'armor' | 'accessory'): string => {
+    const typeNames: Record<string, string> = {
+      weapon: '武器',
+      armor: '防具',
+      accessory: '饰品',
+    };
+    return typeNames[type] || '未知类型';
+  };
+
   // ==================== 背包管理方法 ====================
   // 直接调用服务方法，响应式数据会自动更新
 
@@ -761,6 +853,12 @@ export function useStatData() {
     unequipWeapon,
     unequipArmor,
     unequipAccessory,
+
+    // 装备详情获取方法
+    getEquipmentDetail,
+    isEquipmentEquipped,
+    getEquipmentDisplayInfo,
+    getEquipmentTypeName,
 
     // 背包管理方法
     addToInventory,
