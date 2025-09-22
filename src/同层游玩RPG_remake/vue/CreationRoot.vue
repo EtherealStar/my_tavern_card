@@ -802,70 +802,15 @@ async function toggleFullscreen() {
   }
 }
 
-// 窗口大小变化监听
-let resizeObserver: ResizeObserver | null = null;
-
 // 组件生命周期
 onMounted(async () => {
-  // 使用 nextTick 确保 DOM 完全更新后再进行布局调整
+  // 使用 nextTick 确保 DOM 完全更新
   await nextTick();
-
-  // 强制重新计算布局，确保底部导航栏正确定位
-  const resetLayout = () => {
-    const container = document.querySelector('.creation-container') as HTMLElement;
-    const bottomNav = document.querySelector('.bottom-navigation') as HTMLElement;
-
-    if (container && bottomNav) {
-      // 重置容器布局
-      container.style.display = 'none';
-      container.offsetHeight; // 强制重排
-      container.style.display = '';
-
-      // 确保底部导航栏正确定位
-      bottomNav.style.position = '';
-      bottomNav.style.bottom = '';
-      bottomNav.offsetHeight; // 强制重排
-
-      // 重新应用 sticky 定位
-      requestAnimationFrame(() => {
-        bottomNav.style.position = 'sticky';
-        bottomNav.style.bottom = '0';
-      });
-    }
-  };
-
-  // 立即执行一次
-  resetLayout();
-
-  // 延迟执行一次，确保所有样式都已应用
-  setTimeout(resetLayout, 100);
-
-  // 添加窗口大小变化监听
-  const handleResize = () => {
-    setTimeout(resetLayout, 50);
-  };
-
-  window.addEventListener('resize', handleResize);
-
-  // 使用 ResizeObserver 监听容器大小变化
-  const container = document.querySelector('.creation-container');
-  if (container && window.ResizeObserver) {
-    resizeObserver = new ResizeObserver(() => {
-      setTimeout(resetLayout, 50);
-    });
-    resizeObserver.observe(container);
-  }
+  // CSS 修复后不再需要 JavaScript 强制布局调整
 });
 
 onUnmounted(() => {
-  // 清理事件监听器
-  window.removeEventListener('resize', () => {});
-
-  // 清理 ResizeObserver
-  if (resizeObserver) {
-    resizeObserver.disconnect();
-    resizeObserver = null;
-  }
+  // 清理工作（如果需要的话）
 });
 </script>
 

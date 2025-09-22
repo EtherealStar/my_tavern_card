@@ -729,6 +729,74 @@ export function usePlayingLogic() {
   // ==================== 重新生成和编辑功能 ====================
 
   /**
+   * 仅重新生成AI消息（不处理用户消息）
+   * 用于重新生成场景，避免重复添加用户消息
+   *
+   * @param userInput 用户输入内容
+   * @param shouldStream 是否使用流式生成
+   * @returns 生成是否成功
+   */
+  const regenerateMessageOnly = async (userInput: string, shouldStream?: boolean): Promise<boolean> => {
+    try {
+      let useStream = shouldStream;
+
+      // 如果没有传入参数，从游戏设置中获取
+      if (useStream === undefined && saveLoadManager) {
+        try {
+          const gameSettings = (await saveLoadManager.getSetting('game_settings')) as any;
+          useStream = gameSettings?.shouldStream ?? true; // 默认使用流式
+        } catch (error) {
+          console.warn('[usePlayingLogic] 获取游戏设置失败，使用默认流式:', error);
+          useStream = true;
+        }
+      }
+
+      // 如果仍然没有值，使用默认值
+      if (useStream === undefined) {
+        useStream = true;
+      }
+
+      // 获取当前MVU数据
+      const oldMvuData = statDataBinding?.getMvuData({ type: 'message', message_id: 0 });
+
+      let result: { html: string; newMvuData?: Mvu.MvuData } | null;
+
+      if (useStream) {
+        // 流式生成
+        result = await generateMessageStream(userInput, oldMvuData);
+        if (!result) {
+          throw new Error('流式生成失败');
+        }
+      } else {
+        // 非流式生成
+        result = await generateMessageSync(userInput, oldMvuData);
+      }
+
+      // 确保result不为null
+      if (!result) {
+        throw new Error('生成失败：未获取到结果');
+      }
+
+      // 统一后处理（处理AI消息）
+      const success = await postProcessMessage(userInput, result);
+      if (!success) {
+        throw new Error('消息后处理失败');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('[usePlayingLogic] 重新生成AI消息失败:', error);
+      ui?.error?.('重新生成失败', '请重试');
+
+      // 添加错误消息
+      const errorMessage = createEphemeralMessage('重新生成失败，请重试。');
+      messages.value.push(errorMessage);
+
+      return false;
+    }
+  };
+
+  /**
    * 重新生成消息
    * 1. 获取上一条MVU快照
    * 2. 移除最新AI消息
@@ -818,8 +886,8 @@ export function usePlayingLogic() {
         }
       }
 
-      // 重新生成消息
-      const success = await generateMessage(userInput, useStream);
+      // 重新生成消息（使用专用函数，避免重复添加用户消息）
+      const success = await regenerateMessageOnly(userInput, useStream);
       return success;
     } catch (error) {
       console.error('[usePlayingLogic] 重新生成消息失败:', error);
@@ -931,6 +999,7 @@ export function usePlayingLogic() {
 
     // 重新生成和编辑函数
     regenerateMessage,
+    regenerateMessageOnly,
     editMessage,
 
     // 状态管理协调

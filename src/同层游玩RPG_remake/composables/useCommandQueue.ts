@@ -2,8 +2,6 @@ import { computed, inject, onMounted, onUnmounted, ref } from 'vue';
 import { TYPES } from '../core/ServiceIdentifiers';
 import type { Command, CommandQueueService } from '../services/CommandQueueService';
 import { CommandType } from '../services/CommandQueueService';
-import { useGameServices } from './useGameServices';
-
 /**
  * 指令队列组合式函数
  * 作为服务层和Vue层之间的桥梁，提供响应式接口和便捷方法
@@ -19,8 +17,8 @@ export function useCommandQueue() {
   // 服务层集成
   const commandQueueService = inject<CommandQueueService>(TYPES.CommandQueueService);
 
-  // UI反馈服务
-  const { showSuccess, showError, showWarning } = useGameServices();
+  // UI反馈服务（已移除toast提示，不再使用）
+  // const { showSuccess, showError, showWarning } = useGameServices();
 
   // 事件监听器清理函数
   let unsubscribeUIUpdate: (() => void) | null = null;
@@ -62,16 +60,10 @@ export function useCommandQueue() {
   // 指令操作方法
   const addCommand = (command: Omit<Command, 'id' | 'timestamp'>): boolean => {
     if (!commandQueueService) {
-      showError('指令队列服务不可用');
       return false;
     }
 
     const success = commandQueueService.addCommand(command);
-    if (success) {
-      showSuccess(`操作已加入队列: ${command.description}`);
-    } else {
-      showError('无法添加指令到队列');
-    }
     return success;
   };
 
@@ -87,7 +79,6 @@ export function useCommandQueue() {
       return;
     }
     commandQueueService.clearQueue();
-    showSuccess('指令队列已清空');
   };
 
   // 执行协调方法
@@ -99,15 +90,9 @@ export function useCommandQueue() {
     isExecuting.value = true;
     try {
       const success = await commandQueueService.executeAll();
-      if (success) {
-        showSuccess('指令已执行完成');
-      } else {
-        showWarning('部分指令执行失败');
-      }
       return success;
     } catch (error) {
       console.error('[useCommandQueue] 执行指令队列失败:', error);
-      showError('指令队列执行异常');
       return false;
     } finally {
       isExecuting.value = false;
@@ -117,7 +102,6 @@ export function useCommandQueue() {
   // 便捷方法 - 装备相关
   const addEquipCommand = (type: 'weapon' | 'armor' | 'accessory', item: any): boolean => {
     if (!item || !item.name) {
-      showError('无效的装备物品');
       return false;
     }
 
@@ -150,6 +134,34 @@ export function useCommandQueue() {
     });
   };
 
+  // 便捷方法 - 装备更换
+  const addEquipSwapCommand = (type: 'weapon' | 'armor' | 'accessory', newItem: any, currentItem: any): boolean => {
+    if (!newItem || !newItem.name) {
+      return false;
+    }
+
+    const typeNames = {
+      weapon: '武器',
+      armor: '防具',
+      accessory: '饰品',
+    };
+
+    const currentItemName = currentItem?.name || '无';
+    const newItemName = newItem.name;
+
+    return addCommand({
+      type: CommandType.EQUIP_SWAP,
+      action: `equip_swap.${type}`,
+      params: {
+        type,
+        newItem,
+        currentItem,
+        reason: '用户操作',
+      },
+      description: `更换${typeNames[type]}: ${currentItemName} → ${newItemName}`,
+    });
+  };
+
   // 便捷方法 - 属性相关
   const addAttributeCommand = (attribute: string, value: number, reason: string = '用户操作'): boolean => {
     return addCommand({
@@ -163,7 +175,6 @@ export function useCommandQueue() {
   // 便捷方法 - 背包相关
   const addInventoryAddCommand = (type: string, item: any, reason: string = '用户操作'): boolean => {
     if (!item || !item.name) {
-      showError('无效的物品');
       return false;
     }
 
@@ -213,7 +224,6 @@ export function useCommandQueue() {
       return;
     }
     commandQueueService.clearErrorLog();
-    showSuccess('错误日志已清空');
   };
 
   // 生命周期管理
@@ -242,6 +252,7 @@ export function useCommandQueue() {
     // 便捷方法 - 装备
     addEquipCommand,
     addUnequipCommand,
+    addEquipSwapCommand,
 
     // 便捷方法 - 属性
     addAttributeCommand,

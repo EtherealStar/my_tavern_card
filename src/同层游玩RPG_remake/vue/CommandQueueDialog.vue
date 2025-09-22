@@ -52,10 +52,8 @@
 
 <script setup lang="ts">
 import { computed, inject, onMounted, onUnmounted, ref } from 'vue';
-import { useGameServices } from '../composables/useGameServices';
 import { TYPES } from '../core/ServiceIdentifiers';
 import type { Command, CommandQueueService } from '../services/CommandQueueService';
-
 interface Props {
   visible: boolean;
 }
@@ -64,13 +62,13 @@ interface Emits {
   (e: 'close'): void;
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   visible: false,
 });
 const emit = defineEmits<Emits>();
 
-// 使用组合式函数
-const { showSuccess, showError, showWarning } = useGameServices();
+// 使用组合式函数（已移除toast提示，不再使用）
+// const { showSuccess, showError, showWarning } = useGameServices();
 
 // 通过依赖注入获取 CommandQueueService
 const commandQueue = inject<CommandQueueService>(TYPES.CommandQueueService);
@@ -115,6 +113,7 @@ const getCommandIcon = (type: string) => {
   const icons = {
     equip: '⚔️',
     unequip: '🛡️',
+    equip_swap: '🔄',
     attribute: '📊',
     inventory: '🎒',
     skill: '✨',

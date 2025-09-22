@@ -7,6 +7,7 @@ import { StatDataBindingService } from './StatDataBindingService';
 export enum CommandType {
   EQUIP = 'equip', // 装备物品
   UNEQUIP = 'unequip', // 卸下装备
+  EQUIP_SWAP = 'equip_swap', // 更换装备（将旧装备放入背包，新装备装备上）
   ATTRIBUTE = 'attribute', // 属性修改
   INVENTORY = 'inventory', // 背包操作
   SKILL = 'skill', // 技能使用
@@ -442,6 +443,11 @@ export const COMMAND_MAPPING = {
   'unequip.weapon': { method: 'unequipWeapon', params: ['reason'] },
   'unequip.armor': { method: 'unequipArmor', params: ['reason'] },
   'unequip.accessory': { method: 'unequipAccessory', params: ['reason'] },
+
+  // 装备更换（新增）
+  'equip_swap.weapon': { method: 'swapEquipment', params: ['weapon', 'newWeapon', 'reason'] },
+  'equip_swap.armor': { method: 'swapEquipment', params: ['armor', 'newArmor', 'reason'] },
+  'equip_swap.accessory': { method: 'swapEquipment', params: ['accessory', 'newAccessory', 'reason'] },
 
   // 属性相关
   'attribute.set': { method: 'setBaseAttribute', params: ['attribute', 'value', 'reason'] },

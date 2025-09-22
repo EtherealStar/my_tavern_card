@@ -532,6 +532,7 @@
       :visible="showEquipmentDetail"
       :equipment-type="selectedEquipmentType"
       :equipment="selectedEquipment"
+      :inventory-items="selectedInventoryItems"
       @close="closeEquipmentDetail"
     />
 
@@ -837,13 +838,60 @@
               </div>
             </div>
 
+            <!-- 人物背景信息 -->
+            <div class="mb-6 rounded-xl border border-pink-200 bg-white/80 p-6">
+              <h4 class="mb-4 text-lg font-semibold text-gray-800">背景信息</h4>
+              <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div class="info-item">
+                  <div class="text-sm font-medium text-gray-600">出身背景</div>
+                  <div class="text-sm text-gray-800">{{ selectedCharacter.background || '未知' }}</div>
+                </div>
+                <div class="info-item">
+                  <div class="text-sm font-medium text-gray-600">性格特征</div>
+                  <div class="text-sm text-gray-800">{{ selectedCharacter.personality || '未知' }}</div>
+                </div>
+                <div class="info-item">
+                  <div class="text-sm font-medium text-gray-600">服装描述</div>
+                  <div class="text-sm text-gray-800">{{ selectedCharacter.outfit || '未知' }}</div>
+                </div>
+                <div class="info-item">
+                  <div class="text-sm font-medium text-gray-600">关系状态</div>
+                  <div class="text-sm text-gray-800">{{ selectedCharacter.relationship || '陌生人' }}</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 当前状态 -->
+            <div class="mb-6 rounded-xl border border-pink-200 bg-white/80 p-6">
+              <h4 class="mb-4 text-lg font-semibold text-gray-800">当前状态</h4>
+              <div class="space-y-3">
+                <div class="info-item">
+                  <div class="text-sm font-medium text-gray-600">当前想法</div>
+                  <div class="text-sm text-gray-800">{{ selectedCharacter.thoughts || '未知' }}</div>
+                </div>
+                <div v-if="selectedCharacter.events && selectedCharacter.events.length > 0" class="info-item">
+                  <div class="text-sm font-medium text-gray-600">事件记录</div>
+                  <div class="text-sm text-gray-800">
+                    <ul class="list-inside list-disc space-y-1">
+                      <li v-for="(event, index) in selectedCharacter.events" :key="index">
+                        {{ event }}
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- 其他信息 -->
             <div class="rounded-xl border border-pink-200 bg-white/80 p-6">
               <h4 class="mb-4 text-lg font-semibold text-gray-800">其他信息</h4>
               <div class="text-sm text-gray-600">
                 <p>角色ID: {{ selectedCharacter.id || '未知' }}</p>
+                <p v-if="selectedCharacter.others && selectedCharacter.others !== '未知'">
+                  其他信息: {{ selectedCharacter.others }}
+                </p>
                 <p v-if="selectedCharacter.description">描述: {{ selectedCharacter.description }}</p>
-                <p v-else>暂无其他描述信息</p>
+                <p v-else-if="!selectedCharacter.others || selectedCharacter.others === '未知'">暂无其他描述信息</p>
               </div>
             </div>
           </div>
@@ -1006,6 +1054,10 @@ const {
   isEquipmentEquipped,
   getEquipmentDisplayInfo,
   getEquipmentTypeName,
+  // 背包管理方法
+  getInventoryWeapons,
+  getInventoryArmors,
+  getInventoryAccessories,
 } = useStatData();
 
 // 使用角色创建组合式函数
@@ -1032,6 +1084,7 @@ const characterDetailLoading = ref<boolean>(false);
 const showEquipmentDetail = ref<boolean>(false);
 const selectedEquipmentType = ref<'weapon' | 'armor' | 'accessory'>('weapon');
 const selectedEquipment = ref<any>(null);
+const selectedInventoryItems = ref<any[]>([]);
 
 // 编辑对话框相关变量
 const showEditDialog = ref<boolean>(false);
@@ -1420,9 +1473,24 @@ async function openEquipmentDetail(type: 'weapon' | 'armor' | 'accessory') {
   try {
     selectedEquipmentType.value = type;
 
-    // 获取装备详情
+    // 获取当前装备详情
     const equipmentDetail = await getEquipmentDetail(type);
     selectedEquipment.value = equipmentDetail;
+
+    // 获取背包中对应类型的物品
+    let inventoryItems: any[] = [];
+    switch (type) {
+      case 'weapon':
+        inventoryItems = await getInventoryWeapons();
+        break;
+      case 'armor':
+        inventoryItems = await getInventoryArmors();
+        break;
+      case 'accessory':
+        inventoryItems = await getInventoryAccessories();
+        break;
+    }
+    selectedInventoryItems.value = inventoryItems;
 
     showEquipmentDetail.value = true;
   } catch (error) {
@@ -1436,6 +1504,7 @@ function closeEquipmentDetail() {
   showEquipmentDetail.value = false;
   selectedEquipmentType.value = 'weapon';
   selectedEquipment.value = null;
+  selectedInventoryItems.value = [];
 }
 
 // 其他缺失的函数
@@ -2265,6 +2334,35 @@ onUnmounted(() => {
 
   .attributes-grid {
     grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+
+/* 人物详情新增样式 */
+.info-item {
+  margin-bottom: 8px;
+}
+
+.info-item:last-child {
+  margin-bottom: 0;
+}
+
+/* 事件记录列表样式 */
+.list-disc {
+  list-style-type: disc;
+}
+
+.list-inside {
+  list-style-position: inside;
+}
+
+/* 背景信息网格样式 */
+.grid.grid-cols-1.gap-4.md\\:grid-cols-2 {
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .grid.grid-cols-1.gap-4.md\\:grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 </style>

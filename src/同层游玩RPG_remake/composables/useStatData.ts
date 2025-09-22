@@ -298,6 +298,13 @@ export function useStatData() {
             gender: charInfo.gender || '未知',
             race: charInfo.race || '未知',
             age: charInfo.age || 16,
+            background: charInfo.background || '未知',
+            personality: charInfo.personality || '未知',
+            outfit: charInfo.outfit || '未知',
+            thoughts: charInfo.thoughts || '未知',
+            relationship: charInfo.relationship || '陌生人',
+            others: charInfo.others || '未知',
+            events: charInfo.events || [],
             attributes: charAttributes,
             equipment: charEquipment,
             affinity,
@@ -340,6 +347,13 @@ export function useStatData() {
         gender: charInfo.gender || '未知',
         race: charInfo.race || '未知',
         age: charInfo.age || 16,
+        background: charInfo.background || '未知',
+        personality: charInfo.personality || '未知',
+        outfit: charInfo.outfit || '未知',
+        thoughts: charInfo.thoughts || '未知',
+        relationship: charInfo.relationship || '陌生人',
+        others: charInfo.others || '未知',
+        events: charInfo.events || [],
         attributes: charAttributes,
         equipment: charEquipment,
         affinity,
@@ -355,16 +369,54 @@ export function useStatData() {
    */
   const getCharacterBasicInfo = async (characterId: string | number): Promise<any> => {
     try {
-      // 通过MVU变量获取人物基础信息
-      const name = (await statDataBinding?.getAttributeValue(`character.${characterId}.name`, '')) || '';
-      const gender = (await statDataBinding?.getAttributeValue(`character.${characterId}.gender`, '')) || '';
-      const race = (await statDataBinding?.getAttributeValue(`character.${characterId}.race`, '')) || '';
-      const age = (await statDataBinding?.getAttributeValue(`character.${characterId}.age`, 16)) || 16;
+      // 通过MVU变量获取人物基础信息，使用正确的路径结构
+      const name = (await statDataBinding?.getAttributeValue(`relationships.${characterId}.name`, '')) || '';
+      const gender =
+        (await statDataBinding?.getAttributeValue(`relationships.${characterId}.gender`, '未知')) || '未知';
+      const race = (await statDataBinding?.getAttributeValue(`relationships.${characterId}.race`, '未知')) || '未知';
+      const age = (await statDataBinding?.getAttributeValue(`relationships.${characterId}.age`, 16)) || 16;
+      const background =
+        (await statDataBinding?.getAttributeValue(`relationships.${characterId}.background`, '未知')) || '未知';
+      const personality =
+        (await statDataBinding?.getAttributeValue(`relationships.${characterId}.personality`, '未知')) || '未知';
+      const outfit =
+        (await statDataBinding?.getAttributeValue(`relationships.${characterId}.outfit`, '未知')) || '未知';
+      const thoughts =
+        (await statDataBinding?.getAttributeValue(`relationships.${characterId}.thoughts`, '未知')) || '未知';
+      const relationship =
+        (await statDataBinding?.getAttributeValue(`relationships.${characterId}.relationship`, '陌生人')) || '陌生人';
+      const others =
+        (await statDataBinding?.getAttributeValue(`relationships.${characterId}.others`, '未知')) || '未知';
+      const events = (await statDataBinding?.getAttributeValue(`relationships.${characterId}.events`, [])) || [];
 
-      return { name, gender, race, age };
+      return {
+        name,
+        gender,
+        race,
+        age,
+        background,
+        personality,
+        outfit,
+        thoughts,
+        relationship,
+        others,
+        events,
+      };
     } catch (error) {
       console.error('[useStatData] 获取人物基础信息失败:', error);
-      return { name: '', gender: '未知', race: '未知', age: 16 };
+      return {
+        name: '',
+        gender: '未知',
+        race: '未知',
+        age: 16,
+        background: '未知',
+        personality: '未知',
+        outfit: '未知',
+        thoughts: '未知',
+        relationship: '陌生人',
+        others: '未知',
+        events: [],
+      };
     }
   };
 
@@ -377,7 +429,10 @@ export function useStatData() {
       const attrNames = ['力量', '敏捷', '智力', '体质', '魅力', '幸运', '意志'];
 
       for (const attrName of attrNames) {
-        const value = (await statDataBinding?.getAttributeValue(`character.${characterId}.${attrName}`, 0)) || 0;
+        // 使用英文属性名获取数据，因为MVU变量表中存储的是英文属性名
+        const englishName = getEnglishAttributeName(attrName);
+        const value =
+          (await statDataBinding?.getAttributeValue(`relationships.${characterId}.attributes.${englishName}`, 0)) || 0;
         attributes[attrName] = Number(value);
       }
 
@@ -393,9 +448,12 @@ export function useStatData() {
    */
   const getCharacterEquipment = async (characterId: string | number): Promise<any> => {
     try {
-      const weapon = await statDataBinding?.getAttributeValue(`character.${characterId}.equipment.weapon`, null);
-      const armor = await statDataBinding?.getAttributeValue(`character.${characterId}.equipment.armor`, null);
-      const accessory = await statDataBinding?.getAttributeValue(`character.${characterId}.equipment.accessory`, null);
+      const weapon = await statDataBinding?.getAttributeValue(`relationships.${characterId}.equipment.weapon`, null);
+      const armor = await statDataBinding?.getAttributeValue(`relationships.${characterId}.equipment.armor`, null);
+      const accessory = await statDataBinding?.getAttributeValue(
+        `relationships.${characterId}.equipment.accessory`,
+        null,
+      );
 
       return { weapon, armor, accessory };
     } catch (error) {
@@ -410,11 +468,13 @@ export function useStatData() {
   const getCharacterInventory = async (characterId: string | number): Promise<any> => {
     try {
       const weapons =
-        (await statDataBinding?.getAttributeValue(`character.${characterId}.inventory.weapons`, [])) || [];
-      const armors = (await statDataBinding?.getAttributeValue(`character.${characterId}.inventory.armors`, [])) || [];
+        (await statDataBinding?.getAttributeValue(`relationships.${characterId}.inventory.weapons`, [])) || [];
+      const armors =
+        (await statDataBinding?.getAttributeValue(`relationships.${characterId}.inventory.armors`, [])) || [];
       const accessories =
-        (await statDataBinding?.getAttributeValue(`character.${characterId}.inventory.accessories`, [])) || [];
-      const others = (await statDataBinding?.getAttributeValue(`character.${characterId}.inventory.others`, [])) || [];
+        (await statDataBinding?.getAttributeValue(`relationships.${characterId}.inventory.accessories`, [])) || [];
+      const others =
+        (await statDataBinding?.getAttributeValue(`relationships.${characterId}.inventory.others`, [])) || [];
 
       return { weapons, armors, accessories, others };
     } catch (error) {

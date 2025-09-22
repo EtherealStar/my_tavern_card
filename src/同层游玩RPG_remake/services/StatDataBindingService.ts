@@ -1431,6 +1431,60 @@ export class StatDataBindingService {
     }
   }
 
+  /**
+   * 更换装备（将旧装备放入背包，新装备装备上）
+   * @param type 装备类型
+   * @param newItem 新装备
+   * @param reason 更换原因（用于日志记录）
+   * @returns 是否更换成功
+   *
+   * @example
+   * ```typescript
+   * const newWeapon = {
+   *   name: '钢剑',
+   *   description: '一把锋利的钢制长剑',
+   *   attributes_bonus: { '力量': 3 }
+   * };
+   * const success = await statDataService.swapEquipment('weapon', newWeapon, '更换武器');
+   * if (success) {
+   *   console.log('武器更换成功');
+   * }
+   * ```
+   */
+  public async swapEquipment(type: 'weapon' | 'armor' | 'accessory', newItem: any, reason?: string): Promise<boolean> {
+    try {
+      // 1. 获取当前装备
+      const currentEquipment = await this.getMvuEquipment();
+      const currentItem = currentEquipment[type];
+
+      // 2. 设置新装备
+      const updatedEquipment = { ...currentEquipment, [type]: newItem };
+      const equipSuccess = await this.setStatDataField('equipment', updatedEquipment, reason || `更换${type}`);
+
+      if (!equipSuccess) {
+        return false;
+      }
+
+      // 3. 如果有旧装备，将其添加到背包
+      if (currentItem && currentItem.name) {
+        const inventoryType = type === 'weapon' ? 'weapons' : type === 'armor' ? 'armors' : 'accessories';
+        await this.addToInventory(inventoryType, currentItem, `更换装备回收`);
+      }
+
+      // 4. 发送事件
+      this.eventBus.emit(`equipment:${type}_swapped`, {
+        oldItem: currentItem,
+        newItem,
+        timestamp: new Date(),
+      });
+
+      return true;
+    } catch (error) {
+      console.error(`[StatDataBindingService] 更换${type}失败:`, error);
+      return false;
+    }
+  }
+
   // ==================== 背包相关函数 ====================
 
   /**

@@ -45,6 +45,43 @@
     flex-direction: column;
   }
 
+  /* Vue 根容器 - 确保继承 rpg-app 的高度 */
+  #rpg-root #vue-root {
+    height: 100% !important;
+    min-height: 100% !important;
+    max-height: 100% !important;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* 确保完全填充父容器 */
+    flex: 1;
+    width: 100%;
+  }
+
+  /* Vue 应用根容器 - 确保继承 vue-root 的高度 */
+  #rpg-root #vue-root-container {
+    height: 100% !important;
+    min-height: 100% !important;
+    max-height: 100% !important;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    /* 确保完全填充父容器 */
+    flex: 1;
+  }
+
+  /* 确保 Vue 应用内的所有组件都能正确继承高度 */
+  #rpg-root #vue-root > * {
+    height: 100% !important;
+    min-height: 100% !important;
+    max-height: 100% !important;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    /* 强制填充父容器 */
+    width: 100%;
+  }
+
   /* 响应式模式样式 */
   /* 宽屏16:9模式 - 横向布局 */
   #rpg-root.landscape-mode .rpg-app {
@@ -1351,17 +1388,35 @@
     @apply relative flex h-full flex-col overflow-hidden text-gray-700;
     border-radius: 16px;
     background: var(--bg-base);
+    /* 强制完全填充父容器高度 */
+    height: 100% !important;
+    min-height: 100% !important;
+    max-height: 100% !important;
+    /* 为绝对定位的底部导航提供定位上下文 */
+    position: relative;
+    /* 确保容器完全填充父容器 */
+    flex: 1;
+    width: 100%;
+  }
+
+  /* 为内容区域添加底部内边距，避免被底部导航遮挡 */
+  .creation-container > div:not(.bottom-navigation) {
+    padding-bottom: 80px; /* 为底部导航留出空间 */
   }
 
   .bottom-navigation {
-    @apply flex flex-shrink-0 items-center justify-between border-t bg-white/95 px-5 py-4 backdrop-blur-[12px];
+    @apply flex items-center justify-between border-t bg-white/95 px-5 py-4 backdrop-blur-[12px];
     border-bottom-left-radius: 16px;
     border-bottom-right-radius: 16px;
     border-top-color: rgba(220, 177, 140, 0.3);
-    position: sticky !important;
-    bottom: 0 !important;
+    /* 使用绝对定位固定在容器底部 */
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
     z-index: 10;
-    margin-top: auto;
+    width: 100%;
+    /* 移除 flexbox 相关属性 */
   }
 
   /* 响应式网格样式 - 从CreationRoot.vue提取 */
