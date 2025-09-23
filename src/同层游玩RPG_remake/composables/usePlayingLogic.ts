@@ -40,6 +40,9 @@ export function usePlayingLogic() {
 
   const messages = ref<UIMessage[]>([]);
 
+  // 跟踪正在进行的保存操作
+  const pendingSaveOperations = new Map<string, Promise<any>>();
+
   // 引用
   const rootRef = ref<HTMLElement>();
 
@@ -333,7 +336,20 @@ export function usePlayingLogic() {
       const slotId = await getCurrentSaveSlotId();
       if (slotId && saveLoadManager) {
         try {
-          await saveLoadManager.addAssistantMessage(slotId, content, result.html, result.newMvuData);
+          // 创建保存操作的Promise并跟踪
+          const savePromise = saveLoadManager.addAssistantMessage(slotId, content, result.html, result.newMvuData);
+          pendingSaveOperations.set(message.id, savePromise);
+
+          // 异步等待保存完成，但不阻塞当前流程
+          savePromise
+            .then(() => {
+              console.log('[usePlayingLogic] 消息已成功保存到存档:', message.id);
+              pendingSaveOperations.delete(message.id);
+            })
+            .catch(error => {
+              console.error('[usePlayingLogic] 保存消息到存档失败:', error);
+              pendingSaveOperations.delete(message.id);
+            });
         } catch (error) {
           console.error('[usePlayingLogic] 保存消息到存档失败:', error);
         }
@@ -457,15 +473,44 @@ export function usePlayingLogic() {
 
   /**
    * 删除指定消息
+   * 同时从UI消息数组和存档中删除消息
    */
-  const deleteMessage = (messageId: string): void => {
+  const deleteMessage = async (messageId: string): Promise<boolean> => {
     try {
-      const index = messages.value.findIndex(m => m.id === messageId);
-      if (index !== -1) {
-        messages.value.splice(index, 1);
+      // 1. 查找消息
+      const messageIndex = messages.value.findIndex(m => m.id === messageId);
+      if (messageIndex === -1) {
+        console.warn('[usePlayingLogic] 消息不存在:', messageId);
+        return false;
       }
+
+      const targetMessage = messages.value[messageIndex];
+
+      // 2. 从UI消息数组中删除
+      messages.value.splice(messageIndex, 1);
+
+      // 3. 如果不是ephemeral消息，从存档中删除
+      if (!('ephemeral' in targetMessage && targetMessage.ephemeral)) {
+        const slotId = await getCurrentSaveSlotId();
+        if (slotId && saveLoadManager) {
+          try {
+            await saveLoadManager.deleteMessage(slotId, messageId);
+            console.log('[usePlayingLogic] 成功从存档删除消息:', messageId);
+          } catch (error) {
+            console.error('[usePlayingLogic] 从存档删除消息失败:', error);
+            // 即使存档删除失败，UI中已经删除了，所以返回true
+          }
+        } else {
+          console.warn('[usePlayingLogic] 无法获取存档slotId或SaveLoadManager不可用');
+        }
+      } else {
+        console.log('[usePlayingLogic] 跳过ephemeral消息的存档删除:', messageId);
+      }
+
+      return true;
     } catch (error) {
       console.error('[usePlayingLogic] 删除消息失败:', error);
+      return false;
     }
   };
 
@@ -724,77 +769,11 @@ export function usePlayingLogic() {
   const cleanup = () => {
     cleanupResizeObserver();
     cleanupPlayingLogic();
+    // 清理所有待处理的保存操作
+    pendingSaveOperations.clear();
   };
 
   // ==================== 重新生成和编辑功能 ====================
-
-  /**
-   * 仅重新生成AI消息（不处理用户消息）
-   * 用于重新生成场景，避免重复添加用户消息
-   *
-   * @param userInput 用户输入内容
-   * @param shouldStream 是否使用流式生成
-   * @returns 生成是否成功
-   */
-  const regenerateMessageOnly = async (userInput: string, shouldStream?: boolean): Promise<boolean> => {
-    try {
-      let useStream = shouldStream;
-
-      // 如果没有传入参数，从游戏设置中获取
-      if (useStream === undefined && saveLoadManager) {
-        try {
-          const gameSettings = (await saveLoadManager.getSetting('game_settings')) as any;
-          useStream = gameSettings?.shouldStream ?? true; // 默认使用流式
-        } catch (error) {
-          console.warn('[usePlayingLogic] 获取游戏设置失败，使用默认流式:', error);
-          useStream = true;
-        }
-      }
-
-      // 如果仍然没有值，使用默认值
-      if (useStream === undefined) {
-        useStream = true;
-      }
-
-      // 获取当前MVU数据
-      const oldMvuData = statDataBinding?.getMvuData({ type: 'message', message_id: 0 });
-
-      let result: { html: string; newMvuData?: Mvu.MvuData } | null;
-
-      if (useStream) {
-        // 流式生成
-        result = await generateMessageStream(userInput, oldMvuData);
-        if (!result) {
-          throw new Error('流式生成失败');
-        }
-      } else {
-        // 非流式生成
-        result = await generateMessageSync(userInput, oldMvuData);
-      }
-
-      // 确保result不为null
-      if (!result) {
-        throw new Error('生成失败：未获取到结果');
-      }
-
-      // 统一后处理（处理AI消息）
-      const success = await postProcessMessage(userInput, result);
-      if (!success) {
-        throw new Error('消息后处理失败');
-      }
-
-      return true;
-    } catch (error) {
-      console.error('[usePlayingLogic] 重新生成AI消息失败:', error);
-      ui?.error?.('重新生成失败', '请重试');
-
-      // 添加错误消息
-      const errorMessage = createEphemeralMessage('重新生成失败，请重试。');
-      messages.value.push(errorMessage);
-
-      return false;
-    }
-  };
 
   /**
    * 重新生成消息
@@ -813,7 +792,7 @@ export function usePlayingLogic() {
       }
 
       const targetMessage = messages.value[messageIndex];
-      if (targetMessage.role !== 'assistant' || ('ephemeral' in targetMessage && targetMessage.ephemeral)) {
+      if (targetMessage.role !== 'assistant') {
         console.error('[usePlayingLogic] 只能重新生成AI消息:', targetMessage.role);
         return false;
       }
@@ -830,11 +809,25 @@ export function usePlayingLogic() {
 
       // 3. 获取对应的用户消息
       let userMessage: any = null;
-      for (let i = messageIndex - 1; i >= 0; i--) {
-        const msg = messages.value[i];
-        if (msg.role === 'user' && !('ephemeral' in msg && msg.ephemeral)) {
-          userMessage = msg;
-          break;
+
+      // 如果是ephemeral消息，需要找到对应的用户输入
+      if ('ephemeral' in targetMessage && targetMessage.ephemeral) {
+        // 对于ephemeral消息，向前查找用户输入
+        for (let i = messageIndex - 1; i >= 0; i--) {
+          const msg = messages.value[i];
+          if (msg.role === 'user' && !('ephemeral' in msg && msg.ephemeral)) {
+            userMessage = msg;
+            break;
+          }
+        }
+      } else {
+        // 对于普通AI消息，按原逻辑查找
+        for (let i = messageIndex - 1; i >= 0; i--) {
+          const msg = messages.value[i];
+          if (msg.role === 'user' && !('ephemeral' in msg && msg.ephemeral)) {
+            userMessage = msg;
+            break;
+          }
         }
       }
 
@@ -843,20 +836,89 @@ export function usePlayingLogic() {
         return false;
       }
 
-      // 4. 移除最新AI消息（从UI和存档中）
+      // 4. 移除目标消息（从UI中）
       messages.value.splice(messageIndex, 1);
 
-      // 从存档中删除消息
-      const slotId = await getCurrentSaveSlotId();
-      if (slotId && saveLoadManager) {
-        try {
-          await saveLoadManager.deleteMessage(slotId, messageId);
-        } catch (error) {
-          console.error('[usePlayingLogic] 从存档删除消息失败:', error);
+      // 5. 确保从存档中真正删除消息
+      if (!('ephemeral' in targetMessage && targetMessage.ephemeral)) {
+        const slotId = await getCurrentSaveSlotId();
+        console.log('[usePlayingLogic] 获取到的slotId:', slotId, 'messageId:', messageId);
+
+        if (slotId && saveLoadManager) {
+          try {
+            // 检查SaveLoadManager是否已初始化
+            if (!saveLoadManager.isReady()) {
+              console.warn('[usePlayingLogic] SaveLoadManager未就绪，等待初始化...');
+              const ready = await saveLoadManager.waitForReady(5000);
+              if (!ready) {
+                console.error('[usePlayingLogic] SaveLoadManager初始化超时');
+                return false;
+              }
+            }
+
+            // 先检查消息是否存在
+            const saveData = await saveLoadManager.getSlot(slotId);
+            if (!saveData) {
+              console.error('[usePlayingLogic] 存档不存在:', slotId);
+              return false;
+            }
+
+            const messageExists = saveData.messages.some(msg => msg.id === messageId);
+            console.log('[usePlayingLogic] 消息在存档中存在:', messageExists);
+
+            // 检查是否有正在进行的保存操作
+            const pendingSave = pendingSaveOperations.get(messageId);
+            if (pendingSave) {
+              console.log('[usePlayingLogic] 消息正在保存中，等待保存完成...');
+              try {
+                await pendingSave; // 等待保存完成
+                console.log('[usePlayingLogic] 保存操作完成，继续删除流程');
+                pendingSaveOperations.delete(messageId);
+              } catch (error) {
+                console.warn('[usePlayingLogic] 等待保存完成时出错:', error);
+                pendingSaveOperations.delete(messageId);
+              }
+            }
+
+            const deleteSuccess = await saveLoadManager.deleteMessage(slotId, messageId);
+            console.log('[usePlayingLogic] 删除操作结果:', deleteSuccess);
+
+            if (!deleteSuccess) {
+              console.error('[usePlayingLogic] 从存档删除消息失败，无法重新生成');
+              return false;
+            }
+
+            // 验证删除是否真正完成
+            const verifyDelete = await saveLoadManager.getSlot(slotId);
+            const messageStillExists = verifyDelete?.messages.some(msg => msg.id === messageId);
+            if (messageStillExists) {
+              console.error('[usePlayingLogic] 消息删除验证失败，消息仍然存在于存档中');
+              return false;
+            }
+
+            console.log('[usePlayingLogic] 成功从存档删除消息并验证完成:', messageId);
+          } catch (error) {
+            console.error('[usePlayingLogic] 从存档删除消息失败:', error);
+            console.error('[usePlayingLogic] 错误详情:', {
+              slotId,
+              messageId,
+              errorMessage: error instanceof Error ? error.message : String(error),
+              errorStack: error instanceof Error ? error.stack : undefined,
+            });
+            return false;
+          }
+        } else {
+          console.warn('[usePlayingLogic] 无法获取存档slotId或SaveLoadManager不可用', {
+            slotId,
+            saveLoadManagerAvailable: !!saveLoadManager,
+          });
+          return false;
         }
+      } else {
+        console.log('[usePlayingLogic] 跳过ephemeral消息的存档删除:', messageId);
       }
 
-      // 5. 恢复上一条MVU快照
+      // 6. 恢复上一条MVU快照
       if (previousMvuSnapshot && statDataBinding) {
         const success = await statDataBinding.replaceMvuData(previousMvuSnapshot, {
           type: 'message',
@@ -868,7 +930,7 @@ export function usePlayingLogic() {
         }
       }
 
-      // 6. 重新生成
+      // 7. 重新生成
       const userInput = userMessage.content || userMessage.html?.replace(/<[^>]+>/g, '').trim() || '';
       if (!userInput) {
         console.error('[usePlayingLogic] 用户输入为空');
@@ -886,8 +948,30 @@ export function usePlayingLogic() {
         }
       }
 
-      // 重新生成消息（使用专用函数，避免重复添加用户消息）
-      const success = await regenerateMessageOnly(userInput, useStream);
+      // 获取当前MVU数据
+      const oldMvuData = statDataBinding?.getMvuData({ type: 'message', message_id: 0 });
+
+      // 直接生成AI消息，不添加用户消息
+      let result: { html: string; newMvuData?: Mvu.MvuData } | null;
+
+      if (useStream) {
+        // 流式生成
+        result = await generateMessageStream(userInput, oldMvuData);
+        if (!result) {
+          throw new Error('流式生成失败');
+        }
+      } else {
+        // 非流式生成
+        result = await generateMessageSync(userInput, oldMvuData);
+      }
+
+      // 确保result不为null
+      if (!result) {
+        throw new Error('生成失败：未获取到结果');
+      }
+
+      // 直接处理AI消息结果，不处理用户消息
+      const success = await postProcessMessage(userInput, result);
       return success;
     } catch (error) {
       console.error('[usePlayingLogic] 重新生成消息失败:', error);
@@ -999,7 +1083,6 @@ export function usePlayingLogic() {
 
     // 重新生成和编辑函数
     regenerateMessage,
-    regenerateMessageOnly,
     editMessage,
 
     // 状态管理协调

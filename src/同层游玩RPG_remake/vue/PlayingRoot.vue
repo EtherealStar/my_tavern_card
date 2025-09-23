@@ -504,6 +504,9 @@
       :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
     >
       <button class="block w-full rounded px-3 py-1 text-left hover:bg-gray-100" @click="copyCurrent">复制</button>
+      <button class="block w-full rounded px-3 py-1 text-left text-green-600 hover:bg-green-50" @click="editCurrent">
+        编辑
+      </button>
       <button
         v-if="contextMenu.canRegenerate"
         class="block w-full rounded px-3 py-1 text-left text-blue-600 hover:bg-blue-50"
@@ -511,8 +514,12 @@
       >
         重新生成
       </button>
-      <button class="block w-full rounded px-3 py-1 text-left text-green-600 hover:bg-green-50" @click="editCurrent">
-        编辑
+      <button
+        v-if="contextMenu.canDelete"
+        class="block w-full rounded px-3 py-1 text-left text-red-600 hover:bg-red-50"
+        @click="deleteCurrent"
+      >
+        删除
       </button>
     </div>
 
@@ -1101,11 +1108,15 @@ const contextMenu = ref<{
   y: number;
   target?: any;
   canRegenerate?: boolean;
+  canDelete?: boolean;
+  isLatestMessage?: boolean;
 }>({
   visible: false,
   x: 0,
   y: 0,
   canRegenerate: false,
+  canDelete: false,
+  isLatestMessage: false,
 });
 
 // 属性顺序
@@ -1549,7 +1560,13 @@ function onScroll() {
 
 function onContextMenu(item: Paragraph) {
   // 检查是否可以重新生成（只有AI消息可以重新生成）
-  const canRegenerate = item.role === 'assistant' && !item.ephemeral;
+  const canRegenerate = item.role === 'assistant';
+
+  // 检查是否为最新消息（只有最新消息可以删除）
+  const isLatestMessage = messages.value.length > 0 && messages.value[messages.value.length - 1].id === item.id;
+
+  // 检查是否可以删除（只有最新消息可以删除，不管是用户输入、AI消息还是报错消息）
+  const canDelete = isLatestMessage;
 
   contextMenu.value = {
     visible: true,
@@ -1557,6 +1574,8 @@ function onContextMenu(item: Paragraph) {
     y: (window as any).event?.clientY ?? 0,
     target: item,
     canRegenerate,
+    canDelete,
+    isLatestMessage,
   };
   try {
     document.addEventListener('click', hideMenuOnce, { once: true });
@@ -1641,6 +1660,33 @@ function cancelEdit() {
   showEditDialog.value = false;
   editContent.value = '';
   editingMessage.value = null;
+}
+
+async function deleteCurrent() {
+  try {
+    const target = contextMenu.value.target;
+    if (!target) return;
+
+    // 确认删除
+    if (!confirm('确定要删除这条消息吗？此操作不可恢复。')) {
+      contextMenu.value.visible = false;
+      return;
+    }
+
+    // 调用usePlayingLogic的删除功能，等待删除完成
+    const success = await deleteMessage(target.id);
+
+    if (success) {
+      showSuccess('消息已删除');
+    } else {
+      showError('删除消息失败');
+    }
+  } catch (error) {
+    console.error('[PlayingRoot] 删除消息失败:', error);
+    showError('删除消息失败');
+  } finally {
+    contextMenu.value.visible = false;
+  }
 }
 
 async function toggleFullscreen() {
