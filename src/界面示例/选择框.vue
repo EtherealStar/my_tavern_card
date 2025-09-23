@@ -1,12 +1,26 @@
 <template>
   <div class="roleplay_options">
     <div class="roleplay_options_back">
+<<<<<<< HEAD
       <div v-for="item in items" class="roleplay_options_item" tabindex="1"
         @click="handle_item_click(item)">
         <span class="roleplay_options_title">
           <strong>{{ item.title }}</strong>
         </span>
         <hr class="roleplay_options_hr">
+=======
+      <div
+        v-for="item in items"
+        :key="item.title"
+        class="roleplay_options_item"
+        tabindex="1"
+        @click="handle_item_click(item)"
+      >
+        <span class="roleplay_options_title">
+          <strong>{{ item.title }}</strong>
+        </span>
+        <hr class="roleplay_options_hr" />
+>>>>>>> 5e885b7ae834206899b44047b20624e55ec868f0
         <span class="roleplay_options_content">{{ item.content }}</span>
       </div>
     </div>
@@ -14,8 +28,11 @@
 </template>
 
 <script setup lang="ts">
+<<<<<<< HEAD
 import { onMounted, ref } from 'vue';
 
+=======
+>>>>>>> 5e885b7ae834206899b44047b20624e55ec868f0
 interface RoleplayOption {
   title: string;
   content: string;
@@ -30,7 +47,11 @@ function extract_items(): RoleplayOption[] {
   const item_matches = [...text.matchAll(/(.+?)[:：]\s*(.+)/gm)];
   return item_matches.map(match => ({
     title: match[1],
+<<<<<<< HEAD
     content: match[2].replace(/^\$\{(.+)\}$/, '$1').replace(/^「(.+)」$/, '$1')
+=======
+    content: match[2].replace(/^\$\{(.+)\}$/, '$1').replace(/^「(.+)」$/, '$1'),
+>>>>>>> 5e885b7ae834206899b44047b20624e55ec868f0
   }));
 }
 

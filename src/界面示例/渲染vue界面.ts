@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 import { createApp } from 'vue';
+=======
+>>>>>>> 5e885b7ae834206899b44047b20624e55ec868f0
 import { createMemoryHistory, createRouter } from 'vue-router';
 import App from './app.vue';
 import Diary from './日记.vue';
