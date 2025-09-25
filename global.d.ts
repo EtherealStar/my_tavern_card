@@ -11,8 +11,13 @@ declare module '*.css' {
   export default content;
 }
 declare module '*.vue' {
+<<<<<<< HEAD
   import type { DefineComponent } from 'vue';
   const component: DefineComponent<Record<string, any>, Record<string, any>, any>;
+=======
+  import { DefineComponent } from 'vue';
+  const component: DefineComponent;
+>>>>>>> b60922cd0c09adccad0085e7a3bb47da34f25da5
   export default component;
 }
 
@@ -24,6 +29,7 @@ declare namespace z {
   export type input<T> = import('zod').input<T>;
   export type output<T> = import('zod').output<T>;
 }
+<<<<<<< HEAD
 
 // 添加SaveDialog相关的类型定义
 interface SaveSummary {
@@ -96,3 +102,5 @@ declare global {
   }
 }
 export {};
+=======
+>>>>>>> b60922cd0c09adccad0085e7a3bb47da34f25da5
