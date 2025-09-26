@@ -58,17 +58,17 @@
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
-    "@vue/runtime-dom": "^3.5.21",
+    "@vue/runtime-dom": "^3.5.22",
     "@vueuse/core": "^13.9.0",
     "dedent": "^1.7.0",
-    "inversify": "^7.10.0",
+    "inversify": "^7.10.1",
     "jquery": "^3.7.1",
     "jqueryui": "^1.11.1",
     "lodash": "^4.17.21",
     "pinia": "^3.0.3",
     "reflect-metadata": "^0.2.2",
     "toastr": "^2.1.4",
-    "vue": "^3.5.21",
+    "vue": "^3.5.22",
     "vue-router": "^4.5.1",
     "yaml": "^2.8.1",
     "zod": "^4.1.11"
