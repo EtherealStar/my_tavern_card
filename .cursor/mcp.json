@@ -1,8 +1,15 @@
 {
   "mcpServers": {
     "browsermcp": {
+<<<<<<< HEAD
       "command": "npx",
       "args": ["@browsermcp/mcp@latest"]
+=======
+      "command": "pnpx",
+      "args": [
+        "@browsermcp/mcp"
+      ]
+>>>>>>> 1f7ef5aaf18790e8a2b89ee4f826268a18695d7d
     }
   }
 }
