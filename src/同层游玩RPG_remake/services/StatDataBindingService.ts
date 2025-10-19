@@ -51,7 +51,7 @@ export interface StatDataBindingConfig {
 }
 
 // 从 PlayerService 迁移的类型定义
-export type AttrCN = '力量' | '敏捷' | '智力' | '体质' | '魅力' | '幸运' | '意志';
+export type AttrCN = '力量' | '敏捷' | '防御' | '体质' | '魅力' | '幸运' | '意志';
 export type AttrMap = Record<AttrCN, number | null>;
 
 export interface EquipmentSet {
@@ -92,7 +92,7 @@ export class StatDataBindingService {
   private readonly chineseToEnglishMap: Record<string, string> = {
     力量: 'strength',
     敏捷: 'agility',
-    智力: 'intelligence',
+    防御: 'defense',
     体质: 'constitution',
     魅力: 'charisma',
     意志: 'willpower',
@@ -647,7 +647,7 @@ export class StatDataBindingService {
     const emptyAttrs: AttrMap = {
       力量: null,
       敏捷: null,
-      智力: null,
+      防御: null,
       体质: null,
       魅力: null,
       幸运: null,
@@ -956,7 +956,7 @@ export class StatDataBindingService {
 
   /**
    * 获取单个基础属性值
-   * @param attributeName 属性名称（如：'力量', '敏捷', '智力', '体质', '魅力', '幸运', '意志'）
+   * @param attributeName 属性名称（如：'力量', '敏捷', '防御', '体质', '魅力', '幸运', '意志'）
    * @param defaultValue 默认值，当属性不存在时返回
    * @returns 属性值
    *
@@ -990,7 +990,7 @@ export class StatDataBindingService {
 
   /**
    * 获取单个当前属性值
-   * @param attributeName 属性名称（如：'力量', '敏捷', '智力', '体质', '魅力', '幸运', '意志'）
+   * @param attributeName 属性名称（如：'力量', '敏捷', '防御', '体质', '魅力', '幸运', '意志'）
    * @param defaultValue 默认值，当属性不存在时返回
    * @returns 属性值
    *
@@ -1088,7 +1088,7 @@ export class StatDataBindingService {
    * ```typescript
    * const baseAttrs = await statDataService.getAllBaseAttributes();
    * console.log('所有基础属性:', baseAttrs);
-   * // 输出: { 力量: 15, 敏捷: 12, 智力: 18, ... }
+   * // 输出: { 力量: 15, 敏捷: 12, 防御: 18, ... }
    * ```
    */
   public async getAllBaseAttributes(): Promise<Record<string, number>> {
@@ -1108,7 +1108,7 @@ export class StatDataBindingService {
    * ```typescript
    * const currentAttrs = await statDataService.getAllCurrentAttributes();
    * console.log('所有当前属性:', currentAttrs);
-   * // 输出: { 力量: 18, 敏捷: 14, 智力: 20, ... }
+   * // 输出: { 力量: 18, 敏捷: 14, 防御: 20, ... }
    * ```
    */
   public async getAllCurrentAttributes(): Promise<Record<string, number>> {
@@ -1131,7 +1131,7 @@ export class StatDataBindingService {
    * const newAttributes = {
    *   '力量': 15,
    *   '敏捷': 12,
-   *   '智力': 18
+   *   '防御': 18
    * };
    * const success = await statDataService.updateBaseAttributes(newAttributes, '角色升级');
    * ```
@@ -1157,7 +1157,7 @@ export class StatDataBindingService {
    * const newCurrentAttributes = {
    *   '力量': 18,
    *   '敏捷': 14,
-   *   '智力': 20
+   *   '防御': 20
    * };
    * const success = await statDataService.updateCurrentAttributes(newCurrentAttributes, '装备变更');
    * ```
@@ -1909,7 +1909,7 @@ export class StatDataBindingService {
    *   others: "擅长火系魔法",
    *   events: [],
    *   attributes: {
-   *     strength: 8, agility: 12, intelligence: 18,
+   *     strength: 8, agility: 12, defense: 18,
    *     constitution: 10, charisma: 15, willpower: 14, luck: 11
    *   },
    *   affinity: [0, "对<user>的好感度,范围[-200,200]"]
@@ -2528,15 +2528,7 @@ export class StatDataBindingService {
    */
   private _isCharacterCreationAttributes(attributes: Record<string, any>): boolean {
     // 检查是否包含英文属性名（角色创建时使用英文属性名）
-    const ENGLISH_ATTRIBUTE_NAMES = [
-      'strength',
-      'agility',
-      'intelligence',
-      'constitution',
-      'charisma',
-      'willpower',
-      'luck',
-    ];
+    const ENGLISH_ATTRIBUTE_NAMES = ['strength', 'agility', 'defense', 'constitution', 'charisma', 'willpower', 'luck'];
     return ENGLISH_ATTRIBUTE_NAMES.some(name => Object.prototype.hasOwnProperty.call(attributes, name));
   }
 

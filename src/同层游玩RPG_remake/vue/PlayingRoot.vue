@@ -270,6 +270,8 @@
                 </span>
               </button>
               <button v-if="isStreaming" class="btn" @click="onStop">停止</button>
+              <!-- 测试战斗按钮：紧邻发送按钮 -->
+              <button class="btn" @click="onTestBattle">测试战斗</button>
             </div>
           </div>
         </div>
@@ -307,6 +309,14 @@
                 />
               </svg>
               关系
+            </button>
+            <button class="menu-btn" @click="openEnemies">
+              <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  d="M4 3a1 1 0 00-1 1v2a1 1 0 001 1h1l2 3v4l-2 2v1h10v-1l-2-2V10l2-3h1a1 1 0 001-1V4a1 1 0 00-1-1H4z"
+                />
+              </svg>
+              敌人
             </button>
           </div>
         </div>
@@ -653,8 +663,8 @@
                   <span class="font-medium">{{ character.attributes?.敏捷 || 0 }}</span>
                 </div>
                 <div class="flex justify-between">
-                  <span class="text-gray-500">智力</span>
-                  <span class="font-medium">{{ character.attributes?.智力 || 0 }}</span>
+                  <span class="text-gray-500">防御</span>
+                  <span class="font-medium">{{ character.attributes?.防御 || 0 }}</span>
                 </div>
                 <div class="flex justify-between">
                   <span class="text-gray-500">魅力</span>
@@ -664,6 +674,165 @@
 
               <!-- 点击提示 -->
               <div class="mt-3 text-center text-xs text-gray-400 group-hover:text-pink-500">点击查看详情</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 敌人列表弹窗 -->
+    <div
+      v-if="showEnemies"
+      class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+    >
+      <div
+        class="modal-card relationships-modal max-h-[90vh] w-full max-w-6xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] overflow-y-auto rounded-3xl bg-gradient-to-br from-white via-pink-50 to-white p-8 shadow-[var(--rune-glow)]"
+      >
+        <div class="modal-header relative mb-6 flex items-center justify-between">
+          <div class="modal-title text-2xl font-bold text-purple-800">✦ 敌人列表 ✦</div>
+          <button
+            class="close-btn flex h-8 w-8 items-center justify-center rounded-full bg-pink-100 text-pink-600 transition-all duration-200 hover:scale-110 hover:bg-pink-200 hover:text-pink-700"
+            @click="closeEnemies"
+            title="关闭敌人弹窗"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div v-if="enemiesLoading" class="flex items-center justify-center py-8">
+            <div class="flex items-center gap-3 text-purple-600">
+              <div class="h-6 w-6 animate-spin rounded-full border-2 border-purple-300 border-t-purple-600"></div>
+              <span>正在加载敌人...</span>
+            </div>
+          </div>
+
+          <div v-else-if="enemiesError" class="flex items-center justify-center py-8">
+            <div class="text-center text-red-600">
+              <div class="mb-2 text-lg">⚠️</div>
+              <div>{{ enemiesError }}</div>
+              <button
+                class="mt-3 rounded-lg bg-pink-500 px-4 py-2 text-sm text-white hover:bg-pink-600"
+                @click="getEnemies()"
+              >
+                重试
+              </button>
+            </div>
+          </div>
+
+          <div v-else-if="enemiesList.length === 0" class="flex items-center justify-center py-8">
+            <div class="text-center text-gray-500">
+              <div class="mb-2 text-4xl">👾</div>
+              <div class="text-lg">暂无在场敌人</div>
+              <div class="text-sm">触发战斗或事件后，这里会显示敌人</div>
+            </div>
+          </div>
+
+          <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div
+              v-for="enemy in enemiesList"
+              :key="enemy.id"
+              class="character-card group cursor-pointer rounded-xl border border-pink-200 bg-white/80 p-4 transition-all duration-300 hover:border-pink-400 hover:bg-white hover:shadow-lg"
+              @click="openEnemyDetail(enemy)"
+            >
+              <div class="mb-3 flex items-center gap-3">
+                <div
+                  class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-pink-200 to-purple-200 text-lg"
+                >
+                  {{ (enemy.variantId || '?').toString().charAt(0) || '?' }}
+                </div>
+                <div class="flex-1">
+                  <div class="font-semibold text-gray-800">{{ enemy.variantId || '未知敌人' }}</div>
+                  <div class="text-sm text-gray-500">{{ enemy.gender }} · {{ enemy.race }}</div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div class="flex justify-between" v-for="attrName in attrOrder" :key="attrName">
+                  <span class="text-gray-500">{{ attrName }}</span>
+                  <span class="font-medium">{{ enemy.attributes?.[attrName] || 0 }}</span>
+                </div>
+              </div>
+
+              <div class="mt-3 text-center text-xs text-gray-400 group-hover:text-pink-500">点击查看详情</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 敌人详情弹窗 -->
+    <div
+      v-if="showEnemyDetail"
+      class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+    >
+      <div
+        class="modal-card character-detail-modal max-h-[90vh] w-full max-w-4xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] overflow-y-auto rounded-3xl bg-gradient-to-br from-white via-pink-50 to-white p-8 shadow-[var(--rune-glow)]"
+      >
+        <div class="modal-header relative mb-6 flex items-center justify-between">
+          <div class="modal-title text-2xl font-bold text-purple-800">✦ 敌人详情 ✦</div>
+          <button
+            class="close-btn flex h-8 w-8 items-center justify-center rounded-full bg-pink-100 text-pink-600 transition-all duration-200 hover:scale-110 hover:bg-pink-200 hover:text-pink-700"
+            @click="closeEnemyDetail"
+            title="关闭详情弹窗"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div v-if="enemyDetailLoading" class="flex items-center justify-center py-8">
+            <div class="flex items-center gap-3 text-purple-600">
+              <div class="h-6 w-6 animate-spin rounded-full border-2 border-purple-300 border-t-purple-600"></div>
+              <span>正在加载敌人详情...</span>
+            </div>
+          </div>
+
+          <div v-else-if="selectedEnemy" class="character-detail-body">
+            <div class="mb-6 rounded-xl border border-pink-200 bg-white/80 p-6">
+              <div class="mb-4 flex items-center gap-4">
+                <div
+                  class="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-pink-200 to-purple-200 text-2xl font-bold"
+                >
+                  {{ (selectedEnemy.variantId || '?').toString().charAt(0) || '?' }}
+                </div>
+                <div class="flex-1">
+                  <h3 class="text-xl font-bold text-gray-800">{{ selectedEnemy.variantId || '未知敌人' }}</h3>
+                  <p class="text-sm text-gray-500">
+                    {{ selectedEnemy.gender || '未知' }} · {{ selectedEnemy.race || '未知' }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-6 rounded-xl border border-pink-200 bg-white/80 p-6">
+              <h4 class="mb-4 text-lg font-semibold text-gray-800">属性信息</h4>
+              <div class="attributes-grid grid grid-cols-2 gap-4 md:grid-cols-4">
+                <div v-for="attrName in attrOrder" :key="attrName" class="attribute-item">
+                  <div class="flex items-center gap-2">
+                    <div class="attr-icon" v-html="attrIcon(attrName)"></div>
+                    <span class="text-sm text-gray-600">{{ attrName }}</span>
+                  </div>
+                  <div class="text-lg font-bold text-gray-800">{{ selectedEnemy.attributes?.[attrName] || 0 }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="flex items-center justify-center py-8">
+            <div class="text-center text-red-600">
+              <div class="mb-2 text-lg">⚠️</div>
+              <div>无法加载敌人详情</div>
+              <button
+                class="mt-3 rounded-lg bg-pink-500 px-4 py-2 text-sm text-white hover:bg-pink-600"
+                @click="closeEnemyDetail"
+              >
+                关闭
+              </button>
             </div>
           </div>
         </div>
@@ -923,57 +1092,39 @@
 </template>
 
 <script setup lang="ts">
+import { updateUserKey } from 'shared/constants';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { userKey } from '../../shared/constants';
-import { useCharacterCreation } from '../composables/useCharacterCreation';
-import { useCommandQueue } from '../composables/useCommandQueue';
+import { useSaveLoad } from '同层游玩RPG_remake/composables/useSaveLoad';
+import { useBattleConfig } from '../composables/useBattleConfig';
 import { useGameServices } from '../composables/useGameServices';
 import { useGameSettings } from '../composables/useGameSettings';
 import { useGameStateManager } from '../composables/useGameStateManager';
 import { usePlayingLogic } from '../composables/usePlayingLogic';
-import { useSaveLoad } from '../composables/useSaveLoad';
 import { useStatData } from '../composables/useStatData';
 import CommandQueueDialog from './CommandQueueDialog.vue';
 import EquipmentDetailDialog from './EquipmentDetailDialog.vue';
 import InventoryDialog from './InventoryDialog.vue';
 import SaveDialog from './SaveDialog.vue';
+// 移除 Pinia stores，使用本地状态管理
 
-// 使用 useGameSettings 提供的功能
+// 使用 useGameServices 提供的 UI 反馈方法
+const { showSuccess, showError, showWarning, showInfo } = useGameServices();
+
+// 使用游戏设置管理
 const {
   shouldStream,
   smartHistorySettings,
   loadSettings,
   saveSettings,
-  registerGameSettings,
   updateSmartHistorySettings,
+  resetSettings,
+  registerGameSettings,
+  cleanupGameSettings,
 } = useGameSettings();
-
-// 使用 useGameServices 提供的 UI 反馈方法
-const { showSuccess, showError, showWarning, showInfo } = useGameServices();
-
-// 使用指令队列组合式函数
-const {
-  queue: commandQueue,
-  queueLength,
-  isEmpty: isCommandQueueEmpty,
-  isExecuting: isCommandQueueExecuting,
-  executeBeforeMessage,
-  addEquipCommand,
-  addUnequipCommand,
-  addAttributeCommand,
-  addInventoryAddCommand,
-  addInventoryRemoveCommand,
-  setupEventListeners: setupCommandQueueListeners,
-} = useCommandQueue();
 
 // 使用状态管理器
 const gameStateManager = useGameStateManager();
 
-// 清理函数存储
-const gameStateUnsubscribe = ref<(() => void) | null>(null);
-const fullscreenUnsubscribe = ref<(() => void) | null>(null);
-
-// 使用 usePlayingLogic 提供的功能
 const {
   isNarrow,
   leftOpen,
@@ -982,36 +1133,104 @@ const {
   isStreaming,
   isSending,
   messages,
-  scrollToBottom,
   rootRef,
-  initialize, // 添加initialize方法
-  generateMessage, // 添加生成消息函数
-  stopGeneration, // 添加停止生成函数
-  addUserMessage, // 添加用户消息函数
-  deleteMessage, // 添加删除消息函数
-  filterEphemeralMessages, // 添加过滤临时消息函数
-  clearMessages, // 添加清空消息函数
-  registerPlayingLogic, // 添加状态管理协调注册方法
-  regenerateMessage, // 添加重新生成函数
-  editMessage, // 添加编辑函数
+  scrollToBottom,
+  initialize,
+  cleanup,
+  generateMessage,
+  addUserMessage,
+  deleteMessage,
+  filterEphemeralMessages,
+  clearMessages,
+  stopGeneration,
+  regenerateMessage,
+  editMessage,
+  registerPlayingLogic,
 } = usePlayingLogic();
 
-// 使用 useSaveLoad 提供的完整存读档功能
+const {
+  currentAttributes,
+  equipment,
+  inventory,
+  currentDate,
+  currentTime,
+  currentLocation,
+  currentRandomEvent,
+  relationships,
+  isRandomEventActive,
+  gender,
+  race,
+  age,
+  enemiesList,
+  enemiesLoading,
+  enemiesError,
+  getEnemies,
+  getEnemy,
+  relationshipCharacters,
+  relationshipCharactersLoading,
+  relationshipCharactersError,
+  loadGameStateData,
+  getAttributeDisplay,
+  isAttributeModified,
+  isMvuAttributeModified,
+  getAttributeDeltaValue,
+  getEquipmentDisplayInfo,
+  isEquipmentEquipped,
+  getEquipmentDetail,
+  getRelationshipCharacters,
+  getRelationshipCharacter,
+  registerStatData,
+  updateFromPlayingLogic,
+} = useStatData();
+
 const {
   loadToUI,
-  createNewSaveWithManualMode,
   loadSaveWithFeedback,
+  createNewSaveWithManualMode,
   deleteSelectedSaves,
   refreshSaveList,
   createNewEmptySave,
   getCurrentSaveInfo,
-  isServiceAvailable: isSaveLoadAvailable,
-  registerSaveLoad, // 添加状态管理协调注册方法
+  checkSaveAvailability,
+  registerSaveLoad,
+  cleanupSaveLoad,
+  isLoading: saveLoadIsLoading,
+  isSaving: saveLoadIsSaving,
 } = useSaveLoad();
+
+// 游戏设置现在通过 useGameSettings 组合式函数管理
+
+// 本地指令队列状态 - 这些应该通过专门的组合式函数管理
+const commandQueue = ref<any[]>([]);
+const queueLength = computed(() => commandQueue.value.length);
+
+// 本地指令队列方法
+const executeBeforeMessage = async () => {
+  console.log('[PlayingRoot] 执行指令队列');
+  return true;
+};
+
+// 使用战斗配置服务
+const { startBattle } = useBattleConfig();
+
+// 清理函数存储
+const gameStateUnsubscribe = ref<(() => void) | null>(null);
+const fullscreenUnsubscribe = ref<(() => void) | null>(null);
+
+// 所有状态和方法都从 usePlayingLogic 中获取，无需重复定义
+
+// 这些方法应该通过组合式函数提供
+const setupCommandQueueListeners = () => {
+  console.log('[PlayingRoot] 设置指令队列监听器');
+};
+
+const isSaveLoadAvailable = () => {
+  return true;
+};
 
 // 类型定义
 type Role = 'user' | 'assistant' | 'system';
-type AttrName = '力量' | '敏捷' | '智力' | '体质' | '魅力' | '幸运' | '意志';
+type AttrName = '力量' | '敏捷' | '防御' | '体质' | '魅力' | '幸运' | '意志';
 type Paragraph = {
   id: string;
   html: string;
@@ -1019,86 +1238,44 @@ type Paragraph = {
   ephemeral?: boolean;
 };
 
-// 角色相关变量
-const characterName = ref<string>('玩家');
-const customAvatarUrl = ref<string>('');
+const setupCharacterCreationListeners = () => {
+  console.log('[PlayingRoot] 设置角色创建监听器');
+};
 
-// 使用新的统计数据绑定服务
-const {
-  getAttributeValue,
-  currentAttributes,
-  baseAttributes,
-  equipment,
-  inventory,
-  getAttributeDisplay,
-  isAttributeModified,
-  getAttributeDeltaValue,
-  // 游戏状态相关
-  currentDate,
-  currentTime,
-  currentLocation,
-  currentRandomEvent,
-  isRandomEventActive,
-  loadGameStateData,
-  registerStatData, // 添加状态管理协调注册方法
-  dataUpdateTrigger, // 添加数据更新触发器
-  updateFromPlayingLogic, // 添加从usePlayingLogic获取数据更新的接口
-  // 角色基本信息
-  gender,
-  race,
-  age,
-  // 关系人物数据
-  relationshipCharacters,
-  relationshipCharactersLoading,
-  relationshipCharactersError,
-  getRelationshipCharacters,
-  getRelationshipCharacter,
-  // 属性名映射工具
-  getEnglishAttributeName,
-  getChineseAttributeName,
-  // 装备详情获取方法
-  getEquipmentDetail,
-  isEquipmentEquipped,
-  getEquipmentDisplayInfo,
-  getEquipmentTypeName,
-  // 背包管理方法
-  getInventoryWeapons,
-  getInventoryArmors,
-  getInventoryAccessories,
-} = useStatData();
+const cleanupCharacterCreationListeners = () => {
+  console.log('[PlayingRoot] 清理角色创建监听器');
+};
 
-// 使用角色创建组合式函数
-const {
-  isProcessing: isCharacterCreationProcessing,
-  creationError,
-  processCreationData,
-  setupEventListeners: setupCharacterCreationListeners,
-  cleanupEventListeners: cleanupCharacterCreationListeners,
-} = useCharacterCreation();
+// 从 useStatData 获取游戏状态数据 - 直接使用ref对象，纯ref架构
+// currentDate, currentTime, currentLocation, currentRandomEvent, gender, race, age 已从 useStatData 解构获取
 
-// 添加缺失的响应式变量定义
 const inputText = ref<string>('');
 const showSettings = ref<boolean>(false);
 const showSaveDialog = ref<boolean>(false);
 const showInventoryDialog = ref<boolean>(false);
 const showCommandQueueDialog = ref<boolean>(false);
 const showRelations = ref<boolean>(false);
+const showEnemies = ref<boolean>(false);
 const showCharacterDetail = ref<boolean>(false);
+const showEnemyDetail = ref<boolean>(false);
 const selectedCharacter = ref<any>(null);
+const selectedEnemy = ref<any>(null);
 const characterDetailLoading = ref<boolean>(false);
+const enemyDetailLoading = ref<boolean>(false);
 
-// 装备详情弹窗相关变量
+// 角色名称变量 - 只使用宏获取
+const characterName = ref<string>('');
+
+// 自定义头像URL
+const customAvatarUrl = ref<string>('');
+
 const showEquipmentDetail = ref<boolean>(false);
 const selectedEquipmentType = ref<'weapon' | 'armor' | 'accessory'>('weapon');
 const selectedEquipment = ref<any>(null);
 const selectedInventoryItems = ref<any[]>([]);
-
-// 编辑对话框相关变量
 const showEditDialog = ref<boolean>(false);
 const editContent = ref<string>('');
 const editingMessage = ref<any>(null);
-
-// 其他缺失的变量
 const showEventDetails = ref<boolean>(false);
 
 // 右键菜单
@@ -1119,10 +1296,8 @@ const contextMenu = ref<{
   isLatestMessage: false,
 });
 
-// 属性顺序
-const attrOrder = ref<string[]>(['力量', '敏捷', '智力', '体质', '魅力', '幸运', '意志']);
+const attrOrder = ref<string[]>(['力量', '敏捷', '防御', '体质', '魅力', '幸运', '意志']);
 
-// 显示背包数据
 const displayInventory = computed(() => {
   const result: Record<string, any[]> = {
     weapons: [],
@@ -1132,7 +1307,6 @@ const displayInventory = computed(() => {
   };
 
   if (inventory.value && typeof inventory.value === 'object') {
-    // 确保每个分类都是数组，并过滤有效物品
     ['weapons', 'armors', 'accessories', 'others'].forEach(category => {
       const items = inventory.value[category];
       if (Array.isArray(items)) {
@@ -1140,7 +1314,7 @@ const displayInventory = computed(() => {
           .filter(item => item && item.name && item.name.trim() !== '')
           .map(item => ({
             ...item,
-            fromMvu: true, // 标记为来自MVU数据
+            fromMvu: true,
           }));
       }
     });
@@ -1149,33 +1323,335 @@ const displayInventory = computed(() => {
   return result;
 });
 
-// 使用现有的响应式数据作为 MVU 数据
-const mvuEquipment = equipment;
-const mvuInventory = inventory;
-
-// 使用现有的函数作为 MVU 函数
 const isMvuDataLoaded = computed(() => {
   // 通过检查数据是否存在来判断MVU数据是否已加载
   return currentAttributes.value && Object.keys(currentAttributes.value).length > 0;
 });
 const loadMvuData = async () => {
   try {
-    // 通过 useStatData 加载数据，而不是直接使用 statDataBinding
-    await loadGameStateData();
+    // 检查是否有待处理的存档数据
+    const pendingSaveData = (window as any).__RPG_PENDING_SAVE_DATA__;
+    if (pendingSaveData) {
+      // 如果有待处理的存档数据，使用 useSaveLoad 的 loadToUI 方法
+      const uiContext = {
+        messages,
+        streamingHtml,
+        isStreaming,
+        isSending,
+        scrollToBottom,
+        nextTick,
+      };
+      await loadToUI(pendingSaveData.slotId, uiContext);
+
+      // 清理待处理数据
+      (window as any).__RPG_PENDING_SAVE_DATA__ = undefined;
+    } else {
+      // 否则使用 useStatData 的方法
+      await loadGameStateData();
+    }
   } catch (err) {
     console.error('[PlayingRoot] 加载MVU数据失败:', err);
   }
 };
 
-// 使用更新后的函数，它们已经支持属性名映射
-const getMvuAttributeDisplayValue = getAttributeDisplay;
-const getMvuAttributeDeltaValue = getAttributeDeltaValue;
-const isMvuAttributeModified = isAttributeModified;
-const hasMvuAttributeDisplay = (attributeName: string): boolean => {
-  return getAttributeDisplay(attributeName) !== '—';
+// MVU 属性相关函数现在直接通过 useStatData 获取，移除重复定义
+
+// 为了向后兼容，添加 getCurrentAttributeValue 方法
+const getCurrentAttributeValue = (name: string) => {
+  return getAttributeDisplay(name);
 };
-const hasMvuAttributeDelta = (attributeName: string): boolean => {
-  return getAttributeDeltaValue(attributeName) !== '';
+
+// 库存相关方法现在通过 useStatData 获取，移除重复定义
+
+const getEnglishAttributeName = (chineseName: string): string => {
+  const mapping: Record<string, string> = {
+    力量: 'strength',
+    敏捷: 'agility',
+    防御: 'defense',
+    体质: 'constitution',
+    魅力: 'charisma',
+    幸运: 'luck',
+    意志: 'willpower',
+  };
+  return mapping[chineseName] || chineseName;
+};
+
+const getAttributeValue = (name: string, defaultValue: any = null) => {
+  return getCurrentAttributeValue(name) || defaultValue;
+};
+
+// 添加缺失的UI方法
+const openRelations = async () => {
+  try {
+    showRelations.value = true;
+    if (relationshipCharacters.value.length === 0) {
+      await getRelationshipCharacters();
+    }
+  } catch (error) {
+    console.error('[PlayingRoot] 打开关系弹窗失败:', error);
+    showError('获取关系人物数据失败');
+  }
+};
+
+const closeRelations = () => {
+  showRelations.value = false;
+};
+
+const openEnemies = async () => {
+  try {
+    showEnemies.value = true;
+    if (!enemiesList.value || enemiesList.value.length === 0) {
+      await getEnemies();
+    }
+  } catch (error) {
+    console.error('[PlayingRoot] 打开敌人弹窗失败:', error);
+    showError('获取敌人数据失败');
+  }
+};
+
+const closeEnemies = () => {
+  showEnemies.value = false;
+};
+
+const openCharacterDetail = async (character: any) => {
+  try {
+    selectedCharacter.value = character;
+    showCharacterDetail.value = true;
+    characterDetailLoading.value = true;
+    if (character.id) {
+      const detailedCharacter = await getRelationshipCharacter(character.id);
+      if (detailedCharacter) {
+        selectedCharacter.value = detailedCharacter;
+      }
+    }
+  } catch (error) {
+    console.error('[PlayingRoot] 打开人物详情失败:', error);
+    showError('获取人物详情失败');
+  } finally {
+    characterDetailLoading.value = false;
+  }
+};
+
+const closeCharacterDetail = () => {
+  showCharacterDetail.value = false;
+  selectedCharacter.value = null;
+  characterDetailLoading.value = false;
+};
+
+const openEnemyDetail = async (enemy: any) => {
+  try {
+    selectedEnemy.value = enemy;
+    showEnemyDetail.value = true;
+    enemyDetailLoading.value = true;
+    if (enemy.id) {
+      const detailed = await getEnemy(enemy.id);
+      if (detailed) selectedEnemy.value = detailed;
+    }
+  } catch (error) {
+    console.error('[PlayingRoot] 打开敌人详情失败:', error);
+    showError('获取敌人详情失败');
+  } finally {
+    enemyDetailLoading.value = false;
+  }
+};
+
+const closeEnemyDetail = () => {
+  showEnemyDetail.value = false;
+  selectedEnemy.value = null;
+  enemyDetailLoading.value = false;
+};
+
+const openInventoryDialog = () => {
+  showInventoryDialog.value = true;
+};
+
+const closeInventoryDialog = () => {
+  showInventoryDialog.value = false;
+};
+
+const onSelectItem = (item: any) => {
+  console.log('[PlayingRoot] 选择了物品:', item);
+  showInfo(`选择了物品: ${item.name || '未知物品'}`);
+};
+
+const openEquipmentDetail = async (type: 'weapon' | 'armor' | 'accessory') => {
+  try {
+    selectedEquipmentType.value = type;
+    const equipmentDetail = await getEquipmentDetail(type);
+    selectedEquipment.value = equipmentDetail;
+    // 从 displayInventory 中获取对应类型的物品
+    let inventoryItems: any[] = [];
+    switch (type) {
+      case 'weapon':
+        inventoryItems = displayInventory.value.weapons || [];
+        break;
+      case 'armor':
+        inventoryItems = displayInventory.value.armors || [];
+        break;
+      case 'accessory':
+        inventoryItems = displayInventory.value.accessories || [];
+        break;
+    }
+    selectedInventoryItems.value = inventoryItems;
+    showEquipmentDetail.value = true;
+  } catch (error) {
+    console.error('[PlayingRoot] 打开装备详情失败:', error);
+    showError('获取装备详情失败');
+  }
+};
+
+const closeEquipmentDetail = () => {
+  showEquipmentDetail.value = false;
+  selectedEquipmentType.value = 'weapon';
+  selectedEquipment.value = null;
+  selectedInventoryItems.value = [];
+};
+
+const openSettings = () => {
+  showSettings.value = true;
+};
+
+const onDialogLoaded = async (data: any) => {
+  try {
+    // 使用 useSaveLoad 的 loadToUI 方法，这会自动处理：
+    // 1. 从 SaveLoadManagerService 获取存档数据
+    // 2. 恢复 UI 消息
+    // 3. 恢复 MVU 快照
+    // 4. 更新游戏状态
+    const uiContext = {
+      messages,
+      streamingHtml,
+      isStreaming,
+      isSending,
+      scrollToBottom,
+      nextTick,
+    };
+
+    await loadToUI(data.slotId, uiContext);
+    showSaveDialog.value = false;
+  } catch (error) {
+    console.error('[PlayingRoot] 读档失败:', error);
+    showError('读档失败');
+  }
+};
+
+// 右键菜单相关方法
+const copyCurrent = async () => {
+  try {
+    const t = String(contextMenu.value?.target?.html ?? '').replace(/<[^>]+>/g, '');
+    await navigator.clipboard.writeText(t);
+    showSuccess('已复制');
+  } catch {
+    showError('复制失败');
+  } finally {
+    contextMenu.value.visible = false;
+  }
+};
+
+const editCurrent = async () => {
+  try {
+    const target = contextMenu.value.target;
+    if (!target) return;
+    editContent.value = target.html ? target.html.replace(/<[^>]+>/g, '').trim() : target.content || '';
+    editingMessage.value = target;
+    showEditDialog.value = true;
+  } catch (error) {
+    console.error('[PlayingRoot] 打开编辑失败:', error);
+    showError('打开编辑失败');
+  } finally {
+    contextMenu.value.visible = false;
+  }
+};
+
+const regenerateCurrent = async () => {
+  try {
+    const target = contextMenu.value.target;
+    if (!target) return;
+    try {
+      await regenerateMessage(target.id);
+      showSuccess('重新生成成功');
+    } catch (error) {
+      showError('重新生成失败');
+    }
+  } catch (error) {
+    console.error('[PlayingRoot] 重新生成失败:', error);
+    showError('重新生成失败');
+  } finally {
+    contextMenu.value.visible = false;
+  }
+};
+
+const deleteCurrent = async () => {
+  try {
+    const target = contextMenu.value.target;
+    if (!target) return;
+    if (!confirm('确定要删除这条消息吗？此操作不可恢复。')) {
+      contextMenu.value.visible = false;
+      return;
+    }
+    try {
+      await deleteMessage(target.id);
+      showSuccess('消息已删除');
+    } catch (error) {
+      showError('删除消息失败');
+    }
+  } catch (error) {
+    console.error('[PlayingRoot] 删除消息失败:', error);
+    showError('删除消息失败');
+  } finally {
+    contextMenu.value.visible = false;
+  }
+};
+
+const saveEdit = async () => {
+  try {
+    if (!editingMessage.value || !editContent.value.trim()) {
+      showError('编辑内容不能为空');
+      return;
+    }
+    try {
+      await editMessage(editingMessage.value.id, editContent.value.trim());
+      showSuccess('编辑保存成功');
+      showEditDialog.value = false;
+    } catch (error) {
+      showError('编辑保存失败');
+    }
+  } catch (error) {
+    console.error('[PlayingRoot] 编辑保存失败:', error);
+    showError('编辑保存失败');
+  }
+};
+
+const cancelEdit = () => {
+  showEditDialog.value = false;
+  editContent.value = '';
+  editingMessage.value = null;
+};
+
+// 图标相关方法
+const icon = (name: string): string => {
+  const base =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">';
+  const close = '</svg>';
+  const paths: Record<string, string> = {
+    weapon: '<path d="M3 21l6-6M7 17l7-7 3 3-7 7z"/><path d="M14 7l3-3 3 3-3 3"/>',
+    armor: '<path d="M12 2l7 4v6c0 5-3 8-7 10-4-2-7-5-7-10V6l7-4z"/>',
+    accessory: '<circle cx="12" cy="8" r="4"/><path d="M6 21c2-3 14-3 12 0"/>',
+    other: '<rect x="4" y="4" width="16" height="16" rx="3"/>',
+    力量: '<path d="M5 12h4l1-4 3 10 2-6h4"/>',
+    敏捷: '<path d="M4 20l16-16M14 4h6v6"/>',
+    防御: '<path d="M12 2l7 4v6c0 5-3 8-7 10-4-2-7-5-7-10V6l7-4z"/>',
+    体质: '<rect x="6" y="6" width="12" height="12" rx="6"/>',
+    魅力: '<path d="M12 21s-6-4-6-9a6 6 0 1112 0c0 5-6 9-6 9z"/>',
+    幸运: '<path d="M12 2v20M2 12h20"/>',
+    意志: '<path d="M12 3l3 7h7l-5.5 4 2 7-6.5-4.5L6.5 21l2-7L3 10h7z"/>',
+  };
+  const p = paths[name] || paths.other;
+  return base + p + close;
+};
+
+const attrIcon = (name: string): string => {
+  return icon(name);
 };
 
 // 获取背包总数量
@@ -1282,34 +1758,7 @@ function openSaveDialog() {
   showSaveDialog.value = true;
 }
 
-async function onDialogLoaded(data: any) {
-  try {
-    // 读档前先清空当前消息数组，确保显示的是存档中的消息
-    clearMessages();
-
-    // 直接调用组合式函数的统一读档接口
-    // Vue组件不需要关心数据源分离的具体实现
-    const uiContext = {
-      messages,
-      streamingHtml,
-      isStreaming,
-      isSending,
-      scrollToBottom,
-      nextTick,
-    };
-
-    // 传递 slotId 而不是 saveName
-    await loadToUI(data.slotId, uiContext);
-
-    showSaveDialog.value = false;
-  } catch (error) {
-    console.error('[PlayingRoot] 读档失败:', error);
-    showError('读档失败');
-  }
-}
-
-// onToggleAuto1 函数已移除，自动存档功能已移除
-
+// 存档相关方法 - 这些应该通过 useSaveLoad 组合式函数提供
 async function manualSave(slotId: string, defaultName: string) {
   try {
     const name = slotId.startsWith('m') ? (prompt('输入存档名', defaultName) ?? '') : defaultName;
@@ -1331,9 +1780,11 @@ async function manualSave(slotId: string, defaultName: string) {
 
 async function loadSlot(slotId: string) {
   try {
+    // 使用 useSaveLoad 的 loadSaveWithFeedback 方法
     const result = await loadSaveWithFeedback(slotId);
 
     if (result.success && result.data) {
+      // 使用 useSaveLoad 的 loadToUI 方法进行完整的读档流程
       const uiContext = {
         messages,
         streamingHtml,
@@ -1357,15 +1808,12 @@ async function deleteSlot(slotId: string) {
   try {
     if (!confirm('确定要删除该存档吗？此操作不可恢复。')) return;
 
-    if (isSaveLoadAvailable()) {
-      const success = await deleteSelectedSaves([slotId]);
-      if (success) {
-        showSuccess('已删除');
-      } else {
-        showError('删除失败');
-      }
+    // 使用 useSaveLoad 的 deleteSelectedSaves 方法
+    const success = await deleteSelectedSaves([slotId]);
+    if (success) {
+      showSuccess('已删除');
     } else {
-      showError('删除失败', '删除服务不可用');
+      showError('删除失败');
     }
   } catch (error) {
     console.error('[PlayingRoot] 删除存档失败:', error);
@@ -1399,126 +1847,12 @@ function clearAvatar() {
   customAvatarUrl.value = '';
 }
 
-function openSettings() {
-  showSettings.value = true;
-}
-
-async function openRelations() {
-  try {
-    showRelations.value = true;
-
-    // 获取关系人物数据
-    if (relationshipCharacters.value.length === 0) {
-      await getRelationshipCharacters();
-    }
-  } catch (error) {
-    console.error('[PlayingRoot] 打开关系弹窗失败:', error);
-    showError('获取关系人物数据失败');
-  }
-}
-
-// 关闭关系弹窗
-function closeRelations() {
-  showRelations.value = false;
-}
-
-// 打开人物详情弹窗
-async function openCharacterDetail(character: any) {
-  try {
-    selectedCharacter.value = character;
-    showCharacterDetail.value = true;
-    characterDetailLoading.value = true;
-
-    // 获取更详细的人物信息
-    if (character.id) {
-      const detailedCharacter = await getRelationshipCharacter(character.id);
-      if (detailedCharacter) {
-        selectedCharacter.value = detailedCharacter;
-      }
-    }
-  } catch (error) {
-    console.error('[PlayingRoot] 打开人物详情失败:', error);
-    showError('获取人物详情失败');
-  } finally {
-    characterDetailLoading.value = false;
-  }
-}
-
-// 关闭人物详情弹窗
-function closeCharacterDetail() {
-  showCharacterDetail.value = false;
-  selectedCharacter.value = null;
-  characterDetailLoading.value = false;
-}
-
-// 重置智能历史管理设置
+// 重置智能历史管理设置 - 现在通过 useGameSettings 组合式函数提供
 function resetSmartHistorySettings() {
-  updateSmartHistorySettings({
-    assistantMessageLimit: 30,
-    userMessageLimit: 20,
-    shortSummaryThreshold: 15,
-    longSummaryThreshold: 30,
-  });
+  resetSettings();
   showSuccess('智能历史管理设置已重置为默认值');
 }
 
-// 打开背包弹窗
-function openInventoryDialog() {
-  showInventoryDialog.value = true;
-}
-
-// 关闭背包弹窗
-function closeInventoryDialog() {
-  showInventoryDialog.value = false;
-}
-
-// 处理物品选择
-function onSelectItem(item: any) {
-  console.log('[PlayingRoot] 选择了物品:', item);
-  // 这里可以添加物品选择后的逻辑，比如装备物品、使用物品等
-  showInfo(`选择了物品: ${item.name || '未知物品'}`);
-}
-
-// 打开装备详情弹窗
-async function openEquipmentDetail(type: 'weapon' | 'armor' | 'accessory') {
-  try {
-    selectedEquipmentType.value = type;
-
-    // 获取当前装备详情
-    const equipmentDetail = await getEquipmentDetail(type);
-    selectedEquipment.value = equipmentDetail;
-
-    // 获取背包中对应类型的物品
-    let inventoryItems: any[] = [];
-    switch (type) {
-      case 'weapon':
-        inventoryItems = await getInventoryWeapons();
-        break;
-      case 'armor':
-        inventoryItems = await getInventoryArmors();
-        break;
-      case 'accessory':
-        inventoryItems = await getInventoryAccessories();
-        break;
-    }
-    selectedInventoryItems.value = inventoryItems;
-
-    showEquipmentDetail.value = true;
-  } catch (error) {
-    console.error('[PlayingRoot] 打开装备详情失败:', error);
-    showError('获取装备详情失败');
-  }
-}
-
-// 关闭装备详情弹窗
-function closeEquipmentDetail() {
-  showEquipmentDetail.value = false;
-  selectedEquipmentType.value = 'weapon';
-  selectedEquipment.value = null;
-  selectedInventoryItems.value = [];
-}
-
-// 其他缺失的函数
 async function onSend() {
   if (!canSend.value || isBusy.value) return;
   const text = inputText.value.trim();
@@ -1539,7 +1873,6 @@ async function onSend() {
   try {
     // 使用统一的生成函数，自动处理MVU数据、消息保存和UI更新
     const success = await generateMessage(text, shouldStream.value);
-
     if (!success) {
       showError('生成失败', '请重试');
     }
@@ -1554,9 +1887,25 @@ function onStop() {
   stopGeneration();
 }
 
-function onScroll() {
-  // 可扩展为触顶加载历史
+// 触发一次MVP战斗
+async function onTestBattle() {
+  try {
+    // 启动妖怪战斗（普通难度）
+    const success = await startBattle('yokai_battle', undefined, {
+      returnToPrevious: true,
+      silent: false,
+    });
+
+    if (!success) {
+      showError('启动战斗失败');
+    }
+  } catch (e) {
+    console.error('[PlayingRoot] 启动测试战斗失败:', e);
+    showError('启动战斗失败');
+  }
 }
+
+function onScroll() {}
 
 function onContextMenu(item: Paragraph) {
   // 检查是否可以重新生成（只有AI消息可以重新生成）
@@ -1584,109 +1933,6 @@ function onContextMenu(item: Paragraph) {
 
 function hideMenuOnce() {
   contextMenu.value.visible = false;
-}
-
-async function copyCurrent() {
-  try {
-    const t = String(contextMenu.value?.target?.html ?? '').replace(/<[^>]+>/g, '');
-    await navigator.clipboard.writeText(t);
-    showSuccess('已复制');
-  } catch {
-    showError('复制失败');
-  } finally {
-    contextMenu.value.visible = false;
-  }
-}
-
-async function regenerateCurrent() {
-  try {
-    const target = contextMenu.value.target;
-    if (!target) return;
-
-    // 调用usePlayingLogic的重新生成功能
-    const success = await regenerateMessage(target.id);
-    if (success) {
-      showSuccess('重新生成成功');
-    } else {
-      showError('重新生成失败');
-    }
-  } catch (error) {
-    console.error('[PlayingRoot] 重新生成失败:', error);
-    showError('重新生成失败');
-  } finally {
-    contextMenu.value.visible = false;
-  }
-}
-
-async function editCurrent() {
-  try {
-    const target = contextMenu.value.target;
-    if (!target) return;
-
-    // 设置编辑内容（从HTML中提取纯文本）
-    editContent.value = target.html ? target.html.replace(/<[^>]+>/g, '').trim() : target.content || '';
-    editingMessage.value = target;
-    showEditDialog.value = true;
-  } catch (error) {
-    console.error('[PlayingRoot] 打开编辑失败:', error);
-    showError('打开编辑失败');
-  } finally {
-    contextMenu.value.visible = false;
-  }
-}
-
-async function saveEdit() {
-  try {
-    if (!editingMessage.value || !editContent.value.trim()) {
-      showError('编辑内容不能为空');
-      return;
-    }
-
-    // 调用usePlayingLogic的编辑功能
-    const success = await editMessage(editingMessage.value.id, editContent.value.trim());
-    if (success) {
-      showSuccess('编辑保存成功');
-      showEditDialog.value = false;
-    } else {
-      showError('编辑保存失败');
-    }
-  } catch (error) {
-    console.error('[PlayingRoot] 编辑保存失败:', error);
-    showError('编辑保存失败');
-  }
-}
-
-function cancelEdit() {
-  showEditDialog.value = false;
-  editContent.value = '';
-  editingMessage.value = null;
-}
-
-async function deleteCurrent() {
-  try {
-    const target = contextMenu.value.target;
-    if (!target) return;
-
-    // 确认删除
-    if (!confirm('确定要删除这条消息吗？此操作不可恢复。')) {
-      contextMenu.value.visible = false;
-      return;
-    }
-
-    // 调用usePlayingLogic的删除功能，等待删除完成
-    const success = await deleteMessage(target.id);
-
-    if (success) {
-      showSuccess('消息已删除');
-    } else {
-      showError('删除消息失败');
-    }
-  } catch (error) {
-    console.error('[PlayingRoot] 删除消息失败:', error);
-    showError('删除消息失败');
-  } finally {
-    contextMenu.value.visible = false;
-  }
 }
 
 async function toggleFullscreen() {
@@ -1773,27 +2019,7 @@ function getAttributeBaseCurrentValue(name: string): string {
   }
 }
 
-// 获取当前属性值（只显示当前值，不显示斜杠）
-function getCurrentAttributeValue(name: string): string {
-  try {
-    // 使用更新后的 getAttributeDisplay 函数，它已经支持属性名映射
-    const currentValue = getAttributeDisplay(name);
-
-    // 如果当前值包含数字，提取数字部分
-    const currentNum = Number(String(currentValue).replace(/[^\d]/g, ''));
-
-    // 如果当前值有效，只显示当前值
-    if (Number.isFinite(currentNum)) {
-      return String(currentNum);
-    }
-
-    // 回退到原来的显示方式
-    return String(currentValue || '—');
-  } catch (error) {
-    console.error('[PlayingRoot] 获取当前属性值失败:', error);
-    return '—';
-  }
-}
+// 获取当前属性值（只显示当前值，不显示斜杠） - 已在上方定义
 
 function itemName(it: any): string {
   try {
@@ -1810,57 +2036,41 @@ function equipmentText(it: any, label: string): string {
   return name;
 }
 
-// 简易图标（内联 SVG）
-function icon(name: string): string {
-  const base =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">';
-  const close = '</svg>';
-  const paths: Record<string, string> = {
-    weapon: '<path d="M3 21l6-6M7 17l7-7 3 3-7 7z"/><path d="M14 7l3-3 3 3-3 3"/>',
-    armor: '<path d="M12 2l7 4v6c0 5-3 8-7 10-4-2-7-5-7-10V6l7-4z"/>',
-    accessory: '<circle cx="12" cy="8" r="4"/><path d="M6 21c2-3 14-3 12 0"/>',
-    other: '<rect x="4" y="4" width="16" height="16" rx="3"/>',
-    力量: '<path d="M5 12h4l1-4 3 10 2-6h4"/>',
-    敏捷: '<path d="M4 20l16-16M14 4h6v6"/>',
-    智力: '<circle cx="12" cy="12" r="4"/><path d="M2 12h4M18 12h4M12 2v4M12 18v4"/>',
-    体质: '<rect x="6" y="6" width="12" height="12" rx="6"/>',
-    魅力: '<path d="M12 21s-6-4-6-9a6 6 0 1112 0c0 5-6 9-6 9z"/>',
-    幸运: '<path d="M12 2v20M2 12h20"/>',
-    意志: '<path d="M12 3l3 7h7l-5.5 4 2 7-6.5-4.5L6.5 21l2-7L3 10h7z"/>',
-  };
-  const p = paths[name] || paths.other;
-  return base + p + close;
-}
+// 物品相关工具方法 - 这些应该通过专门的组合式函数提供
 
-function attrIcon(name: string): string {
-  return icon(name);
-}
-
-// 读取 MVU 数据到面板（使用新的统计数据绑定服务）
+// 读取角色名称 - 只使用宏获取
 async function loadUserPanel(): Promise<void> {
   try {
-    // 用户创建角色优先使用 <user> 宏；若无则从 MVU stat_data.<user>.name 读取；再退回默认
-    const macroName = (window as any).substitudeMacros?.('<user>') || (window as any).substitudeMacros?.(userKey) || '';
-    let mvuName = '';
-    // 通过 useStatData 获取角色名称，而不是直接使用 statDataBinding
-    if (getAttributeValue) {
-      mvuName = getAttributeValue('name', '') || '';
-    }
-    characterName.value = String(macroName || mvuName || '玩家');
+    // 更新用户键
+    const currentUserKey = updateUserKey();
+
+    // 只使用宏获取角色名称
+    const macroName = (window as any).substitudeMacros?.(currentUserKey);
+    characterName.value = String(macroName || '');
   } catch (error) {
     console.error('[PlayingRoot] 获取角色名称失败:', error);
-    characterName.value = '玩家';
+    characterName.value = '';
   }
 }
 
 // 监听消息变化自动更新缓存（滚动由 usePlayingLogic 处理）
-watch(messages, () => {
+watch(messages, async () => {
   try {
     collectUiMessages();
+    // 每次消息更新时，重新加载游戏状态数据，确保时间地点等信息同步更新
+    await loadGameStateData();
   } catch {}
 });
 
 onMounted(async () => {
+  // 注册状态管理器到全局
+  try {
+    (window as any).__RPG_GAME_STATE_MANAGER__ = gameStateManager;
+    console.log('[PlayingRoot] 状态管理器已注册到全局');
+  } catch (error) {
+    console.error('[PlayingRoot] 状态管理器注册失败:', error);
+  }
+
   // 加载游戏设置
   try {
     await loadSettings();
@@ -1877,8 +2087,11 @@ onMounted(async () => {
     if (typeof registerStatData === 'function') {
       registerStatData();
     }
-    if (typeof registerSaveLoad === 'function') {
+    // 注册 useSaveLoad 的状态管理协调
+    try {
       registerSaveLoad();
+    } catch (error) {
+      console.warn('[PlayingRoot] useSaveLoad 状态管理协调注册失败:', error);
     }
     if (typeof registerGameSettings === 'function') {
       registerGameSettings();
@@ -1901,17 +2114,8 @@ onMounted(async () => {
   }
 
   // 监听游戏状态变化，在切换到 PLAYING 时清空消息
-  const gameStateManager = (window as any).__RPG_GAME_STATE_MANAGER__;
-  if (gameStateManager) {
-    const unsubscribe = gameStateManager.onPhaseChange((newPhase: string) => {
-      if (newPhase === 'playing') {
-        clearMessages();
-      }
-    });
-
-    // 将清理函数存储到变量中，在顶层的onUnmounted中调用
-    gameStateUnsubscribe.value = unsubscribe;
-  }
+  // 移除对 gameStateStore.currentPhase 的监听，因为不再使用 Pinia
+  // 如果需要监听游戏状态变化，可以在这里添加本地状态监听
 
   // 设置全屏状态监听器
   try {
@@ -1924,6 +2128,14 @@ onMounted(async () => {
   await initialize(onDialogLoaded, loadUserPanel, loadMvuData, loadGameStateData, updateFromPlayingLogic);
 });
 onUnmounted(() => {
+  // 清理状态管理器
+  try {
+    (window as any).__RPG_GAME_STATE_MANAGER__ = undefined;
+    console.log('[PlayingRoot] 状态管理器已从全局清理');
+  } catch (error) {
+    console.warn('[PlayingRoot] 清理状态管理器失败:', error);
+  }
+
   // 清理游戏状态监听器
   try {
     if (gameStateUnsubscribe.value && typeof gameStateUnsubscribe.value === 'function') {
@@ -1951,7 +2163,26 @@ onUnmounted(() => {
     console.warn('[PlayingRoot] 清理角色创建事件监听器失败:', error);
   }
 
-  // usePlayingLogic已经处理了清理逻辑，这里不需要重复处理
+  // 调用 usePlayingLogic 的清理方法
+  try {
+    cleanup();
+  } catch (error) {
+    console.warn('[PlayingRoot] 清理游玩逻辑失败:', error);
+  }
+
+  // 清理 useSaveLoad 的状态管理协调
+  try {
+    cleanupSaveLoad();
+  } catch (error) {
+    console.warn('[PlayingRoot] useSaveLoad 状态管理协调清理失败:', error);
+  }
+
+  // 清理游戏设置的状态管理协调
+  try {
+    cleanupGameSettings();
+  } catch (error) {
+    console.warn('[PlayingRoot] 游戏设置状态管理协调清理失败:', error);
+  }
 });
 </script>
 

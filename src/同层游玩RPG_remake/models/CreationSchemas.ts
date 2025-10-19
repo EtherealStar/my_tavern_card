@@ -22,26 +22,26 @@ export const DestinyPointsSchema = z.object({
 });
 export type DestinyPoints = z.infer<typeof DestinyPointsSchema>;
 
-export type AttributeKey = 'strength' | 'agility' | 'intelligence' | 'constitution' | 'charisma' | 'willpower' | 'luck';
+export type AttributeKey = 'strength' | 'agility' | 'defense' | 'constitution' | 'charisma' | 'willpower' | 'luck';
 
 // 统一的属性顺序定义
 export const ATTRIBUTE_KEYS: AttributeKey[] = [
   'strength',
   'agility',
-  'intelligence',
+  'defense',
   'constitution',
   'charisma',
   'willpower',
   'luck',
 ];
 
-export const CHINESE_ATTRIBUTE_NAMES = ['力量', '敏捷', '智力', '体质', '魅力', '意志', '幸运'];
+export const CHINESE_ATTRIBUTE_NAMES = ['力量', '敏捷', '防御', '体质', '魅力', '意志', '幸运'];
 
 // 属性键到中文名的映射
 export const ATTRIBUTE_NAME_MAP: Record<AttributeKey, string> = {
   strength: '力量',
   agility: '敏捷',
-  intelligence: '智力',
+  defense: '防御',
   constitution: '体质',
   charisma: '魅力',
   willpower: '意志',
@@ -51,7 +51,7 @@ export const ATTRIBUTE_NAME_MAP: Record<AttributeKey, string> = {
 export interface Attributes {
   strength: number;
   agility: number;
-  intelligence: number;
+  defense: number;
   constitution: number;
   charisma: number;
   willpower: number;
@@ -63,7 +63,7 @@ export interface Attributes {
 export const AttributesSchema = z.object({
   strength: z.number().int().min(0),
   agility: z.number().int().min(0),
-  intelligence: z.number().int().min(0),
+  defense: z.number().int().min(0),
   constitution: z.number().int().min(0),
   charisma: z.number().int().min(0),
   willpower: z.number().int().min(0),
@@ -75,7 +75,7 @@ export const AttributesSchema = z.object({
 export const ChineseAttributesSchema = z.object({
   力量: z.number().int().min(0),
   敏捷: z.number().int().min(0),
-  智力: z.number().int().min(0),
+  防御: z.number().int().min(0),
   体质: z.number().int().min(0),
   魅力: z.number().int().min(0),
   意志: z.number().int().min(0),
@@ -100,7 +100,7 @@ export function buildEmptyAttributes(maxPoints: number): Attributes {
   return {
     strength: 0,
     agility: 0,
-    intelligence: 0,
+    defense: 0,
     constitution: 0,
     charisma: 0,
     willpower: 0,
@@ -135,12 +135,12 @@ export function validateAndCorrectAttributes(
   corrected?: boolean;
   errors?: string[];
 } {
-  const keys: AttributeKey[] = ['strength', 'agility', 'intelligence', 'constitution', 'charisma', 'willpower', 'luck'];
+  const keys: AttributeKey[] = ['strength', 'agility', 'defense', 'constitution', 'charisma', 'willpower', 'luck'];
 
   const clamped: Record<AttributeKey, number> = {
     strength: 0,
     agility: 0,
-    intelligence: 0,
+    defense: 0,
     constitution: 0,
     charisma: 0,
     willpower: 0,
@@ -213,7 +213,7 @@ export const CharacterSchema = z.object({
   attributes: z.object({
     strength: z.number(),
     agility: z.number(),
-    intelligence: z.number(),
+    defense: z.number(),
     constitution: z.number(),
     charisma: z.number(),
     willpower: z.number(),

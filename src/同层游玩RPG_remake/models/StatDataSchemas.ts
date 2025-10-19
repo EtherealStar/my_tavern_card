@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // 属性名称枚举
-export const AttributeNameSchema = z.enum(['力量', '敏捷', '智力', '体质', '魅力', '幸运', '意志']);
+export const AttributeNameSchema = z.enum(['力量', '敏捷', '防御', '体质', '魅力', '幸运', '意志']);
 export type AttributeName = z.infer<typeof AttributeNameSchema>;
 
 // 属性值 schema
@@ -134,7 +134,7 @@ export function validateStatData(data: unknown): ValidationResult {
 export function correctStatData(data: unknown): ValidationResult {
   try {
     // 尝试修复常见的数据问题
-    const corrected = { ...data } as any;
+    const corrected = data && typeof data === 'object' ? ({ ...data } as any) : ({} as any);
 
     // 确保基础属性存在
     if (!corrected.base_attributes) {
@@ -143,7 +143,7 @@ export function correctStatData(data: unknown): ValidationResult {
 
     // 确保当前属性存在
     if (!corrected.current_attributes) {
-      corrected.current_attributes = { ...corrected.base_attributes };
+      corrected.current_attributes = corrected.base_attributes ? { ...corrected.base_attributes } : {};
     }
 
     // 确保装备信息存在
@@ -185,7 +185,7 @@ export const DefaultStatData: StatData = {
   base_attributes: {
     力量: 10,
     敏捷: 10,
-    智力: 10,
+    防御: 10,
     体质: 10,
     魅力: 10,
     幸运: 10,
@@ -194,13 +194,17 @@ export const DefaultStatData: StatData = {
   current_attributes: {
     力量: 10,
     敏捷: 10,
-    智力: 10,
+    防御: 10,
     体质: 10,
     魅力: 10,
     幸运: 10,
     意志: 10,
   },
-  equipment: {},
+  equipment: {
+    weapon: undefined,
+    armor: undefined,
+    accessory: undefined,
+  },
   inventory: {},
   achievements: [],
   quests: [],

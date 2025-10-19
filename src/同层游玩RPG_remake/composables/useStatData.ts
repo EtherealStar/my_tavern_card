@@ -15,7 +15,7 @@
  * 4. 性能更好，逻辑更清晰
  */
 
-import { computed, inject, onMounted, onUnmounted, reactive, ref } from 'vue';
+import { inject, onMounted, onUnmounted, ref } from 'vue';
 import { TYPES } from '../core/ServiceIdentifiers';
 import { ATTRIBUTE_NAME_MAP } from '../models/CreationSchemas';
 import type { GameState } from '../models/GameState';
@@ -34,7 +34,7 @@ export function useStatData() {
   const CHINESE_TO_ENGLISH_ATTRIBUTE_MAP: Record<string, string> = {
     力量: 'strength',
     敏捷: 'agility',
-    智力: 'intelligence',
+    防御: 'defense',
     体质: 'constitution',
     魅力: 'charisma',
     意志: 'willpower',
@@ -90,24 +90,20 @@ export function useStatData() {
   };
 
   // ==================== 游戏状态数据 ====================
-  // 使用reactive管理游戏状态，通过事件直接更新
+  // 使用纯ref管理游戏状态，通过事件直接更新
 
-  const gameState = reactive({
-    currentDate: '未知日期',
-    currentTime: '未知时间',
-    currentLocation: '未知地点',
-    currentRandomEvent: '无',
-    relationships: {} as Record<string, any>,
-  });
+  const currentDate = ref('未知日期');
+  const currentTime = ref('未知时间');
+  const currentLocation = ref('未知地点');
+  const currentRandomEvent = ref('无');
+  const relationships = ref({} as Record<string, any>);
 
   // ==================== 角色基本信息数据 ====================
-  // 使用reactive管理角色基本信息，通过事件直接更新
+  // 使用纯ref管理角色基本信息，通过事件直接更新
 
-  const characterInfo = reactive({
-    gender: '未知',
-    race: '未知',
-    age: 16,
-  });
+  const gender = ref('未知');
+  const race = ref('未知');
+  const age = ref(16);
 
   // ==================== 关系人物数据 ====================
   // 使用reactive管理关系人物信息，通过事件直接更新
@@ -119,16 +115,36 @@ export function useStatData() {
   // 计算属性：检查随机事件是否活跃
   const isRandomEventActive = ref(false);
 
+  // ==================== 敌人数据 ====================
+  // 使用纯ref管理敌人信息，通过事件直接更新
+
+  const enemies = ref<Record<string, any>>({});
+  const enemiesList = ref<any[]>([]);
+  const enemiesLoading = ref(false);
+  const enemiesError = ref<string | null>(null);
+
   // 统一的数据更新方法
-  const updateGameState = (newState: Partial<typeof gameState>) => {
-    Object.assign(gameState, newState);
+  const updateGameState = (newState: {
+    currentDate?: string;
+    currentTime?: string;
+    currentLocation?: string;
+    currentRandomEvent?: string;
+    relationships?: Record<string, any>;
+  }) => {
+    if (newState.currentDate !== undefined) currentDate.value = newState.currentDate;
+    if (newState.currentTime !== undefined) currentTime.value = newState.currentTime;
+    if (newState.currentLocation !== undefined) currentLocation.value = newState.currentLocation;
+    if (newState.currentRandomEvent !== undefined) currentRandomEvent.value = newState.currentRandomEvent;
+    if (newState.relationships !== undefined) relationships.value = newState.relationships;
     // 更新随机事件活跃状态
-    isRandomEventActive.value = gameState.currentRandomEvent !== '无' && gameState.currentRandomEvent.trim() !== '';
+    isRandomEventActive.value = currentRandomEvent.value !== '无' && currentRandomEvent.value.trim() !== '';
   };
 
   // 角色信息更新方法
-  const updateCharacterInfo = (newInfo: Partial<typeof characterInfo>) => {
-    Object.assign(characterInfo, newInfo);
+  const updateCharacterInfo = (newInfo: { gender?: string; race?: string; age?: number }) => {
+    if (newInfo.gender !== undefined) gender.value = newInfo.gender;
+    if (newInfo.race !== undefined) race.value = newInfo.race;
+    if (newInfo.age !== undefined) age.value = newInfo.age;
   };
 
   // 异步加载游戏状态数据
@@ -152,6 +168,13 @@ export function useStatData() {
       });
 
       updateCharacterInfo(charInfo);
+      // 更新 enemies 根对象（若可用）
+      try {
+        const enemyRoot = (await statDataBinding?.getAttributeValue('enemies', {})) || {};
+        enemies.value = enemyRoot && typeof enemyRoot === 'object' ? enemyRoot : {};
+      } catch {
+        enemies.value = {};
+      }
     } catch (err) {
       console.error('[useStatData] 加载游戏状态数据失败:', err);
     }
@@ -426,7 +449,7 @@ export function useStatData() {
   const getCharacterAttributes = async (characterId: string | number): Promise<Record<string, number>> => {
     try {
       const attributes: Record<string, number> = {};
-      const attrNames = ['力量', '敏捷', '智力', '体质', '魅力', '幸运', '意志'];
+      const attrNames = ['力量', '敏捷', '防御', '体质', '魅力', '幸运', '意志'];
 
       for (const attrName of attrNames) {
         // 使用英文属性名获取数据，因为MVU变量表中存储的是英文属性名
@@ -480,6 +503,77 @@ export function useStatData() {
     } catch (error) {
       console.error('[useStatData] 获取人物背包失败:', error);
       return { weapons: [], armors: [], accessories: [], others: [] };
+    }
+  };
+
+  // ==================== 敌人数据获取方法 ====================
+
+  /**
+   * 获取所有在场敌人列表
+   */
+  const getEnemies = async (): Promise<any[]> => {
+    try {
+      enemiesLoading.value = true;
+      enemiesError.value = null;
+
+      const enemyRoot = (await statDataBinding?.getAttributeValue('enemies', {})) || {};
+      enemies.value = enemyRoot && typeof enemyRoot === 'object' ? enemyRoot : {};
+
+      const out: any[] = [];
+      const attrNames = ['力量', '敏捷', '防御', '体质', '魅力', '幸运', '意志'];
+
+      for (const [enemyId, _enemyData] of Object.entries(enemies.value)) {
+        const variantId = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.variantId`, '未知')) || '未知';
+        const gender = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.gender`, '未知')) || '未知';
+        const race = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.race`, '未知')) || '未知';
+
+        const attributes: Record<string, number> = {};
+        for (const attrName of attrNames) {
+          const englishName = getEnglishAttributeName(attrName);
+          const v = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.attributes.${englishName}`, 0)) || 0;
+          attributes[attrName] = Number(v);
+        }
+
+        out.push({ id: enemyId, variantId, gender, race, attributes });
+      }
+
+      enemiesList.value = out;
+      return out;
+    } catch (error) {
+      console.error('[useStatData] 获取敌人列表失败:', error);
+      enemiesError.value = '获取敌人列表失败';
+      enemiesList.value = [];
+      return [];
+    } finally {
+      enemiesLoading.value = false;
+    }
+  };
+
+  /**
+   * 获取单个敌人详情
+   */
+  const getEnemy = async (enemyId: string | number): Promise<any | null> => {
+    try {
+      // 先尝试从缓存中获取
+      const cached = enemiesList.value.find(e => e.id === enemyId);
+      if (cached) return cached;
+
+      const variantId = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.variantId`, '未知')) || '未知';
+      const gender = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.gender`, '未知')) || '未知';
+      const race = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.race`, '未知')) || '未知';
+
+      const attrNames = ['力量', '敏捷', '防御', '体质', '魅力', '幸运', '意志'];
+      const attributes: Record<string, number> = {};
+      for (const attrName of attrNames) {
+        const englishName = getEnglishAttributeName(attrName);
+        const v = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.attributes.${englishName}`, 0)) || 0;
+        attributes[attrName] = Number(v);
+      }
+
+      return { id: enemyId, variantId, gender, race, attributes };
+    } catch (error) {
+      console.error('[useStatData] 获取敌人详情失败:', error);
+      return null;
     }
   };
 
@@ -575,6 +669,14 @@ export function useStatData() {
     }
 
     return '';
+  };
+
+  /**
+   * 检查MVU属性是否被修改
+   * 复用 isAttributeModified 的逻辑，用于模板中的MVU修改检查
+   */
+  const isMvuAttributeModified = (attributeName: string): boolean => {
+    return isAttributeModified(attributeName);
   };
 
   // ==================== 装备管理方法 ====================
@@ -776,6 +878,15 @@ export function useStatData() {
             // 更新游戏状态数据和角色信息
             await loadGameStateData();
 
+            // 刷新敌人列表（懒加载：仅在已打开或已有数据时刷新）
+            try {
+              if (enemiesList.value.length > 0) {
+                await getEnemies();
+              }
+            } catch (e) {
+              console.warn('[useStatData] 刷新敌人列表失败:', e);
+            }
+
             // 触发数据更新
             dataUpdateTrigger.value++;
           } catch (err) {
@@ -849,29 +960,28 @@ export function useStatData() {
     equipment,
     inventory,
 
-    // 统一的游戏状态
-    gameState,
+    // 统一的游戏状态 - 纯ref架构
+    currentDate,
+    currentTime,
+    currentLocation,
+    currentRandomEvent,
+    relationships,
     isRandomEventActive,
 
-    // 角色基本信息
-    characterInfo,
-
-    // 为了向后兼容，保留原有的访问方式（使用computed包装reactive数据）
-    relationships: computed(() => gameState.relationships),
-    currentDate: computed(() => gameState.currentDate),
-    currentTime: computed(() => gameState.currentTime),
-    currentLocation: computed(() => gameState.currentLocation),
-    currentRandomEvent: computed(() => gameState.currentRandomEvent),
-
-    // 角色基本信息计算属性（为了向后兼容）
-    gender: computed(() => characterInfo.gender),
-    race: computed(() => characterInfo.race),
-    age: computed(() => characterInfo.age),
+    // 角色基本信息 - 纯ref架构
+    gender,
+    race,
+    age,
 
     // 关系人物数据
     relationshipCharacters,
     relationshipCharactersLoading,
     relationshipCharactersError,
+    // 敌人数据
+    enemies,
+    enemiesList,
+    enemiesLoading,
+    enemiesError,
 
     // ==================== 数据操作方法 ====================
     loadGameStateData,
@@ -899,11 +1009,15 @@ export function useStatData() {
     getCharacterAttributes,
     getCharacterEquipment,
     getCharacterInventory,
+    // 敌人方法
+    getEnemies,
+    getEnemy,
 
     // 属性显示方法
     getAttributeDisplay,
     getAttributeDisplayAsync,
     isAttributeModified,
+    isMvuAttributeModified,
     getAttributeDeltaValue,
 
     // 装备管理方法

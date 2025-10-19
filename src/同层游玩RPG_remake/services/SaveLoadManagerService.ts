@@ -570,13 +570,28 @@ export class SaveLoadManagerService {
   }
 
   /**
-   * 更新游戏状态（已移除持久化，仅用于兼容性）
+   * 更新游戏状态
    */
   async updateGameState(data: SaveData): Promise<boolean> {
     try {
-      // 游戏状态不再持久化，此方法保留用于兼容性
-      console.log('[SaveLoadManager] 游戏状态不再持久化，存档信息:', data.name);
-      return true;
+      console.log('[SaveLoadManager] 更新游戏状态，存档信息:', data.name, 'slotId:', data.slotId);
+
+      // 获取游戏状态管理器
+      const gameStateManager = (window as any).__RPG_GAME_STATE_MANAGER__;
+      if (gameStateManager && gameStateManager.transitionToPlaying) {
+        // 调用游戏状态管理器的 transitionToPlaying 方法，传入正确的 slotId
+        const success = await gameStateManager.transitionToPlaying(data.name, data.slotId);
+        if (success) {
+          console.log('[SaveLoadManager] 游戏状态更新成功，slotId:', data.slotId);
+          return true;
+        } else {
+          console.warn('[SaveLoadManager] 游戏状态更新失败');
+          return false;
+        }
+      } else {
+        console.warn('[SaveLoadManager] 游戏状态管理器不可用，无法更新状态');
+        return false;
+      }
     } catch (error) {
       console.error('[SaveLoadManager] 更新游戏状态失败:', error);
       return false;

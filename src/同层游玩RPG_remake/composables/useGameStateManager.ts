@@ -24,15 +24,39 @@ export interface GameStateManager {
   currentState: ComputedRef<GameState>;
   isTransitioning: ComputedRef<boolean>;
 
+  // 计算属性
+  isInBattle: ComputedRef<boolean>;
+  isPlaying: ComputedRef<boolean>;
+  isInitial: ComputedRef<boolean>;
+  isCreation: ComputedRef<boolean>;
+  hasBattleConfig: ComputedRef<boolean>;
+  hasBattleState: ComputedRef<boolean>;
+
   // 状态切换方法
   transitionToInitial: (options?: GameStateTransitionOptions) => Promise<boolean>;
   transitionToCreation: (options?: GameStateTransitionOptions) => Promise<boolean>;
-  transitionToPlaying: (options?: GameStateTransitionOptions) => Promise<boolean>;
+  transitionToPlaying: (optionsOrSaveName?: GameStateTransitionOptions | string, slotId?: string) => Promise<boolean>;
+
+  // 战斗管理
+  enterBattle: (battleConfig: any, previousPhase?: GamePhase) => Promise<boolean>;
+  exitBattle: (returnToPrevious?: boolean) => Promise<boolean>;
+  updateBattleState: (battleState: any) => Promise<boolean>;
 
   // 状态更新方法
   updateCreationData: (data: CreationData) => Promise<boolean>;
+  setPlayer: (name: string) => Promise<boolean>;
+  setCreationData: (creationData: CreationData) => Promise<boolean>;
   startNewGame: () => Promise<boolean>;
   resetGameState: () => Promise<boolean>;
+  reset: () => Promise<boolean>;
+
+  // 状态查询方法
+  getCurrentGameState: () => GameState;
+  getCurrentPhase: () => GamePhase;
+  getCreationData: () => CreationData | undefined;
+  getBattleConfig: () => any;
+  getBattleState: () => any;
+  getPreviousPhase: () => GamePhase | undefined;
 
   // 状态监听
   onStateChange: (callback: (newState: GameState) => void) => () => void;
@@ -97,8 +121,17 @@ export function useGameStateManager(): GameStateManager {
   const isTransitioning = ref(false);
   const coordinator = new ComposableCoordinator();
 
+  // 状态切换锁
+  let transitionLock: Promise<boolean> | null = null;
+
   // 计算属性
   const currentPhase = computed(() => currentState.value.phase);
+  const isInBattle = computed(() => currentState.value.phase === GamePhase.BATTLE);
+  const isPlaying = computed(() => currentState.value.phase === GamePhase.PLAYING);
+  const isInitial = computed(() => currentState.value.phase === GamePhase.INITIAL);
+  const isCreation = computed(() => currentState.value.phase === GamePhase.CREATION);
+  const hasBattleConfig = computed(() => !!currentState.value.battleConfig);
+  const hasBattleState = computed(() => !!currentState.value.battleState);
   const isServiceAvailable = computed(() => {
     return !!(gameStateService && eventBus);
   });
@@ -170,12 +203,33 @@ export function useGameStateManager(): GameStateManager {
       throw createError('SERVICE_UNAVAILABLE', '游戏状态服务不可用');
     }
 
-    if (isTransitioning.value) {
-      throw createError('TRANSITION_FAILED', '状态切换正在进行中');
+    // 如果已经有状态切换在进行，等待它完成
+    if (transitionLock) {
+      try {
+        await transitionLock;
+      } catch (error) {
+        // 忽略前一个切换的错误，继续执行当前切换
+        console.warn('[useGameStateManager] 前一个状态切换失败，继续执行当前切换:', error);
+      }
     }
 
+    // 创建新的状态切换锁
+    transitionLock = executeTransition(targetPhase, options);
     isTransitioning.value = true;
 
+    try {
+      const result = await transitionLock;
+      return result;
+    } finally {
+      transitionLock = null;
+      isTransitioning.value = false;
+    }
+  };
+
+  const executeTransition = async (
+    targetPhase: GamePhase,
+    options: GameStateTransitionOptions = {},
+  ): Promise<boolean> => {
     try {
       // 触发开始事件
       if (eventBus?.emit && !options.silent) {
@@ -235,8 +289,6 @@ export function useGameStateManager(): GameStateManager {
         eventBus.emit('game:transition-failed', { targetPhase, error, options });
       }
       throw error;
-    } finally {
-      isTransitioning.value = false;
     }
   };
 
@@ -258,11 +310,171 @@ export function useGameStateManager(): GameStateManager {
     }
   };
 
-  const transitionToPlaying = async (options?: GameStateTransitionOptions): Promise<boolean> => {
+  const transitionToPlaying = async (
+    optionsOrSaveName?: GameStateTransitionOptions | string,
+    slotId?: string,
+  ): Promise<boolean> => {
     try {
+      let options: GameStateTransitionOptions;
+
+      // 支持重载：直接传递 saveName 和 slotId 参数
+      if (typeof optionsOrSaveName === 'string') {
+        options = {
+          saveName: optionsOrSaveName,
+          slotId: slotId,
+        };
+      } else {
+        options = optionsOrSaveName || {};
+      }
+
       return await performTransition(GamePhase.PLAYING, options);
     } catch (error) {
-      return handleError(error, '转换到游戏状态', GamePhase.PLAYING, options);
+      return handleError(
+        error,
+        '转换到游戏状态',
+        GamePhase.PLAYING,
+        typeof optionsOrSaveName === 'string' ? { saveName: optionsOrSaveName, slotId } : optionsOrSaveName,
+      );
+    }
+  };
+
+  // ==================== 战斗管理方法 ====================
+
+  const enterBattle = async (battleConfig: any, previousPhase?: GamePhase): Promise<boolean> => {
+    if (!isServiceAvailable.value) {
+      throw createError('SERVICE_UNAVAILABLE', '游戏状态服务不可用');
+    }
+
+    try {
+      const oldPhase = currentState.value.phase;
+
+      // 将 BattleConfig 包装在 BattleConfigItem 结构中，确保数据结构一致性
+      const battleConfigItem = {
+        id: 'current_battle',
+        name: '当前战斗',
+        description: '正在进行的战斗',
+        difficulty: 'normal' as const,
+        config: battleConfig, // 原始 BattleConfig
+      };
+
+      const newState = {
+        ...currentState.value,
+        phase: GamePhase.BATTLE,
+        previousPhase: previousPhase || oldPhase,
+        battleConfig: battleConfigItem, // 存储完整的 BattleConfigItem
+        battleState: {
+          started: true,
+          ended: false,
+          winner: null,
+          currentTurn: 'player',
+          participants: battleConfig.participants || [],
+        },
+      };
+
+      // 更新内存状态
+      currentState.value = newState;
+
+      // 通知状态变化
+      if (gameStateService) {
+        await gameStateService.setGameState(newState);
+      }
+
+      // 发送事件
+      if (eventBus?.emit) {
+        eventBus.emit('game:enter-battle', {
+          battleConfig,
+          previousPhase: previousPhase || oldPhase,
+        });
+      }
+
+      console.log('[useGameStateManager] Entered battle:', {
+        battleConfig,
+        previousPhase: previousPhase || oldPhase,
+      });
+
+      return true;
+    } catch (error) {
+      return handleError(error, '进入战斗状态');
+    }
+  };
+
+  const exitBattle = async (returnToPrevious: boolean = true): Promise<boolean> => {
+    if (!isServiceAvailable.value) {
+      throw createError('SERVICE_UNAVAILABLE', '游戏状态服务不可用');
+    }
+
+    try {
+      const previousPhase = currentState.value.previousPhase || GamePhase.PLAYING;
+      const newState = {
+        ...currentState.value,
+        phase: returnToPrevious ? previousPhase : GamePhase.PLAYING,
+        previousPhase: undefined,
+        battleConfig: undefined,
+        battleState: undefined,
+      };
+
+      // 更新内存状态
+      currentState.value = newState;
+
+      // 通知状态变化
+      if (gameStateService) {
+        await gameStateService.setGameState(newState);
+      }
+
+      // 发送事件
+      if (eventBus?.emit) {
+        eventBus.emit('game:exit-battle', {
+          returnToPrevious,
+          previousPhase,
+        });
+      }
+
+      console.log('[useGameStateManager] Exited battle:', {
+        returnToPrevious,
+        newPhase: currentState.value.phase,
+      });
+
+      return true;
+    } catch (error) {
+      return handleError(error, '退出战斗状态');
+    }
+  };
+
+  const updateBattleState = async (battleState: any): Promise<boolean> => {
+    if (!isServiceAvailable.value) {
+      throw createError('SERVICE_UNAVAILABLE', '游戏状态服务不可用');
+    }
+
+    if (currentState.value.phase !== GamePhase.BATTLE) {
+      console.warn('[useGameStateManager] 当前不在战斗状态，无法更新战斗状态');
+      return false;
+    }
+
+    try {
+      const newState = {
+        ...currentState.value,
+        battleState: {
+          ...currentState.value.battleState,
+          ...battleState,
+        },
+      };
+
+      // 更新内存状态
+      currentState.value = newState;
+
+      // 通知状态变化
+      if (gameStateService) {
+        await gameStateService.setGameState(newState);
+      }
+
+      // 发送事件
+      if (eventBus?.emit) {
+        eventBus.emit('game:battle-state-changed', { battleState });
+      }
+
+      return true;
+    } catch (error) {
+      return handleError(error, '更新战斗状态');
     }
   };
 
@@ -300,6 +512,52 @@ export function useGameStateManager(): GameStateManager {
     }
   };
 
+  const setPlayer = async (name: string): Promise<boolean> => {
+    if (!isServiceAvailable.value) {
+      throw createError('SERVICE_UNAVAILABLE', '游戏状态服务不可用');
+    }
+
+    try {
+      const newState = {
+        ...currentState.value,
+        player: { name },
+      };
+
+      currentState.value = newState;
+
+      if (gameStateService) {
+        await gameStateService.setGameState(newState);
+      }
+
+      return true;
+    } catch (error) {
+      return handleError(error, '设置玩家信息');
+    }
+  };
+
+  const setCreationData = async (creationData: CreationData): Promise<boolean> => {
+    if (!isServiceAvailable.value) {
+      throw createError('SERVICE_UNAVAILABLE', '游戏状态服务不可用');
+    }
+
+    try {
+      const newState = {
+        ...currentState.value,
+        creationData,
+      };
+
+      currentState.value = newState;
+
+      if (gameStateService) {
+        await gameStateService.setGameState(newState);
+      }
+
+      return true;
+    } catch (error) {
+      return handleError(error, '设置创建数据');
+    }
+  };
+
   const resetGameState = async (): Promise<boolean> => {
     if (!isServiceAvailable.value) {
       throw createError('SERVICE_UNAVAILABLE', '游戏状态服务不可用');
@@ -313,6 +571,29 @@ export function useGameStateManager(): GameStateManager {
       return success;
     } catch (error) {
       return handleError(error, '重置游戏状态');
+    }
+  };
+
+  const reset = async (): Promise<boolean> => {
+    try {
+      const resetState = {
+        phase: GamePhase.INITIAL,
+        started: false,
+      };
+
+      currentState.value = resetState;
+
+      if (gameStateService) {
+        await gameStateService.setGameState(resetState);
+      }
+
+      if (eventBus?.emit) {
+        eventBus.emit('game:state-reset');
+      }
+
+      return true;
+    } catch (error) {
+      return handleError(error, '重置状态');
     }
   };
 
@@ -334,6 +615,32 @@ export function useGameStateManager(): GameStateManager {
     return onStateChange(newState => {
       callback(newState.phase);
     });
+  };
+
+  // ==================== 状态查询方法 ====================
+
+  const getCurrentGameState = (): GameState => {
+    return { ...currentState.value };
+  };
+
+  const getCurrentPhase = (): GamePhase => {
+    return currentState.value.phase;
+  };
+
+  const getCreationData = (): CreationData | undefined => {
+    return currentState.value.creationData;
+  };
+
+  const getBattleConfig = (): any => {
+    return currentState.value.battleConfig;
+  };
+
+  const getBattleState = (): any => {
+    return currentState.value.battleState;
+  };
+
+  const getPreviousPhase = (): GamePhase | undefined => {
+    return currentState.value.previousPhase;
   };
 
   // ==================== 服务状态检查 ====================
@@ -382,15 +689,39 @@ export function useGameStateManager(): GameStateManager {
     currentState: computed(() => currentState.value),
     isTransitioning: computed(() => isTransitioning.value),
 
+    // 计算属性
+    isInBattle,
+    isPlaying,
+    isInitial,
+    isCreation,
+    hasBattleConfig,
+    hasBattleState,
+
     // 状态切换方法
     transitionToInitial,
     transitionToCreation,
     transitionToPlaying,
 
+    // 战斗管理
+    enterBattle,
+    exitBattle,
+    updateBattleState,
+
     // 状态更新方法
     updateCreationData,
+    setPlayer,
+    setCreationData,
     startNewGame,
     resetGameState,
+    reset,
+
+    // 状态查询方法
+    getCurrentGameState,
+    getCurrentPhase,
+    getCreationData,
+    getBattleConfig,
+    getBattleState,
+    getPreviousPhase,
 
     // 状态监听
     onStateChange,

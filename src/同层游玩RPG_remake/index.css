@@ -1587,4 +1587,12 @@
       @apply p-3 text-sm;
     }
   }
+  /* Battle overlay container */
+  #rpg-root .battle-overlay {
+    position: relative;
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
 }

@@ -1,3 +1,4 @@
+import CopyWebpackPlugin from 'copy-webpack-plugin';
 import HtmlInlineScriptWebpackPlugin from 'html-inline-script-webpack-plugin';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
@@ -183,6 +184,18 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
               use: 'html-loader',
               exclude: /node_modules/,
             },
+            {
+              resourceQuery: /inline/,
+              type: 'asset/inline',
+              exclude: /node_modules/,
+            },
+            {
+              test: /\.(png|jpe?g|gif|svg|webp)$/i,
+              type: 'asset/resource',
+              generator: {
+                filename: 'assets/[name][ext]',
+              },
+            },
           ].concat(
             entry.html === undefined
               ? <any[]>[
@@ -264,7 +277,20 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
             },
           }),
         ]
-    ).concat({ apply: watch_it }, new VueLoaderPlugin()),
+    ).concat(
+      { apply: watch_it },
+      new VueLoaderPlugin(),
+      // 复制静态资源文件
+      new CopyWebpackPlugin({
+        patterns: [
+          {
+            from: path.join(__dirname, 'src', '同层游玩RPG_remake', 'assets'),
+            to: path.join(__dirname, 'dist', path.relative(path.join(__dirname, 'src'), script_filepath.dir), 'assets'),
+            noErrorOnMissing: true,
+          },
+        ],
+      }),
+    ),
     optimization: {
       minimize: true,
       runtimeChunk: false,

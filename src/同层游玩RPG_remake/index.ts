@@ -1,5 +1,4 @@
 import $ from 'jquery';
-import { createPinia } from 'pinia';
 import { createApp } from 'vue';
 import App from './App.vue';
 import { serviceContainer } from './core/Container';
@@ -76,7 +75,6 @@ async function ensureJQueryLoaded(): Promise<void> {
       const mountEl = document.getElementById(vueId);
       if (mountEl) {
         const app = createApp(App);
-        app.use(createPinia());
         // 暴露以便卸载/重挂
         (window as any).__RPG_VUE_APP__ = app;
         // 提供服务与事件总线给 Vue 组件使用
@@ -92,11 +90,15 @@ async function ensureJQueryLoaded(): Promise<void> {
           // LoadManager功能已整合到useSaveLoad中，不再需要单独提供
           app.provide(TYPES.ResponsiveService, serviceContainer.get(TYPES.ResponsiveService));
           app.provide(TYPES.CommandQueueService, serviceContainer.get(TYPES.CommandQueueService));
-          try {
-            app.provide(TYPES.GameStateService, serviceContainer.get(TYPES.GameStateService));
-          } catch {
-            /* no-op */ void 0;
-          }
+          // 提供战斗与Phaser相关服务
+          app.provide(TYPES.PhaserManager, serviceContainer.get(TYPES.PhaserManager));
+          app.provide(TYPES.BattleService, serviceContainer.get(TYPES.BattleService));
+          app.provide(TYPES.BattleEngine, serviceContainer.get(TYPES.BattleEngine));
+          app.provide(TYPES.BattleResultHandler, serviceContainer.get(TYPES.BattleResultHandler));
+          app.provide(TYPES.BattleConfigService, serviceContainer.get(TYPES.BattleConfigService));
+          app.provide(TYPES.BattleConfigInitializer, serviceContainer.get(TYPES.BattleConfigInitializer));
+          // 提供游戏状态服务给状态管理器使用
+          app.provide(TYPES.GameStateService, serviceContainer.get(TYPES.GameStateService));
         } catch {
           /* no-op */ void 0;
         }
@@ -107,7 +109,6 @@ async function ensureJQueryLoaded(): Promise<void> {
             /* no-op */ void 0;
           }
           const next = createApp(App);
-          next.use(createPinia());
           (window as any).__RPG_VUE_APP__ = next;
           try {
             // 使用Symbol作为key确保类型安全和唯一性，与inject保持一致
@@ -121,11 +122,15 @@ async function ensureJQueryLoaded(): Promise<void> {
             // LoadManager功能已整合到useSaveLoad中，不再需要单独提供
             next.provide(TYPES.ResponsiveService, serviceContainer.get(TYPES.ResponsiveService));
             next.provide(TYPES.CommandQueueService, serviceContainer.get(TYPES.CommandQueueService));
-            try {
-              next.provide(TYPES.GameStateService, serviceContainer.get(TYPES.GameStateService));
-            } catch {
-              /* no-op */ void 0;
-            }
+            // 提供战斗与Phaser相关服务
+            next.provide(TYPES.PhaserManager, serviceContainer.get(TYPES.PhaserManager));
+            next.provide(TYPES.BattleService, serviceContainer.get(TYPES.BattleService));
+            next.provide(TYPES.BattleEngine, serviceContainer.get(TYPES.BattleEngine));
+            next.provide(TYPES.BattleResultHandler, serviceContainer.get(TYPES.BattleResultHandler));
+            next.provide(TYPES.BattleConfigService, serviceContainer.get(TYPES.BattleConfigService));
+            next.provide(TYPES.BattleConfigInitializer, serviceContainer.get(TYPES.BattleConfigInitializer));
+            // 提供游戏状态服务给状态管理器使用
+            next.provide(TYPES.GameStateService, serviceContainer.get(TYPES.GameStateService));
           } catch {
             /* no-op */ void 0;
           }

@@ -3,6 +3,13 @@ import 'reflect-metadata';
 import { TYPES } from './ServiceIdentifiers';
 
 // 导入服务类
+import { BattleConfigInitializer } from '同层游玩RPG_remake/services/BattleConfigInitializer';
+import { BattleConfigService } from '同层游玩RPG_remake/services/BattleConfigService';
+import { BattleEngine } from '同层游玩RPG_remake/services/BattleEngine';
+import { BattleResourceService } from '同层游玩RPG_remake/services/BattleResourceService';
+import { BattleResultHandler } from '同层游玩RPG_remake/services/BattleResultHandler';
+import { BattleService } from '同层游玩RPG_remake/services/BattleService';
+import { PhaserManager } from '同层游玩RPG_remake/services/PhaserManager';
 import { AchievementService } from '../services/AchievementService';
 import { CommandQueueService } from '../services/CommandQueueService';
 import { DomPortalService } from '../services/DomPortalService';
@@ -84,6 +91,21 @@ export class ServiceContainer {
 
     // 指令队列服务 - 单例
     this.container.bind<CommandQueueService>(TYPES.CommandQueueService).to(CommandQueueService).inSingletonScope();
+
+    // 战斗相关服务 - 单例
+    this.container
+      .bind<BattleResourceService>(TYPES.BattleResourceService)
+      .to(BattleResourceService)
+      .inSingletonScope();
+    this.container.bind<BattleConfigService>(TYPES.BattleConfigService).to(BattleConfigService).inSingletonScope();
+    this.container
+      .bind<BattleConfigInitializer>(TYPES.BattleConfigInitializer)
+      .to(BattleConfigInitializer)
+      .inSingletonScope();
+    this.container.bind<BattleEngine>(TYPES.BattleEngine).to(BattleEngine).inSingletonScope();
+    this.container.bind<BattleResultHandler>(TYPES.BattleResultHandler).to(BattleResultHandler).inSingletonScope();
+    this.container.bind<BattleService>(TYPES.BattleService).to(BattleService).inSingletonScope();
+    this.container.bind<PhaserManager>(TYPES.PhaserManager).to(PhaserManager).inSingletonScope();
   }
 
   /**
@@ -131,6 +153,22 @@ export class ServiceContainer {
     // LoadManager功能已整合到useSaveLoad中
     this.serviceDependencies.set('DomPortalService', []);
     this.serviceDependencies.set('CommandQueueService', ['EventBus', 'StatDataBindingService']);
+
+    // 战斗相关服务依赖
+    this.serviceDependencies.set('BattleResourceService', []);
+    this.serviceDependencies.set('BattleConfigService', ['BattleResourceService']);
+    this.serviceDependencies.set('BattleConfigInitializer', ['BattleConfigService']);
+    this.serviceDependencies.set('BattleEngine', ['EventBus']);
+    this.serviceDependencies.set('BattleResultHandler', ['EventBus', 'SaveLoadManagerService']);
+    this.serviceDependencies.set('BattleService', [
+      'EventBus',
+      'BattleEngine',
+      'BattleResultHandler',
+      'SameLayerService',
+      'SaveLoadManagerService',
+    ]);
+    this.serviceDependencies.set('PhaserManager', ['EventBus']);
+
     this.serviceDependencies.set('GameCore', [
       'EventBus',
       'UIService',
@@ -140,6 +178,9 @@ export class ServiceContainer {
       'AchievementService',
       'SaveLoadManagerService',
       'CommandQueueService',
+      'BattleConfigService',
+      'BattleService',
+      'PhaserManager',
     ]);
 
     // 初始化所有服务状态

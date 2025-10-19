@@ -2,6 +2,7 @@ import { inject, injectable } from 'inversify';
 import $ from 'jquery';
 import { updateUserKey } from 'shared/constants';
 // import { CommandQueueService } from '同层游玩RPG_remake/services/CommandQueueService';
+import { BattleConfigInitializer } from '同层游玩RPG_remake/services/BattleConfigInitializer';
 import { GameStateService } from '同层游玩RPG_remake/services/GameStateService';
 import { AchievementService } from '../services/AchievementService';
 import { SameLayerService } from '../services/SameLayerService';
@@ -26,6 +27,7 @@ export class GameCore {
     // @inject(TYPES.SaveLoadFacade) private _saveLoadFacade: SaveLoadFacade, // 已废弃
     @inject(TYPES.SaveLoadManagerService) private saveLoadManagerService: SaveLoadManagerService,
     // @inject(TYPES.CommandQueueService) private commandQueueService: CommandQueueService,
+    @inject(TYPES.BattleConfigInitializer) private battleConfigInitializer: BattleConfigInitializer,
   ) {}
 
   public async init(): Promise<void> {
@@ -85,7 +87,7 @@ export class GameCore {
         attributeMapping: {
           strength: '力量',
           agility: '敏捷',
-          intelligence: '智力',
+          defense: '防御',
           willpower: '意志',
           luck: '幸运',
         },
@@ -117,6 +119,14 @@ export class GameCore {
    */
   public async initializeAdvancedServices(): Promise<void> {
     // 自动存档功能已移除，接口保留在SaveLoadManagerService中
+
+    // 初始化战斗配置
+    try {
+      await this.battleConfigInitializer.initialize();
+    } catch (error) {
+      console.error('[GameCore] 战斗配置初始化失败:', error);
+      // 不抛出错误，允许应用继续运行
+    }
 
     // 读取一次/触达一次以消除未使用成员告警
     try {
@@ -204,6 +214,12 @@ export class GameCore {
 
     // 进入页面即视为开始
     this.eventBus.emit('game:started');
+
+    // 发送初始状态，确保Vue能接收到
+    this.eventBus.emit('game:state-changed', {
+      phase: 'initial',
+      started: false,
+    });
 
     // 监听创建流程事件
     this.eventBus.on('game:start-create', () => {

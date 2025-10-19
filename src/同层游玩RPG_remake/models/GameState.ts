@@ -11,6 +11,7 @@ export enum GamePhase {
   INITIAL = 'initial', // 初始状态 - 主菜单
   CREATION = 'creation', // 创建状态 - 角色创建流程
   PLAYING = 'playing', // 进行状态 - 游戏进行中
+  BATTLE = 'battle', // 战斗状态 - 战斗进行中
 }
 
 // 创建数据模式
@@ -41,6 +42,12 @@ export const GameStateSchema = z.object({
   lastLoaded: z.number().optional(),
   /** 创建状态相关数据 */
   creationData: CreationDataSchema.optional(),
+  /** 战斗配置 */
+  battleConfig: z.any().optional(),
+  /** 战斗状态 */
+  battleState: z.any().optional(),
+  /** 进入战斗前的阶段 */
+  previousPhase: z.nativeEnum(GamePhase).optional(),
 });
 
 export type GameState = z.infer<typeof GameStateSchema>;

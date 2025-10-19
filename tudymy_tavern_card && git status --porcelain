@@ -1,0 +1,153 @@
+[1mdiff --git "a/src/\345\220\214\345\261\202\346\270\270\347\216\251RPG_remake/composables/usePlayingLogic.ts" "b/src/\345\220\214\345\261\202\346\270\270\347\216\251RPG_remake/composables/usePlayingLogic.ts"[m
+[1mindex 5ced113..bbcecb4 100644[m
+[1m--- "a/src/\345\220\214\345\261\202\346\270\270\347\216\251RPG_remake/composables/usePlayingLogic.ts"[m
+[1m+++ "b/src/\345\220\214\345\261\202\346\270\270\347\216\251RPG_remake/composables/usePlayingLogic.ts"[m
+[36m@@ -797,7 +797,11 @@[m [mexport function usePlayingLogic() {[m
+         return false;[m
+       }[m
+ [m
+[31m-      // 2. 获取上一条AI消息的MVU快照[m
+[32m+[m[32m      // 2. 检查是否为ephemeral消息[m
+[32m+[m[32m      const isEphemeral = 'ephemeral' in targetMessage && targetMessage.ephemeral;[m
+[32m+[m[32m      console.log('[usePlayingLogic] 消息类型检查:', { messageId, isEphemeral });[m
+[32m+[m
+[32m+[m[32m      // 3. 获取上一条AI消息的MVU快照[m
+       let previousMvuSnapshot: any = null;[m
+       for (let i = messageIndex - 1; i >= 0; i--) {[m
+         const msg = messages.value[i];[m
+[36m@@ -807,27 +811,13 @@[m [mexport function usePlayingLogic() {[m
+         }[m
+       }[m
+ [m
+[31m-      // 3. 获取对应的用户消息[m
+[32m+[m[32m      // 4. 获取对应的用户消息[m
+       let userMessage: any = null;[m
+[31m-[m
+[31m-      // 如果是ephemeral消息，需要找到对应的用户输入[m
+[31m-      if ('ephemeral' in targetMessage && targetMessage.ephemeral) {[m
+[31m-        // 对于ephemeral消息，向前查找用户输入[m
+[31m-        for (let i = messageIndex - 1; i >= 0; i--) {[m
+[31m-          const msg = messages.value[i];[m
+[31m-          if (msg.role === 'user' && !('ephemeral' in msg && msg.ephemeral)) {[m
+[31m-            userMessage = msg;[m
+[31m-            break;[m
+[31m-          }[m
+[31m-        }[m
+[31m-      } else {[m
+[31m-        // 对于普通AI消息，按原逻辑查找[m
+[31m-        for (let i = messageIndex - 1; i >= 0; i--) {[m
+[31m-          const msg = messages.value[i];[m
+[31m-          if (msg.role === 'user' && !('ephemeral' in msg && msg.ephemeral)) {[m
+[31m-            userMessage = msg;[m
+[31m-            break;[m
+[31m-          }[m
+[32m+[m[32m      for (let i = messageIndex - 1; i >= 0; i--) {[m
+[32m+[m[32m        const msg = messages.value[i];[m
+[32m+[m[32m        if (msg.role === 'user' && !('ephemeral' in msg && msg.ephemeral)) {[m
+[32m+[m[32m          userMessage = msg;[m
+[32m+[m[32m          break;[m
+         }[m
+       }[m
+ [m
+[36m@@ -836,11 +826,11 @@[m [mexport function usePlayingLogic() {[m
+         return false;[m
+       }[m
+ [m
+[31m-      // 4. 移除目标消息（从UI中）[m
+[32m+[m[32m      // 5. 移除目标消息（从UI中）[m
+       messages.value.splice(messageIndex, 1);[m
+ [m
+[31m-      // 5. 确保从存档中真正删除消息[m
+[31m-      if (!('ephemeral' in targetMessage && targetMessage.ephemeral)) {[m
+[32m+[m[32m      // 6. 处理存档删除（仅对非ephemeral消息）[m
+[32m+[m[32m      if (!isEphemeral) {[m
+         const slotId = await getCurrentSaveSlotId();[m
+         console.log('[usePlayingLogic] 获取到的slotId:', slotId, 'messageId:', messageId);[m
+ [m
+[36m@@ -866,37 +856,42 @@[m [mexport function usePlayingLogic() {[m
+             const messageExists = saveData.messages.some(msg => msg.id === messageId);[m
+             console.log('[usePlayingLogic] 消息在存档中存在:', messageExists);[m
+ [m
+[31m-            // 检查是否有正在进行的保存操作[m
+[31m-            const pendingSave = pendingSaveOperations.get(messageId);[m
+[31m-            if (pendingSave) {[m
+[31m-              console.log('[usePlayingLogic] 消息正在保存中，等待保存完成...');[m
+[31m-              try {[m
+[31m-                await pendingSave; // 等待保存完成[m
+[31m-                console.log('[usePlayingLogic] 保存操作完成，继续删除流程');[m
+[31m-                pendingSaveOperations.delete(messageId);[m
+[31m-              } catch (error) {[m
+[31m-                console.warn('[usePlayingLogic] 等待保存完成时出错:', error);[m
+[31m-                pendingSaveOperations.delete(messageId);[m
+[32m+[m[32m            // 如果消息不存在，直接跳过删除操作[m
+[32m+[m[32m            if (!messageExists) {[m
+[32m+[m[32m              console.warn('[usePlayingLogic] 消息不存在于存档中，跳过删除操作');[m
+[32m+[m[32m            } else {[m
+[32m+[m[32m              // 检查是否有正在进行的保存操作[m
+[32m+[m[32m              const pendingSave = pendingSaveOperations.get(messageId);[m
+[32m+[m[32m              if (pendingSave) {[m
+[32m+[m[32m                console.log('[usePlayingLogic] 消息正在保存中，等待保存完成...');[m
+[32m+[m[32m                try {[m
+[32m+[m[32m                  await pendingSave; // 等待保存完成[m
+[32m+[m[32m                  console.log('[usePlayingLogic] 保存操作完成，继续删除流程');[m
+[32m+[m[32m                  pendingSaveOperations.delete(messageId);[m
+[32m+[m[32m                } catch (error) {[m
+[32m+[m[32m                  console.warn('[usePlayingLogic] 等待保存完成时出错:', error);[m
+[32m+[m[32m                  pendingSaveOperations.delete(messageId);[m
+[32m+[m[32m                }[m
+               }[m
+[31m-            }[m
+ [m
+[31m-            const deleteSuccess = await saveLoadManager.deleteMessage(slotId, messageId);[m
+[31m-            console.log('[usePlayingLogic] 删除操作结果:', deleteSuccess);[m
+[32m+[m[32m              const deleteSuccess = await saveLoadManager.deleteMessage(slotId, messageId);[m
+[32m+[m[32m              console.log('[usePlayingLogic] 删除操作结果:', deleteSuccess);[m
+ [m
+[31m-            if (!deleteSuccess) {[m
+[31m-              console.error('[usePlayingLogic] 从存档删除消息失败，无法重新生成');[m
+[31m-              return false;[m
+[31m-            }[m
+[32m+[m[32m              if (!deleteSuccess) {[m
+[32m+[m[32m                console.error('[usePlayingLogic] 从存档删除消息失败，无法重新生成');[m
+[32m+[m[32m                return false;[m
+[32m+[m[32m              }[m
+ [m
+[31m-            // 验证删除是否真正完成[m
+[31m-            const verifyDelete = await saveLoadManager.getSlot(slotId);[m
+[31m-            const messageStillExists = verifyDelete?.messages.some(msg => msg.id === messageId);[m
+[31m-            if (messageStillExists) {[m
+[31m-              console.error('[usePlayingLogic] 消息删除验证失败，消息仍然存在于存档中');[m
+[31m-              return false;[m
+[31m-            }[m
+[32m+[m[32m              // 验证删除是否真正完成[m
+[32m+[m[32m              const verifyDelete = await saveLoadManager.getSlot(slotId);[m
+[32m+[m[32m              const messageStillExists = verifyDelete?.messages.some(msg => msg.id === messageId);[m
+[32m+[m[32m              if (messageStillExists) {[m
+[32m+[m[32m                console.error('[usePlayingLogic] 消息删除验证失败，消息仍然存在于存档中');[m
+[32m+[m[32m                return false;[m
+[32m+[m[32m              }[m
+ [m
+[31m-            console.log('[usePlayingLogic] 成功从存档删除消息并验证完成:', messageId);[m
+[32m+[m[32m              console.log('[usePlayingLogic] 成功从存档删除消息并验证完成:', messageId);[m
+[32m+[m[32m            }[m
+           } catch (error) {[m
+             console.error('[usePlayingLogic] 从存档删除消息失败:', error);[m
+             console.error('[usePlayingLogic] 错误详情:', {[m
+[36m@@ -918,7 +913,7 @@[m [mexport function usePlayingLogic() {[m
+         console.log('[usePlayingLogic] 跳过ephemeral消息的存档删除:', messageId);[m
+       }[m
+ [m
+[31m-      // 6. 恢复上一条MVU快照[m
+[32m+[m[32m      // 7. 恢复上一条MVU快照[m
+       if (previousMvuSnapshot && statDataBinding) {[m
+         const success = await statDataBinding.replaceMvuData(previousMvuSnapshot, {[m
+           type: 'message',[m
+[36m@@ -930,7 +925,7 @@[m [mexport function usePlayingLogic() {[m
+         }[m
+       }[m
+ [m
+[31m-      // 7. 重新生成[m
+[32m+[m[32m      // 8. 重新生成[m
+       const userInput = userMessage.content || userMessage.html?.replace(/<[^>]+>/g, '').trim() || '';[m
+       if (!userInput) {[m
+         console.error('[usePlayingLogic] 用户输入为空');[m

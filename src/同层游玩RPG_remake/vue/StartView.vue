@@ -56,15 +56,18 @@
 
 <script setup lang="ts">
 import { nextTick, onMounted, ref } from 'vue';
-import { useSaveLoad } from '同层游玩RPG_remake/composables/useSaveLoad';
 import { useGameServices } from '../composables/useGameServices';
 import { useGameStateManager } from '../composables/useGameStateManager';
+import { useSaveLoad } from '../composables/useSaveLoad';
 import SaveDialog from './SaveDialog.vue';
 
 // 使用 Composable 获取服务
 const { showSuccess, showInfo, showError } = useGameServices();
-const { checkSaveAvailability, isLoading, loadGame } = useSaveLoad();
-const gameStateManager = useGameStateManager();
+const saveLoad = useSaveLoad();
+const gameState = useGameStateManager();
+
+// 从Composable获取状态和方法
+const { checkSaveAvailability, isLoading, loadGame } = saveLoad;
 
 const showSaveDialog = ref(false);
 const canLoad = ref(false);
@@ -83,8 +86,8 @@ async function startCreation() {
   try {
     showSuccess('开始创建', '进入角色创建流程');
 
-    // 使用新的状态管理器进行状态切换
-    const success = await gameStateManager.transitionToCreation();
+    // 使用Composable进行状态切换
+    const success = await gameState.transitionToCreation();
 
     if (!success) {
       showError('启动创建流程失败');
@@ -122,10 +125,7 @@ async function handleLoaded(data: any) {
 
     if (success) {
       // 切换到游玩状态
-      const transitionSuccess = await gameStateManager.transitionToPlaying({
-        saveName: data.name,
-        slotId: data.slotId,
-      });
+      const transitionSuccess = await gameState.transitionToPlaying(data.name, data.slotId);
 
       if (!transitionSuccess) {
         showError('状态切换失败');

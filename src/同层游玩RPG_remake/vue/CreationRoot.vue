@@ -350,8 +350,9 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useGameStateManager } from '同层游玩RPG_remake/composables/useGameStateManager';
+import { useCharacterCreation } from '../composables/useCharacterCreation';
 import { useGameServices } from '../composables/useGameServices';
-import { useGameStateManager } from '../composables/useGameStateManager';
 import { useSaveLoad } from '../composables/useSaveLoad';
 import { useWorldbookToggle } from '../composables/useWorldbookToggle';
 import { getBackgroundsForWorld } from '../data/backgrounds';
@@ -369,10 +370,14 @@ import {
   type Background,
 } from '../models/CreationSchemas';
 // 获取 composables
-const { createNewEmptySave } = useSaveLoad();
+const saveLoad = useSaveLoad();
+const characterCreation = useCharacterCreation();
 const { showError, showInfo, emitEvent } = useGameServices();
-const gameStateManager = useGameStateManager();
+const gameState = useGameStateManager();
 const { applyBackgroundToggles, applyExpansionToggles } = useWorldbookToggle();
+
+// 从composables获取方法
+const { createNewEmptySave } = saveLoad;
 
 // 创建状态
 const creationState = ref({
@@ -718,41 +723,42 @@ async function handleConfirmCreateSave() {
 
     showSaveModal.value = false;
 
-    // 使用新的状态管理器进行状态切换，传递 slotId
+    // 准备角色创建数据
     const creationData = {
-      difficulty: creationState.value.difficulty || undefined,
-      world: creationState.value.world || undefined,
+      difficulty: creationState.value.difficulty!,
+      world: creationState.value.world!,
       expansions: Array.from(creationState.value.expansions),
       attributes: creationState.value.attributes,
-      background: creationState.value.background?.name || undefined,
-      gender: creationState.value.gender || undefined,
-      race: creationState.value.race || undefined,
+      background: creationState.value.background?.name,
+      gender: creationState.value.gender!,
+      race: creationState.value.race!,
     };
 
-    const transitionSuccess = await gameStateManager.transitionToPlaying({
-      saveName: createResult.saveName || name,
-      slotId: createResult.slotId, // 传递新创建的 slotId
-      creationData,
-    });
+    console.log('[CreationRoot] 开始处理角色创建数据:', creationData);
+
+    // 直接调用 useCharacterCreation 组合式函数处理数据并应用 MVU 变量
+    const processSuccess = await characterCreation.processCreationData(creationData);
+
+    if (!processSuccess) {
+      console.error('[CreationRoot] 角色创建数据处理失败');
+      showError('角色创建失败', characterCreation.creationError.value || '请稍后重试');
+      return;
+    }
+
+    console.log('[CreationRoot] 角色创建数据处理成功，MVU变量已应用');
+
+    // 先更新创建数据到游戏状态
+    gameState.setCreationData(creationData);
+
+    // 然后切换到游戏状态
+    const transitionSuccess = await gameState.transitionToPlaying(createResult.saveName || name, createResult.slotId);
 
     if (!transitionSuccess) {
       showError('启动游戏失败');
       return;
     }
 
-    // 确保初始化文本
-    setTimeout(() => {
-      const storyPayload = {
-        difficulty: creationState.value.difficulty,
-        world: creationState.value.world,
-        expansions: Array.from(creationState.value.expansions),
-        attributes: creationState.value.attributes,
-        background: creationState.value.background?.name,
-        gender: creationState.value.gender,
-        race: creationState.value.race,
-      };
-      emitEvent?.('game:init-story', storyPayload);
-    }, 0);
+    console.log('[CreationRoot] 游戏状态切换成功，角色创建完成');
   } catch (error: any) {
     console.error('[CreationRoot] 创建存档异常:', error);
     showError('创建存档失败', error?.message || '请稍后重试');
@@ -763,8 +769,8 @@ async function handleConfirmCreateSave() {
 
 async function backMenu() {
   try {
-    // 使用新的状态管理器返回开始界面
-    const success = await gameStateManager.transitionToInitial();
+    // 使用组合式函数返回开始界面
+    const success = await gameState.transitionToInitial();
 
     if (!success) {
       showError('返回主菜单失败');

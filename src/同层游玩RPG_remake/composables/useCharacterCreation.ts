@@ -60,10 +60,18 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
     // 直接使用英文属性名，排除pointsLeft字段
     Object.entries(attributes).forEach(([key, value]) => {
       if (key !== 'pointsLeft' && typeof value === 'number') {
-        attributeRecord[key] = value;
+        // 确保数值有效
+        const numValue = Number(value);
+        if (Number.isFinite(numValue) && numValue >= 0) {
+          attributeRecord[key] = numValue;
+        } else {
+          console.warn(`[useCharacterCreation] 无效的属性值: ${key} = ${value}`);
+          attributeRecord[key] = 0; // 使用默认值
+        }
       }
     });
 
+    console.log('[useCharacterCreation] 属性转换结果:', attributeRecord);
     return attributeRecord;
   };
 
@@ -118,6 +126,20 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
     try {
       console.log('[useCharacterCreation] 准备应用属性到MVU变量:', attributes);
 
+      // 检查MVU框架是否可用
+      const Mvu = (window as any).Mvu;
+      if (!Mvu) {
+        console.error('[useCharacterCreation] MVU框架不可用');
+        return false;
+      }
+
+      // 获取MVU数据
+      const mvuData = statDataBinding.getMvuData();
+      if (!mvuData) {
+        console.error('[useCharacterCreation] 无法获取MVU数据');
+        return false;
+      }
+
       // 使用StatDataBindingService的setAttributes方法
       // 该方法会自动检测角色创建数据并设置base_attributes和current_attributes
       const results = await statDataBinding.setAttributes(attributes, 'character_creation');
@@ -156,21 +178,28 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
     }
 
     try {
+      console.log('[useCharacterCreation] 开始设置角色身份:', { gender, race });
+
       // 设置性别
       const genderSuccess = await statDataBinding.setGender(gender, '角色创建');
       if (!genderSuccess) {
         console.warn('[useCharacterCreation] 性别设置失败');
+      } else {
+        console.log('[useCharacterCreation] 性别设置成功:', gender);
       }
 
       // 设置种族
       const raceSuccess = await statDataBinding.setRace(race, '角色创建');
       if (!raceSuccess) {
         console.warn('[useCharacterCreation] 种族设置失败');
+      } else {
+        console.log('[useCharacterCreation] 种族设置成功:', race);
       }
 
       console.log('[useCharacterCreation] 角色身份设置完成:', { gender, race });
     } catch (error) {
       console.error('[useCharacterCreation] 设置角色身份失败:', error);
+      throw error; // 重新抛出错误，让调用者处理
     }
   };
 
@@ -209,8 +238,14 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
 
         if (attributesSuccess) {
           // 4. 设置性别和种族
-          await setCharacterIdentity(data.gender, data.race);
-          return true;
+          try {
+            await setCharacterIdentity(data.gender, data.race);
+            return true;
+          } catch (error) {
+            console.error('[useCharacterCreation] 设置角色身份失败:', error);
+            creationError.value = '角色身份设置失败';
+            return false;
+          }
         } else {
           creationError.value = '属性应用失败';
           return false;
@@ -225,7 +260,13 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
 
       if (attributesSuccess) {
         // 4. 设置性别和种族
-        await setCharacterIdentity(data.gender, data.race);
+        try {
+          await setCharacterIdentity(data.gender, data.race);
+        } catch (error) {
+          console.error('[useCharacterCreation] 设置角色身份失败:', error);
+          creationError.value = '角色身份设置失败';
+          return false;
+        }
 
         // 5. 应用出身世界书开关
         if (background.id) {
@@ -260,12 +301,26 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
    */
   const handleInitStoryEvent = async (data: CreationData) => {
     try {
+      console.log('[useCharacterCreation] 收到game:init-story事件:', data);
+
+      // 验证数据完整性
+      if (!data || !data.attributes || !data.gender || !data.race) {
+        console.error('[useCharacterCreation] 角色创建数据不完整:', data);
+        return;
+      }
+
       const success = await processCreationData(data);
       if (!success) {
         console.error('[useCharacterCreation] 角色创建数据处理失败');
+        if (creationError.value) {
+          console.error('[useCharacterCreation] 错误详情:', creationError.value);
+        }
+      } else {
+        console.log('[useCharacterCreation] 角色创建数据处理成功');
       }
     } catch (error) {
       console.error('[useCharacterCreation] 处理game:init-story事件失败:', error);
+      creationError.value = error instanceof Error ? error.message : '处理事件失败';
     }
   };
 

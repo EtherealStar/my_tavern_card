@@ -6,13 +6,15 @@ location: 未知
 gender: 未知
 race: 未知
 age: 16
+level: 1
+exp: 0
 random_event: 无
 base_attributes:
   $meta:
     recursiveExtensible: false
   strength: 10
   agility: 10
-  intelligence: 10
+  defense: 10
   constitution: 10
   charisma: 10
   willpower: 10
@@ -22,7 +24,7 @@ current_attributes:
     recursiveExtensible: false
   strength: 10
   agility: 10
-  intelligence: 10
+  defense: 10
   constitution: 10
   charisma: 10
   willpower: 10
@@ -57,9 +59,24 @@ relationships:
       attributes:
         strength: 10
         agility: 10
-        intelligence: 10
+        defense: 10
         constitution: 10
         charisma: 10
         willpower: 10
         luck: 10
       affinity: 0
+enemies:
+  $meta:
+    recursiveExtensible: true
+    template:
+      variantId: 未知
+      gender: 未知
+      race: 未知
+      attributes:
+        strength: 10
+        agility: 10
+        defense: 10
+        constitution: 10
+        charisma: 10
+        willpower: 10
+        luck: 10

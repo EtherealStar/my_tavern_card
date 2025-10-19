@@ -8,15 +8,14 @@ import { TYPES } from '../core/ServiceIdentifiers';
 import type { GameState } from '../models/GameState';
 import { GamePhase } from '../models/GameState';
 import { createMessage, generateMessageId, type SaveMessage } from '../models/SaveSchemas';
-import type { GameStateService } from '../services/GameStateService';
 import type { SameLayerService } from '../services/SameLayerService';
 import type { SaveLoadManagerService } from '../services/SaveLoadManagerService';
 import type { StatDataBindingService } from '../services/StatDataBindingService';
+
 export function usePlayingLogic() {
-  // 注入服务 - 不暴露给Vue组件，只在组合式函数内部使用
-  const sameLayerService = inject<SameLayerService>(TYPES.SameLayerService);
   const saveLoadManager = inject<SaveLoadManagerService>(TYPES.SaveLoadManagerService);
   const statDataBinding = inject<StatDataBindingService>(TYPES.StatDataBindingService);
+  const sameLayerService = inject<SameLayerService>(TYPES.SameLayerService);
   const ui = inject<any>('ui');
 
   // 响应式状态
@@ -211,7 +210,7 @@ export function usePlayingLogic() {
     loadGameStateData: () => Promise<void>,
   ) => {
     try {
-      const gameStateService = inject<GameStateService>('gameState');
+      // const gameStateService = inject<GameStateService>('gameState'); // GameStateService 不存在，暂时注释
       const globalEventBus = (window as any).__RPG_EVENT_BUS__;
 
       const handleGameStateChange = async (newState: any) => {
@@ -230,11 +229,11 @@ export function usePlayingLogic() {
         }
       };
 
-      // 通过GameStateService监听状态变化
-      if (gameStateService) {
-        gameStateService.onStateChange(handleGameStateChange);
-        (window as any).__RPG_GAME_STATE_SERVICE__ = gameStateService;
-      }
+      // 通过GameStateService监听状态变化 - 暂时注释，因为GameStateService不存在
+      // if (gameStateService) {
+      //   gameStateService.onStateChange(handleGameStateChange);
+      //   (window as any).__RPG_GAME_STATE_SERVICE__ = gameStateService;
+      // }
 
       // 通过事件总线监听状态变化
       if (globalEventBus) {
@@ -260,15 +259,15 @@ export function usePlayingLogic() {
       }
 
       // 降级清理：清理旧的事件监听
-      const gameStateService = (window as any).__RPG_GAME_STATE_SERVICE__;
+      // const gameStateService = (window as any).__RPG_GAME_STATE_SERVICE__; // 暂时注释，因为GameStateService不存在
       const listener = (window as any).__RPG_GAME_STATE_LISTENER__;
       const globalEventBus = (window as any).__RPG_EVENT_BUS__;
 
-      // 清理GameStateService监听器
-      if (gameStateService && listener) {
-        gameStateService.offStateChange(listener);
-        (window as any).__RPG_GAME_STATE_SERVICE__ = undefined;
-      }
+      // 清理GameStateService监听器 - 暂时注释，因为GameStateService不存在
+      // if (gameStateService && listener) {
+      //   gameStateService.offStateChange(listener);
+      //   (window as any).__RPG_GAME_STATE_SERVICE__ = undefined;
+      // }
 
       // 清理事件总线监听器
       if (globalEventBus && listener) {
@@ -382,18 +381,34 @@ export function usePlayingLogic() {
       if (gameStateManager && gameStateManager.currentState?.value) {
         const gameState = gameStateManager.currentState.value;
 
+        console.log('[usePlayingLogic] 当前游戏状态:', {
+          phase: gameState.phase,
+          saveName: gameState.saveName,
+          slotId: gameState.slotId,
+          started: gameState.started,
+        });
+
         // 优先使用状态中直接存储的 slotId
         if (gameState.slotId) {
+          console.log('[usePlayingLogic] 使用状态中的 slotId:', gameState.slotId);
           return gameState.slotId;
         }
 
         // 如果没有 slotId，通过存档名查找（向后兼容）
         if (gameState.saveName) {
+          console.log('[usePlayingLogic] 通过存档名查找 slotId:', gameState.saveName);
           const slotId = await saveLoadManager.findSlotIdBySaveName(gameState.saveName);
           if (slotId) {
+            console.log('[usePlayingLogic] 找到对应的 slotId:', slotId);
             return slotId;
           }
         }
+      } else {
+        console.warn('[usePlayingLogic] 游戏状态管理器不可用或状态为空:', {
+          gameStateManagerExists: !!gameStateManager,
+          hasCurrentState: !!gameStateManager?.currentState,
+          hasValue: !!gameStateManager?.currentState?.value,
+        });
       }
 
       console.warn('[usePlayingLogic] 无法获取当前存档 slotId');
@@ -474,6 +489,7 @@ export function usePlayingLogic() {
   /**
    * 删除指定消息
    * 同时从UI消息数组和存档中删除消息
+   * 修复：区分ephemeral消息和存档消息的删除逻辑
    */
   const deleteMessage = async (messageId: string): Promise<boolean> => {
     try {
@@ -486,28 +502,40 @@ export function usePlayingLogic() {
 
       const targetMessage = messages.value[messageIndex];
 
-      // 2. 从UI消息数组中删除
-      messages.value.splice(messageIndex, 1);
+      // 2. 检查是否为ephemeral消息
+      const isEphemeral = 'ephemeral' in targetMessage && targetMessage.ephemeral;
 
-      // 3. 如果不是ephemeral消息，从存档中删除
-      if (!('ephemeral' in targetMessage && targetMessage.ephemeral)) {
+      if (isEphemeral) {
+        // ephemeral消息只存在于UI中，直接删除UI消息
+        console.log('[usePlayingLogic] 删除ephemeral消息:', messageId);
+        messages.value.splice(messageIndex, 1);
+        console.log('[usePlayingLogic] 成功从UI删除ephemeral消息:', messageId);
+        return true;
+      } else {
+        // 存档消息：先从存档中删除，成功后再删除UI消息
         const slotId = await getCurrentSaveSlotId();
         if (slotId && saveLoadManager) {
           try {
-            await saveLoadManager.deleteMessage(slotId, messageId);
+            const archiveDeleteSuccess = await saveLoadManager.deleteMessage(slotId, messageId);
+            if (!archiveDeleteSuccess) {
+              console.error('[usePlayingLogic] 存档删除失败，消息可能不存在:', messageId);
+              return false;
+            }
             console.log('[usePlayingLogic] 成功从存档删除消息:', messageId);
           } catch (error) {
             console.error('[usePlayingLogic] 从存档删除消息失败:', error);
-            // 即使存档删除失败，UI中已经删除了，所以返回true
+            return false; // 存档删除失败，不删除UI消息
           }
         } else {
           console.warn('[usePlayingLogic] 无法获取存档slotId或SaveLoadManager不可用');
+          return false; // 无法访问存档，不删除UI消息
         }
-      } else {
-        console.log('[usePlayingLogic] 跳过ephemeral消息的存档删除:', messageId);
-      }
 
-      return true;
+        // 3. 存档删除成功后，从UI消息数组中删除
+        messages.value.splice(messageIndex, 1);
+        console.log('[usePlayingLogic] 成功从UI删除存档消息:', messageId);
+        return true;
+      }
     } catch (error) {
       console.error('[usePlayingLogic] 删除消息失败:', error);
       return false;

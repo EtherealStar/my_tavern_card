@@ -1,5 +1,8 @@
 import { TRIGGERED_RANDOM_EVENTS_PATH, userKey } from '../shared/constants';
 
+// 等待MVU框架初始化
+await waitGlobalInitialized('Mvu');
+
 type EventItem = {
   name: string;
   allowedPeriods?: string[];
@@ -40,7 +43,7 @@ const EVENT_POOL: EventItem[] = [
   { name: '雨夜的误会', allowedPeriods: ['下午', '晚间'], allowedLocations: ['花丘高中'] },
   { name: '奢侈品店的插曲', allowedPeriods: ['下午', '晚间'] },
   { name: '商业街的调戏', allowedPeriods: ['下午', '晚间'] },
-  { name: '迷路的女游客' },
+  { name: '迷路的女游客', allowedPeriods: ['上午', '下午'] },
   { name: '后台突袭', allowedPeriods: ['下午', '晚间'] },
   { name: '风纪注意', allowedPeriods: ['上午', '下午'], allowedLocations: ['花丘高中'] },
   { name: '美术社的缪斯', allowedPeriods: ['上午', '下午'], allowedLocations: ['花丘高中'] },
@@ -53,12 +56,12 @@ function normalizeLocation(loc: string): string {
   return loc.replace(/{{user}}/g, userKey);
 }
 
-function getCurrentPeriod(variables: Record<string, any>): string | undefined {
-  return _.get(variables, 'stat_data.世界.时段[0]');
+function getCurrentPeriod(variables: Mvu.MvuData): string | undefined {
+  return Mvu.getMvuVariable(variables, '世界.时段[0]');
 }
 
-function getCurrentLocation(variables: Record<string, any>): string | undefined {
-  return _.get(variables, `stat_data.${userKey}.地点[0]`);
+function getCurrentLocation(variables: Mvu.MvuData): string | undefined {
+  return Mvu.getMvuVariable(variables, `${userKey}.地点[0]`);
 }
 
 // 脚本域配置与状态
@@ -73,45 +76,16 @@ function getCooldownReplies(scriptVars: Record<string, any>): number {
 /**
  * 确保好感事件优先、且保证写入持久化：
  * - 直接在事件回调中修改传入的 variables，并置 out_is_updated = true，由宿主环境负责持久化；
- * - 若任一角色存在“待触发”的好感事件（阶段值为奇数），则本轮放弃随机事件（保证好感事件优先级）；
- * - 若当前“世界.随机事件”非“无”，放弃随机触发；否则以 45% 概率抽取并写入。
+ * - 若任一角色存在"待触发"的好感事件（阶段值为奇数），则本轮放弃随机事件（保证好感事件优先级）；
+ * - 若当前"世界.随机事件"非"无"，放弃随机触发；否则以 45% 概率抽取并写入。
  */
-// 读取/写入 stat_data.* 的工具（优先走 Mvu，回退到 _.get/_.set）
-function getStatValue<T = any>(variables: Record<string, any>, path: string, defaultValue?: T): T {
-  try {
-    if (typeof Mvu !== 'undefined') {
-      const value = Mvu.getMvuVariable(variables as any, path);
-      return (value === undefined ? defaultValue : value) as T;
-    }
-  } catch (_) {
-    void 0;
-  }
-  return _.get(variables, `stat_data.${path}`, defaultValue) as T;
-}
 
-async function setStatValue(variables: Record<string, any>, path: string, value: any, reason?: string): Promise<void> {
+async function tryTriggerRandomEvent(variables: Mvu.MvuData, _out_is_updated?: boolean): Promise<void> {
   try {
-    if (typeof Mvu !== 'undefined') {
-      await Mvu.setMvuVariable(variables as any, path, value, { reason });
-      return;
-    }
-  } catch (_) {
-    void 0;
-  }
-  _.set(variables, `stat_data.${path}`, value);
-}
-
-async function tryTriggerRandomEvent(variables: Record<string, any>, _out_is_updated?: boolean): Promise<void> {
-  try {
-    // 初始化完成判定：仅当“伪娘魔法少女”已初始化时才启用随机事件抽取
-    const initializedList = _.get(variables, 'initialized_lorebooks', [] as string[]);
-    const isInitialized = Array.isArray(initializedList) && initializedList.includes('伪娘魔法少女');
-    if (!isInitialized) {
-      return;
-    }
-
-    // 若存在“好感事件待触发”（阶段为奇数），优先让好感事件占用，跳过本次随机触发
-    const affectionStages = _.get(variables, 'tavern_helper.affection_events.stage', {} as Record<string, any>);
+    // 若存在"好感事件待触发"（阶段为奇数），优先让好感事件占用，跳过本次随机触发
+    const affectionStages = Mvu.getMvuVariable(variables, 'tavern_helper.affection_events.stage', {
+      default_value: {},
+    });
     const hasPendingAffection =
       affectionStages &&
       typeof affectionStages === 'object' &&
@@ -120,7 +94,7 @@ async function tryTriggerRandomEvent(variables: Record<string, any>, _out_is_upd
       return;
     }
 
-    const currentEvent = getStatValue<string>(variables, '世界.随机事件[0]', '无');
+    const currentEvent = Mvu.getMvuVariable(variables, '世界.随机事件[0]', { default_value: '无' });
 
     // 读写脚本域状态（用于避免随机事件连发）：至少间隔一条回复
     const svars = getVariables({ type: 'script', script_id: getScriptId() });
@@ -159,7 +133,8 @@ async function tryTriggerRandomEvent(variables: Record<string, any>, _out_is_upd
     if (!currentPeriod || !currentLocation) return;
 
     // 获取已触发的事件列表
-    const triggeredEvents: string[] = _.get(variables, TRIGGERED_RANDOM_EVENTS_PATH, []);
+    const triggeredEventsPath = TRIGGERED_RANDOM_EVENTS_PATH.replace('tavern_helper.', '');
+    const triggeredEvents: string[] = Mvu.getMvuVariable(variables, triggeredEventsPath, { default_value: [] });
 
     // 事件筛选（兼容未设置限制的事件），并排除已触发的事件
     const availableEvents = EVENT_POOL.filter(event => {
@@ -183,13 +158,10 @@ async function tryTriggerRandomEvent(variables: Record<string, any>, _out_is_upd
     const selectedEvent = availableEvents[idx];
 
     // 在事件回调中直接修改传入的 variables，由宿主在回调结束时统一持久化
-    const existedTriggered: string[] = _.get(variables, TRIGGERED_RANDOM_EVENTS_PATH, []);
-    await setStatValue(variables, '世界.随机事件[0]', selectedEvent.name, '随机事件触发');
-    _.set(
-      variables,
-      TRIGGERED_RANDOM_EVENTS_PATH,
-      _.uniq([...(Array.isArray(existedTriggered) ? existedTriggered : []), selectedEvent.name]),
-    );
+    const existedTriggered: string[] = Mvu.getMvuVariable(variables, triggeredEventsPath, { default_value: [] });
+    await Mvu.setMvuVariable(variables, '世界.随机事件[0]', selectedEvent.name, { reason: '随机事件触发' });
+    const newTriggered = _.uniq([...(Array.isArray(existedTriggered) ? existedTriggered : []), selectedEvent.name]);
+    await Mvu.setMvuVariable(variables, triggeredEventsPath, newTriggered, { reason: '添加已触发事件' });
     // 标记已更新，交由宿主持久化
     _out_is_updated = true;
 
@@ -203,7 +175,4 @@ async function tryTriggerRandomEvent(variables: Record<string, any>, _out_is_upd
 }
 
 // 监听变量更新完成钩子
-eventOn(
-  typeof Mvu !== 'undefined' ? Mvu.events.VARIABLE_UPDATE_ENDED : 'mag_variable_update_ended',
-  tryTriggerRandomEvent,
-);
+eventOn(Mvu.events.VARIABLE_UPDATE_ENDED, tryTriggerRandomEvent);

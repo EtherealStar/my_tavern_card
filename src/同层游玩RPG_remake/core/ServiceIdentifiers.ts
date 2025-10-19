@@ -35,6 +35,17 @@ export const TYPES = {
 
   // 指令队列服务
   CommandQueueService: Symbol.for('CommandQueueService'),
+
+  // 战斗相关服务
+  BattleConfigService: Symbol.for('BattleConfigService'),
+  BattleConfigInitializer: Symbol.for('BattleConfigInitializer'),
+  BattleService: Symbol.for('BattleService'),
+  BattleEngine: Symbol.for('BattleEngine'),
+  BattleResultHandler: Symbol.for('BattleResultHandler'),
+  BattleResourceService: Symbol.for('BattleResourceService'),
+
+  // Phaser相关服务
+  PhaserManager: Symbol.for('PhaserManager'),
 } as const;
 
 export type ServiceType = (typeof TYPES)[keyof typeof TYPES];

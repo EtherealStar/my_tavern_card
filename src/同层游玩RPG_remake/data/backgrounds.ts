@@ -9,7 +9,7 @@ export const BACKGROUNDS: Background[] = [
     name: '法师学徒',
     description: '魔法塔熏陶，奥术天赋卓越',
     cost: 3,
-    attributeBonus: { intelligence: 2, willpower: 1 },
+    attributeBonus: { defense: 2, willpower: 1 },
     world: '西幻',
     worldbookToggles: [
       // 示例：{ uid: 2001, enable: true }, // 法师相关世界书条目
@@ -61,7 +61,7 @@ export const BACKGROUNDS: Background[] = [
     name: '猫妖',
     description: '作为一只猫妖,你游走在人类都市的霓虹灯影中,寻找着能长期提供"精气"的伴侣。',
     cost: 1,
-    attributeBonus: { charisma: 2, intelligence: 2 },
+    attributeBonus: { charisma: 2, defense: 2 },
     world: '现代：阴阳师',
     genderRestrictions: ['女性', '扶她'],
     raceRestrictions: ['妖族'],

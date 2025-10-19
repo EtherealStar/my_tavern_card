@@ -86,6 +86,80 @@
   - 出身选择并入属性页下方，按所选世界过滤显示；选择后仅更新选中态与开始按钮可用性。
   - 维持 MVC 解耦：视图仅渲染模板，控制器绑定事件与状态推进，服务通过 `locator` 获取。
 
+## 敌人立绘和战斗背景（仅支持URL资源）
+
+项目支持敌人立绘和战斗背景功能，**仅支持从互联网URL获取资源**，不再支持本地文件。
+
+### 功能特点
+
+- **URL资源**: 仅支持完整的互联网URL地址
+- **敌人立绘**: 支持为每个敌人配置立绘图片URL
+- **战斗背景**: 支持主背景和视差层背景URL
+- **资源管理**: 自动预加载和缓存URL资源
+- **错误处理**: 内置重试机制和错误处理
+- **动画支持**: 支持敌人攻击、受伤等动画效果
+
+### 使用方式
+
+```typescript
+import { BattleConfig } from './models/BattleSchemas';
+import { BattleResourceService } from './services/BattleResourceService';
+
+const resourceService = new BattleResourceService();
+const exampleUrls = resourceService.getExampleUrls();
+
+const battleConfig: BattleConfig = {
+  background: {
+    image: exampleUrls.forest_bg, // 必须是完整的URL
+    parallax: {
+      layers: [
+        { 
+          image: 'https://images.unsplash.com/photo-1234567890?w=1920&h=1080&fit=crop', 
+          speed: 0.3, 
+          depth: 0.5 
+        }
+      ]
+    }
+  },
+  participants: [
+    {
+      id: 'player',
+      name: '勇者',
+      maxHp: 100,
+      hp: 100,
+      side: 'player',
+    },
+    {
+      id: 'enemy_goblin',
+      name: '哥布林',
+      maxHp: 50,
+      hp: 50,
+      side: 'enemy',
+      enemyPortrait: {
+        image: exampleUrls.goblin, // 必须是完整的URL
+        position: { x: 0.75, y: 0.4, scale: 0.8 }
+      }
+    }
+  ]
+};
+```
+
+### 资源要求
+
+- **URL格式**: 必须是完整的HTTP/HTTPS URL
+- **图片格式**: 支持PNG、JPG、WebP等常见格式
+- **推荐服务**: 使用稳定的图片托管服务（如Unsplash、Picsum等）
+- **网络要求**: 需要稳定的网络连接
+
+### 错误处理
+
+系统内置了完善的错误处理机制：
+
+- **自动重试**: 网络资源加载失败时自动重试（最多3次）
+- **指数退避**: 重试间隔逐渐增加
+- **超时处理**: 30秒超时保护
+- **错误统计**: 提供详细的错误统计信息
+
 ## 后续拓展
 
 - 角色创建流程（zod 校验）、世界选择、属性分配等

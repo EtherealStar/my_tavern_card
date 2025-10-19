@@ -207,7 +207,7 @@ const { addEquipCommand, addUnequipCommand, addEquipSwapCommand } = useCommandQu
 const ATTRIBUTE_NAME_MAP: Record<string, string> = {
   strength: '力量',
   agility: '敏捷',
-  intelligence: '智力',
+  defense: '防御',
   constitution: '体质',
   charisma: '魅力',
   willpower: '意志',
