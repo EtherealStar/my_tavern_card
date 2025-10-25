@@ -1,8 +1,20 @@
 {
   "compilerOptions": {
+<<<<<<< HEAD
     "jsx": "preserve",
     "jsxImportSource": "vue",
     "types": ["jquery", "jqueryui", "lodash", "toastr", "type-fest", "yaml", "zod", "vue/jsx", "vue"],
+=======
+    "types": [
+      "jquery",
+      "jqueryui",
+      "lodash",
+      "toastr",
+      "type-fest",
+      "yaml",
+      "zod",
+    ],
+>>>>>>> fdcb3fcc413e2f1fe11e10b448df6b0e292f5b04
     "target": "ESNext",
     "module": "ESNext",
     "outDir": "dist",
@@ -22,10 +34,24 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
+<<<<<<< HEAD
     "forceConsistentCasingInFileNames": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },
   "include": ["@types", "src", "global.d.ts"],
   "exclude": ["**/dist/**", "**/node_modules/**"]
+=======
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "@types",
+    "src",
+    "*.d.ts",
+  ],
+  "exclude": [
+    "**/dist/**",
+    "**/node_modules/**",
+  ]
+>>>>>>> fdcb3fcc413e2f1fe11e10b448df6b0e292f5b04
 }
