@@ -21,6 +21,7 @@ const SmartHistorySettingsSchema = z.object({
 // 完整游戏设置模式
 const GameSettingsSchema = z.object({
   shouldStream: z.boolean().default(true),
+  autoScrollDuringStreaming: z.boolean().default(false),
   smartHistory: SmartHistorySettingsSchema,
 });
 
@@ -31,6 +32,7 @@ export type GameSettings = z.infer<typeof GameSettingsSchema>;
 // 默认设置值
 const DEFAULT_SETTINGS: GameSettings = {
   shouldStream: true,
+  autoScrollDuringStreaming: false,
   smartHistory: {
     assistantMessageLimit: 30,
     userMessageLimit: 20,
@@ -60,6 +62,14 @@ export function useGameSettings() {
     get: () => settings.value.shouldStream,
     set: (value: boolean) => {
       settings.value.shouldStream = value;
+    },
+  });
+
+  // 计算属性：流式生成时自动滚动设置
+  const autoScrollDuringStreaming = computed({
+    get: () => settings.value.autoScrollDuringStreaming,
+    set: (value: boolean) => {
+      settings.value.autoScrollDuringStreaming = value;
     },
   });
 
@@ -245,6 +255,7 @@ export function useGameSettings() {
     // 计算属性
     smartHistorySettings,
     shouldStream,
+    autoScrollDuringStreaming,
 
     // 方法
     loadSettings,

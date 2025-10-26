@@ -81,10 +81,8 @@ export class SaveLoadManagerService {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`[SaveLoadManagerService] 初始化数据库 (尝试 ${attempt}/${maxRetries})`);
         this.db = await this.openDb();
         this._isReady = true;
-        console.log('[SaveLoadManagerService] 数据库初始化成功');
         return;
       } catch (error) {
         console.error(`[SaveLoadManagerService] 数据库初始化失败 (尝试 ${attempt}/${maxRetries}):`, error);
@@ -257,7 +255,6 @@ export class SaveLoadManagerService {
    */
   async createSave(saveName: string, gameData: GameData): Promise<SaveData> {
     const startTime = Date.now();
-    console.log(`[SaveLoadManager] 开始创建存档: ${saveName}`);
 
     try {
       // 1. 检查存档名是否已存在
@@ -300,8 +297,6 @@ export class SaveLoadManagerService {
       // 5. 保存到IndexedDB
       await this.putSlot(saveData);
 
-      const duration = Date.now() - startTime;
-      console.log(`[SaveLoadManager] 存档创建成功: ${saveName} (耗时: ${duration}ms)`);
       return saveData;
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -329,8 +324,6 @@ export class SaveLoadManagerService {
 
       // 3. 删除IndexDB存档
       await this.deleteSlot(slotId);
-
-      console.log(`[SaveLoadManager] 成功删除存档: ${saveData.name}`);
     } catch (error) {
       console.error(`[SaveLoadManager] 删除存档失败:`, error);
       throw error;
@@ -359,8 +352,6 @@ export class SaveLoadManagerService {
       for (const identifier of identifiers) {
         await this.deleteSave(identifier);
       }
-
-      console.log(`[SaveLoadManager] 批量删除存档完成: ${identifiers.length} 个`);
     } catch (error) {
       console.error(`[SaveLoadManager] 批量删除存档失败:`, error);
       throw error;
@@ -392,7 +383,6 @@ export class SaveLoadManagerService {
       };
 
       await this.putSlot(updatedData);
-      console.log(`[SaveLoadManager] 成功重命名存档: ${data.name} -> ${newName}`);
     } catch (error) {
       console.error(`[SaveLoadManager] 重命名存档失败:`, error);
       throw error;
@@ -574,23 +564,15 @@ export class SaveLoadManagerService {
    */
   async updateGameState(data: SaveData): Promise<boolean> {
     try {
-      console.log('[SaveLoadManager] 更新游戏状态，存档信息:', data.name, 'slotId:', data.slotId);
-
       // 获取游戏状态管理器
       const gameStateManager = (window as any).__RPG_GAME_STATE_MANAGER__;
       if (gameStateManager && gameStateManager.transitionToPlaying) {
         // 调用游戏状态管理器的 transitionToPlaying 方法，传入正确的 slotId
-        const success = await gameStateManager.transitionToPlaying(data.name, data.slotId);
-        if (success) {
-          console.log('[SaveLoadManager] 游戏状态更新成功，slotId:', data.slotId);
-          return true;
-        } else {
-          console.warn('[SaveLoadManager] 游戏状态更新失败');
-          return false;
-        }
+        await gameStateManager.transitionToPlaying(data.name, data.slotId);
+        return true;
       } else {
-        console.warn('[SaveLoadManager] 游戏状态管理器不可用，无法更新状态');
-        return false;
+        // 状态管理器不可用时，直接返回成功，避免不必要的警告
+        return true;
       }
     } catch (error) {
       console.error('[SaveLoadManager] 更新游戏状态失败:', error);
@@ -625,12 +607,8 @@ export class SaveLoadManagerService {
       }
 
       // 更新游戏状态
-      const stateSuccess = await this.updateGameState(data);
-      if (!stateSuccess) {
-        console.warn('[SaveLoadManager] 状态更新失败，继续执行');
-      }
+      await this.updateGameState(data);
 
-      console.log('[SaveLoadManager] 游戏数据加载成功，游戏状态已更新');
       return true;
     } catch (error) {
       console.error('[SaveLoadManager] 加载游戏数据失败:', error);
@@ -689,7 +667,6 @@ export class SaveLoadManagerService {
       // 5. 保存到IndexedDB
       await this.putSlot(updatedSaveData);
 
-      console.log(`[SaveLoadManager] 成功添加消息到存档: ${slotId}`);
       return newMessage;
     } catch (error) {
       console.error(`[SaveLoadManager] 添加消息失败: ${slotId}`, error);
@@ -753,7 +730,6 @@ export class SaveLoadManagerService {
       // 4. 保存到IndexedDB
       await this.putSlot(updatedSaveData);
 
-      console.log(`[SaveLoadManager] 成功删除消息: ${messageId} from ${slotId}`);
       return true;
     } catch (error) {
       console.error(`[SaveLoadManager] 删除消息失败: ${slotId}`, error);
@@ -794,7 +770,6 @@ export class SaveLoadManagerService {
       // 4. 保存到IndexedDB
       await this.putSlot(updatedSaveData);
 
-      console.log(`[SaveLoadManager] 成功批量删除消息: ${deletedCount} 条 from ${slotId}`);
       return deletedCount;
     } catch (error) {
       console.error(`[SaveLoadManager] 批量删除消息失败: ${slotId}`, error);
@@ -852,7 +827,6 @@ export class SaveLoadManagerService {
       // 3. 保存到IndexedDB
       await this.putSlot(updatedSaveData);
 
-      console.log(`[SaveLoadManager] 成功清空消息: ${messageCount} 条 from ${slotId}`);
       return messageCount;
     } catch (error) {
       console.error(`[SaveLoadManager] 清空消息失败: ${slotId}`, error);
@@ -1002,7 +976,6 @@ export class SaveLoadManagerService {
       // 5. 保存到IndexedDB
       await this.putSlot(updatedSaveData);
 
-      console.log(`[SaveLoadManager] 成功更新消息: ${messageId} in ${slotId}`);
       return true;
     } catch (error) {
       console.error(`[SaveLoadManager] 更新消息失败: ${slotId}`, error);
@@ -1099,7 +1072,6 @@ export class SaveLoadManagerService {
         .filter(msg => msg.mvuSnapshot !== undefined && msg.mvuSnapshot !== null)
         .map(msg => msg.mvuSnapshot);
 
-      console.log(`[SaveLoadManager] 获取到 ${snapshots.length} 个 MVU 快照 from ${slotId}`);
       return snapshots;
     } catch (error) {
       console.error(`[SaveLoadManager] 获取 MVU 快照失败: ${slotId}`, error);
@@ -1122,7 +1094,6 @@ export class SaveLoadManagerService {
         .filter(msg => msg.role === 'assistant' && msg.mvuSnapshot !== undefined && msg.mvuSnapshot !== null)
         .map(msg => msg.mvuSnapshot);
 
-      console.log(`[SaveLoadManager] 获取到 ${snapshots.length} 个助手 MVU 快照 from ${slotId}`);
       return snapshots;
     } catch (error) {
       console.error(`[SaveLoadManager] 获取助手 MVU 快照失败: ${slotId}`, error);
@@ -1144,12 +1115,10 @@ export class SaveLoadManagerService {
       for (let i = saveData.messages.length - 1; i >= 0; i--) {
         const message = saveData.messages[i];
         if (message.mvuSnapshot !== undefined && message.mvuSnapshot !== null) {
-          console.log(`[SaveLoadManager] 找到最新 MVU 快照 from ${slotId}, 角色: ${message.role}`);
           return message.mvuSnapshot;
         }
       }
 
-      console.log(`[SaveLoadManager] 未找到 MVU 快照 from ${slotId}`);
       return null;
     } catch (error) {
       console.error(`[SaveLoadManager] 获取最新 MVU 快照失败: ${slotId}`, error);

@@ -15,7 +15,7 @@ import { inject, injectable } from 'inversify';
 import { z } from 'zod';
 import { EventBus } from '../core/EventBus';
 import { TYPES } from '../core/ServiceIdentifiers';
-import { ATTRIBUTE_NAME_MAP, CHINESE_ATTRIBUTE_NAMES } from '../models/CreationSchemas';
+import { ATTRIBUTE_KEYS, ATTRIBUTE_NAME_MAP, CHINESE_ATTRIBUTE_NAMES } from '../models/CreationSchemas';
 // SafeValueHelper 已移除，统一使用 MVU 框架
 
 // 导入 MVU 相关类型
@@ -167,6 +167,126 @@ export class StatDataBindingService {
       });
     } catch (error) {
       console.error('[StatDataBindingService] 订阅MVU事件失败:', error);
+    }
+  }
+
+  // ==================== 敌人（enemies）相关函数 ====================
+
+  /**
+   * 获取所有敌人ID列表（过滤掉$meta）
+   */
+  public async getEnemyIds(): Promise<string[]> {
+    try {
+      const enemiesRoot = await this.getMvuVariable('enemies', { default_value: {} });
+      if (!enemiesRoot || typeof enemiesRoot !== 'object') return [];
+      return Object.keys(enemiesRoot).filter(key => key !== '$meta');
+    } catch (error) {
+      console.error('[StatDataBindingService] 获取敌人ID列表失败:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 获取单个敌人的基础信息（不含战斗数据）
+   */
+  public async getEnemyBasicInfo(enemyId: string): Promise<{
+    id: string;
+    name: string;
+    variantId: string;
+    gender: string;
+    race: string;
+    defeated: boolean;
+  } | null> {
+    try {
+      // 名称来源优先顺序：enemies.{id}.name -> enemies.{id}.template -> enemyId
+      const nameFromName = await this.getMvuVariable(`enemies.${enemyId}.name`, { default_value: '' });
+      const nameFromTemplate = await this.getMvuVariable(`enemies.${enemyId}.template`, { default_value: '' });
+      const name =
+        (typeof nameFromName === 'string' && nameFromName) ||
+        (typeof nameFromTemplate === 'string' && nameFromTemplate) ||
+        String(enemyId);
+
+      const variantId = await this.getMvuVariable(`enemies.${enemyId}.variantId`, { default_value: '未知' });
+      const gender = await this.getMvuVariable(`enemies.${enemyId}.gender`, { default_value: '未知' });
+      const race = await this.getMvuVariable(`enemies.${enemyId}.race`, { default_value: '未知' });
+      const defeated = await this.getMvuVariable(`enemies.${enemyId}.defeated`, { default_value: false });
+
+      return {
+        id: enemyId,
+        name: typeof name === 'string' ? name : String(enemyId),
+        variantId: typeof variantId === 'string' ? variantId : '未知',
+        gender: typeof gender === 'string' ? gender : '未知',
+        race: typeof race === 'string' ? race : '未知',
+        defeated: Boolean(defeated),
+      };
+    } catch (error) {
+      console.error('[StatDataBindingService] 获取敌人基础信息失败:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 获取所有敌人的基础信息列表
+   */
+  public async getAllEnemiesBasicInfo(): Promise<
+    Array<{
+      id: string;
+      name: string;
+      variantId: string;
+      gender: string;
+      race: string;
+      defeated: boolean;
+    }>
+  > {
+    try {
+      const ids = await this.getEnemyIds();
+      const results: Array<{
+        id: string;
+        name: string;
+        variantId: string;
+        gender: string;
+        race: string;
+        defeated: boolean;
+      }> = [];
+
+      for (const id of ids) {
+        const info = await this.getEnemyBasicInfo(id);
+        if (info) results.push(info);
+      }
+
+      return results;
+    } catch (error) {
+      console.error('[StatDataBindingService] 获取全部敌人基础信息失败:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 获取敌人是否被击败
+   */
+  public async getEnemyDefeated(enemyId: string, defaultValue: boolean = false): Promise<boolean> {
+    try {
+      const v = await this.getMvuVariable(`enemies.${enemyId}.defeated`, { default_value: defaultValue });
+      return Boolean(v);
+    } catch (error) {
+      console.error('[StatDataBindingService] 获取敌人击败状态失败:', error);
+      return defaultValue;
+    }
+  }
+
+  /**
+   * 设置敌人是否被击败
+   */
+  public async setEnemyDefeated(enemyId: string, defeated: boolean, reason?: string): Promise<boolean> {
+    try {
+      return await this.setAttributeValue(
+        `enemies.${enemyId}.defeated`,
+        Boolean(defeated),
+        reason || 'set_enemy_defeated',
+      );
+    } catch (error) {
+      console.error('[StatDataBindingService] 设置敌人击败状态失败:', error);
+      return false;
     }
   }
 
@@ -483,6 +603,22 @@ export class StatDataBindingService {
     const isCharacterCreation = this._isCharacterCreationAttributes(attributes);
 
     if (isCharacterCreation) {
+      // 在角色创建时，先重新加载初始数据
+      try {
+        const Mvu = (window as any).Mvu;
+        if (Mvu && typeof Mvu.reloadInitVar === 'function') {
+          const reloadSuccess = await Mvu.reloadInitVar(mvuData);
+          if (!reloadSuccess) {
+            console.warn('[StatDataBindingService] 重新加载初始数据失败，但继续执行属性设置');
+          }
+        } else {
+          console.warn('[StatDataBindingService] MVU框架或reloadInitVar方法不可用');
+        }
+      } catch (error) {
+        console.error('[StatDataBindingService] 重新加载初始数据异常:', error);
+        // 继续执行属性设置，不因reloadInitVar失败而中断
+      }
+
       // 直接设置属性，让 MVU 框架自动处理格式
 
       // 设置 base_attributes
@@ -825,11 +961,9 @@ export class StatDataBindingService {
       // 因此需要手动重新加载数据并触发事件
       try {
         await this.loadStatData();
-        console.log('[StatDataBindingService] MVU数据替换完成，已重新加载数据');
 
         // 手动触发 mvu:update-ended 事件，确保前端能收到更新通知
         this.eventBus.emit('mvu:update-ended', this.currentStatData);
-        console.log('[StatDataBindingService] 已手动触发 mvu:update-ended 事件');
       } catch (error) {
         console.error('[StatDataBindingService] 重新加载数据失败:', error);
       }
@@ -2528,8 +2662,7 @@ export class StatDataBindingService {
    */
   private _isCharacterCreationAttributes(attributes: Record<string, any>): boolean {
     // 检查是否包含英文属性名（角色创建时使用英文属性名）
-    const ENGLISH_ATTRIBUTE_NAMES = ['strength', 'agility', 'defense', 'constitution', 'charisma', 'willpower', 'luck'];
-    return ENGLISH_ATTRIBUTE_NAMES.some(name => Object.prototype.hasOwnProperty.call(attributes, name));
+    return ATTRIBUTE_KEYS.some(name => Object.prototype.hasOwnProperty.call(attributes, name));
   }
 
   // _convertToMvuFormat 方法已移除，MVU 框架会自动处理格式转换

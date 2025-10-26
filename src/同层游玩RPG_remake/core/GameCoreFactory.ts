@@ -94,7 +94,12 @@ export class GameCoreFactory {
   private static async initializeDataServices(): Promise<void> {
     // 使用 waitGlobalInitialized 优雅等待 MVU 框架初始化
     try {
-      await waitGlobalInitialized('Mvu');
+      // 检查 waitGlobalInitialized 是否可用
+      if (typeof waitGlobalInitialized === 'function') {
+        await waitGlobalInitialized('Mvu');
+      } else {
+        console.warn('[GameCoreFactory] waitGlobalInitialized 函数不可用，跳过MVU等待');
+      }
     } catch (error) {
       console.warn('[GameCoreFactory] 等待MVU框架初始化失败:', error);
     }

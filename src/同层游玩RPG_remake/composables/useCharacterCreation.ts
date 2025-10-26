@@ -142,6 +142,7 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
 
       // 使用StatDataBindingService的setAttributes方法
       // 该方法会自动检测角色创建数据并设置base_attributes和current_attributes
+      // StatDataBindingService内部会处理初始数据重新加载
       const results = await statDataBinding.setAttributes(attributes, 'character_creation');
 
       console.log('[useCharacterCreation] 属性应用结果:', results);

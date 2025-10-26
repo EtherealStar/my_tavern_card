@@ -40,14 +40,12 @@ export function useWorldbookToggle() {
       // 1. 尝试获取角色卡绑定的世界书
       const charWorldbooks = getCharWorldbookNames('current');
       if (charWorldbooks.primary) {
-        console.log('[useWorldbookToggle] 使用角色卡 primary 世界书:', charWorldbooks.primary);
         return charWorldbooks.primary;
       }
 
       // 2. 尝试获取聊天绑定的世界书
       const chatWorldbook = getChatWorldbookName('current');
       if (chatWorldbook) {
-        console.log('[useWorldbookToggle] 使用聊天绑定世界书:', chatWorldbook);
         return chatWorldbook;
       }
 
@@ -86,7 +84,6 @@ export function useWorldbookToggle() {
         { render: 'immediate' },
       );
 
-      console.log(`[useWorldbookToggle] 成功开关条目: 世界书=${worldbookName}, uid=${uid}, enabled=${enabled}`);
       return {
         success: true,
         affectedUids: [uid],
@@ -139,7 +136,6 @@ export function useWorldbookToggle() {
         { render: 'immediate' },
       );
 
-      console.log(`[useWorldbookToggle] 批量开关成功: 世界书=${worldbookName}, 影响条目=${affectedUids.length}个`);
       return {
         success: true,
         affectedUids,
@@ -187,10 +183,6 @@ export function useWorldbookToggle() {
 
       // 4. 应用开关
       const result = await toggleWorldbookEntries(worldbookName, allToggles);
-
-      if (result.success) {
-        console.log(`[useWorldbookToggle] 出身世界书开关应用成功: 出身=${backgroundId}, 世界书=${worldbookName}`);
-      }
 
       return result;
     } catch (error) {
@@ -247,12 +239,6 @@ export function useWorldbookToggle() {
 
       // 4. 应用开关
       const result = await toggleWorldbookEntries(worldbookName, allToggles);
-
-      if (result.success) {
-        console.log(
-          `[useWorldbookToggle] 扩展世界书开关应用成功: 世界=${world}, 选择=${selectedExpansions.join(',')}, 世界书=${worldbookName}`,
-        );
-      }
 
       return result;
     } catch (error) {

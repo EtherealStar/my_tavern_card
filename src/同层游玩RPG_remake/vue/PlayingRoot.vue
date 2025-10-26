@@ -269,7 +269,6 @@
                   {{ isBusy ? '施法中...' : '发送' }}
                 </span>
               </button>
-              <button v-if="isStreaming" class="btn" @click="onStop">停止</button>
               <!-- 测试战斗按钮：紧邻发送按钮 -->
               <button class="btn" @click="onTestBattle">测试战斗</button>
             </div>
@@ -353,7 +352,7 @@
         <div class="menu-category">
           <div class="category-title">系统功能</div>
           <div class="menu-buttons">
-            <button class="menu-btn" @click="openSaveDialog">
+            <button class="menu-btn" @click="showSaveDialog = true">
               <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h5a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5v5.586l-1.293-1.293zM9 4a1 1 0 012 0v2H9V4z"
@@ -430,6 +429,23 @@
               />
               <span class="text-sm font-medium text-purple-700">流式传输</span>
             </label>
+          </div>
+
+          <!-- 流式生成时自动滚动设置 -->
+          <div class="setting-group">
+            <label
+              class="flex cursor-pointer items-center gap-2 rounded-lg bg-pink-50 p-3 transition-colors hover:bg-pink-100"
+            >
+              <input
+                v-model="autoScrollDuringStreaming"
+                type="checkbox"
+                class="h-4 w-4 rounded border-pink-300 text-pink-500 focus:ring-pink-200"
+              />
+              <span class="text-sm font-medium text-purple-700">流式生成时自动滚动</span>
+            </label>
+            <p class="mt-1 px-3 text-xs text-purple-600">
+              开启后，AI 生成文本时会自动滚动到底部；关闭后，仅在生成完成时滚动
+            </p>
           </div>
 
           <!-- 智能历史管理设置 -->
@@ -652,26 +668,6 @@
                 </div>
               </div>
 
-              <!-- 主要属性 -->
-              <div class="grid grid-cols-2 gap-2 text-xs">
-                <div class="flex justify-between">
-                  <span class="text-gray-500">力量</span>
-                  <span class="font-medium">{{ character.attributes?.力量 || 0 }}</span>
-                </div>
-                <div class="flex justify-between">
-                  <span class="text-gray-500">敏捷</span>
-                  <span class="font-medium">{{ character.attributes?.敏捷 || 0 }}</span>
-                </div>
-                <div class="flex justify-between">
-                  <span class="text-gray-500">防御</span>
-                  <span class="font-medium">{{ character.attributes?.防御 || 0 }}</span>
-                </div>
-                <div class="flex justify-between">
-                  <span class="text-gray-500">魅力</span>
-                  <span class="font-medium">{{ character.attributes?.魅力 || 0 }}</span>
-                </div>
-              </div>
-
               <!-- 点击提示 -->
               <div class="mt-3 text-center text-xs text-gray-400 group-hover:text-pink-500">点击查看详情</div>
             </div>
@@ -749,13 +745,6 @@
                 </div>
               </div>
 
-              <div class="grid grid-cols-2 gap-2 text-xs">
-                <div class="flex justify-between" v-for="attrName in attrOrder" :key="attrName">
-                  <span class="text-gray-500">{{ attrName }}</span>
-                  <span class="font-medium">{{ enemy.attributes?.[attrName] || 0 }}</span>
-                </div>
-              </div>
-
               <div class="mt-3 text-center text-xs text-gray-400 group-hover:text-pink-500">点击查看详情</div>
             </div>
           </div>
@@ -805,19 +794,6 @@
                   <p class="text-sm text-gray-500">
                     {{ selectedEnemy.gender || '未知' }} · {{ selectedEnemy.race || '未知' }}
                   </p>
-                </div>
-              </div>
-            </div>
-
-            <div class="mb-6 rounded-xl border border-pink-200 bg-white/80 p-6">
-              <h4 class="mb-4 text-lg font-semibold text-gray-800">属性信息</h4>
-              <div class="attributes-grid grid grid-cols-2 gap-4 md:grid-cols-4">
-                <div v-for="attrName in attrOrder" :key="attrName" class="attribute-item">
-                  <div class="flex items-center gap-2">
-                    <div class="attr-icon" v-html="attrIcon(attrName)"></div>
-                    <span class="text-sm text-gray-600">{{ attrName }}</span>
-                  </div>
-                  <div class="text-lg font-bold text-gray-800">{{ selectedEnemy.attributes?.[attrName] || 0 }}</div>
                 </div>
               </div>
             </div>
@@ -958,22 +934,6 @@
               </div>
             </div>
 
-            <!-- 属性信息 -->
-            <div class="mb-6 rounded-xl border border-pink-200 bg-white/80 p-6">
-              <h4 class="mb-4 text-lg font-semibold text-gray-800">属性信息</h4>
-              <div class="attributes-grid grid grid-cols-2 gap-4 md:grid-cols-4">
-                <div v-for="attrName in attrOrder" :key="attrName" class="attribute-item">
-                  <div class="flex items-center gap-2">
-                    <div class="attr-icon" v-html="attrIcon(attrName)"></div>
-                    <span class="text-sm text-gray-600">{{ attrName }}</span>
-                  </div>
-                  <div class="text-lg font-bold text-gray-800">
-                    {{ selectedCharacter.attributes?.[attrName] || 0 }}
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <!-- 装备信息 -->
             <div v-if="selectedCharacter.equipment" class="mb-6 rounded-xl border border-pink-200 bg-white/80 p-6">
               <h4 class="mb-4 text-lg font-semibold text-gray-800">装备信息</h4>
@@ -1057,19 +1017,6 @@
                 </div>
               </div>
             </div>
-
-            <!-- 其他信息 -->
-            <div class="rounded-xl border border-pink-200 bg-white/80 p-6">
-              <h4 class="mb-4 text-lg font-semibold text-gray-800">其他信息</h4>
-              <div class="text-sm text-gray-600">
-                <p>角色ID: {{ selectedCharacter.id || '未知' }}</p>
-                <p v-if="selectedCharacter.others && selectedCharacter.others !== '未知'">
-                  其他信息: {{ selectedCharacter.others }}
-                </p>
-                <p v-if="selectedCharacter.description">描述: {{ selectedCharacter.description }}</p>
-                <p v-else-if="!selectedCharacter.others || selectedCharacter.others === '未知'">暂无其他描述信息</p>
-              </div>
-            </div>
           </div>
 
           <!-- 错误状态 -->
@@ -1096,6 +1043,7 @@ import { updateUserKey } from 'shared/constants';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useSaveLoad } from '同层游玩RPG_remake/composables/useSaveLoad';
 import { useBattleConfig } from '../composables/useBattleConfig';
+import { useCommandQueue } from '../composables/useCommandQueue';
 import { useGameServices } from '../composables/useGameServices';
 import { useGameSettings } from '../composables/useGameSettings';
 import { useGameStateManager } from '../composables/useGameStateManager';
@@ -1105,7 +1053,6 @@ import CommandQueueDialog from './CommandQueueDialog.vue';
 import EquipmentDetailDialog from './EquipmentDetailDialog.vue';
 import InventoryDialog from './InventoryDialog.vue';
 import SaveDialog from './SaveDialog.vue';
-// 移除 Pinia stores，使用本地状态管理
 
 // 使用 useGameServices 提供的 UI 反馈方法
 const { showSuccess, showError, showWarning, showInfo } = useGameServices();
@@ -1113,6 +1060,7 @@ const { showSuccess, showError, showWarning, showInfo } = useGameServices();
 // 使用游戏设置管理
 const {
   shouldStream,
+  autoScrollDuringStreaming,
   smartHistorySettings,
   loadSettings,
   saveSettings,
@@ -1181,6 +1129,17 @@ const {
   getRelationshipCharacter,
   registerStatData,
   updateFromPlayingLogic,
+  // 新增库存相关
+  displayInventory,
+  getTotalInventoryCount,
+  getDisplayInventoryItems,
+  // 新增属性相关
+  getCurrentAttributeValue,
+  displayAttr,
+  getAttributeBaseCurrentValue,
+  // 新增工具方法
+  itemName,
+  equipmentText,
 } = useStatData();
 
 const {
@@ -1192,6 +1151,13 @@ const {
   createNewEmptySave,
   getCurrentSaveInfo,
   checkSaveAvailability,
+  renameSaveWithFeedback,
+  loadGame,
+  addUserMessage: addSaveUserMessage,
+  addAssistantMessage,
+  deleteMessage: deleteSaveMessage,
+  updateMessageContent,
+  getLastMessage,
   registerSaveLoad,
   cleanupSaveLoad,
   isLoading: saveLoadIsLoading,
@@ -1200,18 +1166,21 @@ const {
 
 // 游戏设置现在通过 useGameSettings 组合式函数管理
 
-// 本地指令队列状态 - 这些应该通过专门的组合式函数管理
-const commandQueue = ref<any[]>([]);
-const queueLength = computed(() => commandQueue.value.length);
-
-// 本地指令队列方法
-const executeBeforeMessage = async () => {
-  console.log('[PlayingRoot] 执行指令队列');
-  return true;
-};
+// 指令队列状态现在通过 useCommandQueue 组合式函数管理
 
 // 使用战斗配置服务
 const { startBattle } = useBattleConfig();
+
+// 使用指令队列组合式函数
+const {
+  queue: commandQueue,
+  queueLength,
+  isEmpty: isQueueEmpty,
+  isExecuting: isQueueExecuting,
+  executeBeforeMessage,
+  setupEventListeners: setupCommandQueueListeners,
+  cleanupEventListeners: cleanupCommandQueueListeners,
+} = useCommandQueue();
 
 // 清理函数存储
 const gameStateUnsubscribe = ref<(() => void) | null>(null);
@@ -1220,30 +1189,14 @@ const fullscreenUnsubscribe = ref<(() => void) | null>(null);
 // 所有状态和方法都从 usePlayingLogic 中获取，无需重复定义
 
 // 这些方法应该通过组合式函数提供
-const setupCommandQueueListeners = () => {
-  console.log('[PlayingRoot] 设置指令队列监听器');
-};
-
-const isSaveLoadAvailable = () => {
-  return true;
-};
 
 // 类型定义
 type Role = 'user' | 'assistant' | 'system';
-type AttrName = '力量' | '敏捷' | '防御' | '体质' | '魅力' | '幸运' | '意志';
 type Paragraph = {
   id: string;
   html: string;
   role: Role;
   ephemeral?: boolean;
-};
-
-const setupCharacterCreationListeners = () => {
-  console.log('[PlayingRoot] 设置角色创建监听器');
-};
-
-const cleanupCharacterCreationListeners = () => {
-  console.log('[PlayingRoot] 清理角色创建监听器');
 };
 
 // 从 useStatData 获取游戏状态数据 - 直接使用ref对象，纯ref架构
@@ -1298,31 +1251,6 @@ const contextMenu = ref<{
 
 const attrOrder = ref<string[]>(['力量', '敏捷', '防御', '体质', '魅力', '幸运', '意志']);
 
-const displayInventory = computed(() => {
-  const result: Record<string, any[]> = {
-    weapons: [],
-    armors: [],
-    accessories: [],
-    others: [],
-  };
-
-  if (inventory.value && typeof inventory.value === 'object') {
-    ['weapons', 'armors', 'accessories', 'others'].forEach(category => {
-      const items = inventory.value[category];
-      if (Array.isArray(items)) {
-        result[category] = items
-          .filter(item => item && item.name && item.name.trim() !== '')
-          .map(item => ({
-            ...item,
-            fromMvu: true,
-          }));
-      }
-    });
-  }
-
-  return result;
-});
-
 const isMvuDataLoaded = computed(() => {
   // 通过检查数据是否存在来判断MVU数据是否已加载
   return currentAttributes.value && Object.keys(currentAttributes.value).length > 0;
@@ -1356,29 +1284,9 @@ const loadMvuData = async () => {
 
 // MVU 属性相关函数现在直接通过 useStatData 获取，移除重复定义
 
-// 为了向后兼容，添加 getCurrentAttributeValue 方法
-const getCurrentAttributeValue = (name: string) => {
-  return getAttributeDisplay(name);
-};
-
 // 库存相关方法现在通过 useStatData 获取，移除重复定义
 
-const getEnglishAttributeName = (chineseName: string): string => {
-  const mapping: Record<string, string> = {
-    力量: 'strength',
-    敏捷: 'agility',
-    防御: 'defense',
-    体质: 'constitution',
-    魅力: 'charisma',
-    幸运: 'luck',
-    意志: 'willpower',
-  };
-  return mapping[chineseName] || chineseName;
-};
-
-const getAttributeValue = (name: string, defaultValue: any = null) => {
-  return getCurrentAttributeValue(name) || defaultValue;
-};
+// getEnglishAttributeName 和 getAttributeValue 函数已移除，暂未使用
 
 // 添加缺失的UI方法
 const openRelations = async () => {
@@ -1470,7 +1378,6 @@ const closeInventoryDialog = () => {
 };
 
 const onSelectItem = (item: any) => {
-  console.log('[PlayingRoot] 选择了物品:', item);
   showInfo(`选择了物品: ${item.name || '未知物品'}`);
 };
 
@@ -1650,48 +1557,7 @@ const icon = (name: string): string => {
   return base + p + close;
 };
 
-const attrIcon = (name: string): string => {
-  return icon(name);
-};
-
-// 获取背包总数量
-const getTotalInventoryCount = (): number => {
-  if (!displayInventory.value || typeof displayInventory.value !== 'object') {
-    return 0;
-  }
-
-  let total = 0;
-  ['weapons', 'armors', 'accessories', 'others'].forEach(category => {
-    const items = displayInventory.value[category];
-    if (Array.isArray(items)) {
-      total += items.length;
-    }
-  });
-
-  return total;
-};
-
-// 获取用于显示的背包物品列表（扁平化）
-const getDisplayInventoryItems = (): any[] => {
-  if (!displayInventory.value || typeof displayInventory.value !== 'object') {
-    return [];
-  }
-
-  const result: any[] = [];
-  ['weapons', 'armors', 'accessories', 'others'].forEach(category => {
-    const items = displayInventory.value[category];
-    if (Array.isArray(items)) {
-      items.forEach(item => {
-        result.push({
-          ...item,
-          category,
-        });
-      });
-    }
-  });
-
-  return result;
-};
+// attrIcon 函数已移除，直接使用 icon 函数
 
 // 容器类名
 const containerClass = computed(() => ({
@@ -1754,105 +1620,6 @@ function collectUiMessages(): { role: 'user' | 'assistant'; text: string }[] {
   return out;
 }
 
-function openSaveDialog() {
-  showSaveDialog.value = true;
-}
-
-// 存档相关方法 - 这些应该通过 useSaveLoad 组合式函数提供
-async function manualSave(slotId: string, defaultName: string) {
-  try {
-    const name = slotId.startsWith('m') ? (prompt('输入存档名', defaultName) ?? '') : defaultName;
-    if (slotId.startsWith('m') && !name.trim()) return;
-
-    // 使用 useSaveLoad 的方法
-    const success = await createNewSaveWithManualMode(slotId, name.trim() || defaultName);
-
-    if (success) {
-      showSuccess('存档成功');
-    } else {
-      showError('存档失败');
-    }
-  } catch (error) {
-    console.error('[PlayingRoot] 存档失败:', error);
-    showError('存档失败');
-  }
-}
-
-async function loadSlot(slotId: string) {
-  try {
-    // 使用 useSaveLoad 的 loadSaveWithFeedback 方法
-    const result = await loadSaveWithFeedback(slotId);
-
-    if (result.success && result.data) {
-      // 使用 useSaveLoad 的 loadToUI 方法进行完整的读档流程
-      const uiContext = {
-        messages,
-        streamingHtml,
-        isStreaming,
-        isSending,
-        scrollToBottom,
-        nextTick,
-      };
-      await loadToUI(slotId, uiContext);
-      showSaveDialog.value = false;
-    } else {
-      showError('读档失败', result.error || '未找到存档');
-    }
-  } catch (error) {
-    console.error('[PlayingRoot] 读档失败:', error);
-    showError('读档失败');
-  }
-}
-
-async function deleteSlot(slotId: string) {
-  try {
-    if (!confirm('确定要删除该存档吗？此操作不可恢复。')) return;
-
-    // 使用 useSaveLoad 的 deleteSelectedSaves 方法
-    const success = await deleteSelectedSaves([slotId]);
-    if (success) {
-      showSuccess('已删除');
-    } else {
-      showError('删除失败');
-    }
-  } catch (error) {
-    console.error('[PlayingRoot] 删除存档失败:', error);
-    showError('删除失败');
-  }
-}
-
-function createManual(slotId: string) {
-  void manualSave(slotId, '我的大冒险');
-}
-
-function onPickAvatar() {
-  // 选择头像逻辑
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*';
-  input.onchange = e => {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = e => {
-        customAvatarUrl.value = e.target?.result as string;
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-  input.click();
-}
-
-function clearAvatar() {
-  customAvatarUrl.value = '';
-}
-
-// 重置智能历史管理设置 - 现在通过 useGameSettings 组合式函数提供
-function resetSmartHistorySettings() {
-  resetSettings();
-  showSuccess('智能历史管理设置已重置为默认值');
-}
-
 async function onSend() {
   if (!canSend.value || isBusy.value) return;
   const text = inputText.value.trim();
@@ -1864,9 +1631,14 @@ async function onSend() {
   filterEphemeralMessages();
 
   // 先执行指令队列
-  const commandQueueSuccess = await executeBeforeMessage();
-  if (!commandQueueSuccess) {
-    showWarning('部分指令执行失败，但继续发送消息');
+  try {
+    const queueExecuted = await executeBeforeMessage();
+    if (!queueExecuted) {
+      console.warn('[PlayingRoot] 指令队列执行失败');
+    }
+  } catch (error) {
+    console.error('[PlayingRoot] 指令队列执行失败:', error);
+    showError('指令队列执行失败');
   }
 
   // 然后执行原有的消息发送逻辑
@@ -1880,11 +1652,6 @@ async function onSend() {
     console.error('[PlayingRoot] 生成消息失败:', error);
     showError('生成失败', '请求发送异常');
   }
-}
-
-function onStop() {
-  // 使用新的统一停止生成接口
-  stopGeneration();
 }
 
 // 触发一次MVP战斗
@@ -1986,58 +1753,6 @@ function setupFullscreenListener(): (() => void) | null {
   };
 }
 
-// 展示辅助
-function displayAttr(v: number | null | undefined): string {
-  const n = Number(v);
-  return Number.isFinite(n) ? String(n) : '—';
-}
-
-// 获取基础值/当前值格式的属性显示
-function getAttributeBaseCurrentValue(name: string): string {
-  try {
-    // 获取基础属性值 - 使用英文属性名
-    const englishName = getEnglishAttributeName(name);
-    const baseValue = getAttributeValue(englishName, 0);
-
-    // 获取当前属性值（包含装备加成等）- 使用更新后的函数
-    const currentValue = getAttributeDisplay(name);
-
-    // 如果当前值包含数字，提取数字部分
-    const currentNum = Number(String(currentValue).replace(/[^\d]/g, ''));
-    const baseNum = Number(baseValue);
-
-    // 如果两个值都有效，显示为 "基础值/当前值" 格式
-    if (Number.isFinite(baseNum) && Number.isFinite(currentNum)) {
-      return `${baseNum}/${currentNum}`;
-    }
-
-    // 回退到原来的显示方式
-    return String(currentValue || baseValue || '—');
-  } catch (error) {
-    console.error('[PlayingRoot] 获取属性基础当前值失败:', error);
-    return '—';
-  }
-}
-
-// 获取当前属性值（只显示当前值，不显示斜杠） - 已在上方定义
-
-function itemName(it: any): string {
-  try {
-    if (!it) return '未知物品';
-    if (typeof it === 'string') return it || '未知物品';
-    if (typeof it.name === 'string' && it.name) return it.name;
-  } catch {}
-  return '未知物品';
-}
-
-function equipmentText(it: any, label: string): string {
-  const name = itemName(it);
-  if (!it || name === '未知物品') return `未装备${label}`;
-  return name;
-}
-
-// 物品相关工具方法 - 这些应该通过专门的组合式函数提供
-
 // 读取角色名称 - 只使用宏获取
 async function loadUserPanel(): Promise<void> {
   try {
@@ -2066,7 +1781,6 @@ onMounted(async () => {
   // 注册状态管理器到全局
   try {
     (window as any).__RPG_GAME_STATE_MANAGER__ = gameStateManager;
-    console.log('[PlayingRoot] 状态管理器已注册到全局');
   } catch (error) {
     console.error('[PlayingRoot] 状态管理器注册失败:', error);
   }
@@ -2097,21 +1811,17 @@ onMounted(async () => {
       registerGameSettings();
     }
     // 设置指令队列事件监听器
-    if (typeof setupCommandQueueListeners === 'function') {
+    try {
       setupCommandQueueListeners();
+    } catch (error) {
+      console.warn('[PlayingRoot] 指令队列监听器设置失败:', error);
     }
   } catch (error) {
     console.warn('[PlayingRoot] 状态管理协调注册失败:', error);
   }
 
   // 设置角色创建事件监听器
-  try {
-    if (typeof setupCharacterCreationListeners === 'function') {
-      setupCharacterCreationListeners();
-    }
-  } catch (error) {
-    console.warn('[PlayingRoot] 角色创建事件监听器设置失败:', error);
-  }
+  // TODO: 实现角色创建事件监听器设置
 
   // 监听游戏状态变化，在切换到 PLAYING 时清空消息
   // 移除对 gameStateStore.currentPhase 的监听，因为不再使用 Pinia
@@ -2131,7 +1841,6 @@ onUnmounted(() => {
   // 清理状态管理器
   try {
     (window as any).__RPG_GAME_STATE_MANAGER__ = undefined;
-    console.log('[PlayingRoot] 状态管理器已从全局清理');
   } catch (error) {
     console.warn('[PlayingRoot] 清理状态管理器失败:', error);
   }
@@ -2155,13 +1864,7 @@ onUnmounted(() => {
   }
 
   // 清理角色创建事件监听器
-  try {
-    if (typeof cleanupCharacterCreationListeners === 'function') {
-      cleanupCharacterCreationListeners();
-    }
-  } catch (error) {
-    console.warn('[PlayingRoot] 清理角色创建事件监听器失败:', error);
-  }
+  // TODO: 实现角色创建事件监听器清理
 
   // 调用 usePlayingLogic 的清理方法
   try {
@@ -2182,6 +1885,13 @@ onUnmounted(() => {
     cleanupGameSettings();
   } catch (error) {
     console.warn('[PlayingRoot] 游戏设置状态管理协调清理失败:', error);
+  }
+
+  // 清理指令队列事件监听器
+  try {
+    cleanupCommandQueueListeners();
+  } catch (error) {
+    console.warn('[PlayingRoot] 指令队列监听器清理失败:', error);
   }
 });
 </script>
@@ -2607,10 +2317,6 @@ onUnmounted(() => {
 
   .character-detail-body {
     grid-template-columns: 1fr !important;
-  }
-
-  .attributes-grid {
-    grid-template-columns: repeat(3, 1fr) !important;
   }
 }
 

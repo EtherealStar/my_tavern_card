@@ -11,12 +11,21 @@ import { createMessage, generateMessageId, type SaveMessage } from '../models/Sa
 import type { SameLayerService } from '../services/SameLayerService';
 import type { SaveLoadManagerService } from '../services/SaveLoadManagerService';
 import type { StatDataBindingService } from '../services/StatDataBindingService';
+import type { UIService } from '../services/UIService';
+import { useGameSettings } from './useGameSettings';
+import { usePromptInjector } from './usePromptInjector';
 
 export function usePlayingLogic() {
   const saveLoadManager = inject<SaveLoadManagerService>(TYPES.SaveLoadManagerService);
   const statDataBinding = inject<StatDataBindingService>(TYPES.StatDataBindingService);
   const sameLayerService = inject<SameLayerService>(TYPES.SameLayerService);
-  const ui = inject<any>('ui');
+  const ui = inject<UIService>(TYPES.UIService);
+
+  // 获取游戏设置
+  const { autoScrollDuringStreaming } = useGameSettings();
+
+  // 获取提示注入器
+  const promptInjector = usePromptInjector();
 
   // 响应式状态
   const isNarrow = ref(false);
@@ -39,9 +48,6 @@ export function usePlayingLogic() {
 
   const messages = ref<UIMessage[]>([]);
 
-  // 跟踪正在进行的保存操作
-  const pendingSaveOperations = new Map<string, Promise<any>>();
-
   // 引用
   const rootRef = ref<HTMLElement>();
 
@@ -52,6 +58,7 @@ export function usePlayingLogic() {
     content: string,
     html?: string,
     mvuSnapshot?: any,
+    summary?: { short?: string; long?: string },
   ): SaveMessage => {
     const message = createMessage(role, content, html, mvuSnapshot);
     return {
@@ -59,6 +66,7 @@ export function usePlayingLogic() {
       id: generateMessageId(),
       timestamp: new Date().toISOString(),
       html: html || content, // 确保html字段不为undefined
+      summary: summary,
     };
   };
 
@@ -284,11 +292,11 @@ export function usePlayingLogic() {
 
   /**
    * 统一的消息后处理方法
-   * 处理生成结果：应用MVU数据变更、创建消息对象、保存到存档、更新UI
+   * 处理生成结果：应用MVU数据变更、保存到存档、创建UI消息对象、更新UI
    */
   const postProcessMessage = async (
     _userInput: string,
-    result: { html: string; newMvuData?: Mvu.MvuData },
+    result: { html: string; newMvuData?: Mvu.MvuData; summary?: { short?: string; long?: string } },
   ): Promise<boolean> => {
     try {
       // 1. 应用MVU数据变更
@@ -323,38 +331,39 @@ export function usePlayingLogic() {
         }
       }
 
-      // 2. 创建消息对象（包含MVU快照）
+      // 2. 先保存到存档，获取存档返回的消息ID
+      const slotId = await getCurrentSaveSlotId();
+      if (!slotId || !saveLoadManager) {
+        console.warn('[usePlayingLogic] 无法保存消息到存档，slotId:', slotId, 'saveLoadManager:', !!saveLoadManager);
+        return false;
+      }
+
       // 从HTML中提取纯文本作为content，HTML作为html字段
       const content = result.html.replace(/<[^>]+>/g, '').trim();
-      const message = createSaveMessage('assistant', content, result.html, result.newMvuData);
+      let savedMessage: any = null;
 
-      // 3. 添加到UI消息数组
-      messages.value.push(message);
-
-      // 4. 保存到存档
-      const slotId = await getCurrentSaveSlotId();
-      if (slotId && saveLoadManager) {
-        try {
-          // 创建保存操作的Promise并跟踪
-          const savePromise = saveLoadManager.addAssistantMessage(slotId, content, result.html, result.newMvuData);
-          pendingSaveOperations.set(message.id, savePromise);
-
-          // 异步等待保存完成，但不阻塞当前流程
-          savePromise
-            .then(() => {
-              console.log('[usePlayingLogic] 消息已成功保存到存档:', message.id);
-              pendingSaveOperations.delete(message.id);
-            })
-            .catch(error => {
-              console.error('[usePlayingLogic] 保存消息到存档失败:', error);
-              pendingSaveOperations.delete(message.id);
-            });
-        } catch (error) {
-          console.error('[usePlayingLogic] 保存消息到存档失败:', error);
-        }
-      } else {
-        console.warn('[usePlayingLogic] 无法保存消息到存档，slotId:', slotId, 'saveLoadManager:', !!saveLoadManager);
+      try {
+        // 先保存到存档，获取存档返回的消息对象
+        savedMessage = await saveLoadManager.addAssistantMessage(slotId, content, result.html, result.newMvuData);
+        console.log('[usePlayingLogic] 消息已成功保存到存档:', savedMessage.id);
+      } catch (error) {
+        console.error('[usePlayingLogic] 保存消息到存档失败:', error);
+        return false; // 保存失败，返回false
       }
+
+      // 3. 使用存档返回的消息ID创建UI消息对象
+      const message: SaveMessage = {
+        id: savedMessage.id, // 使用存档返回的ID
+        role: 'assistant',
+        content: content,
+        html: result.html,
+        timestamp: savedMessage.timestamp || new Date().toISOString(),
+        mvuSnapshot: result.newMvuData,
+        summary: result.summary,
+      };
+
+      // 4. 添加到UI消息数组（使用存档的ID）
+      messages.value.push(message);
 
       // 5. 滚动到底部
       scrollToBottom();
@@ -560,35 +569,130 @@ export function usePlayingLogic() {
   const generateMessageSync = async (
     userInput: string,
     oldMvuData?: Mvu.MvuData,
+    extraInjects?: Omit<InjectionPrompt, 'id'>[],
   ): Promise<{ html: string; newMvuData?: Mvu.MvuData }> => {
     if (!sameLayerService) {
       console.error('[usePlayingLogic] SameLayerService 不可用');
       throw new Error('SameLayerService 不可用');
     }
 
-    try {
-      isSending.value = true;
+    // 添加"少女祈祷中..."的临时消息
+    const prayingMessage = createEphemeralMessage(
+      '<div style="text-align: center; color: #ffd700; font-style: italic;">少女祈祷中...</div>',
+    );
+    messages.value.push(prayingMessage);
+    scrollToBottom();
 
-      // 获取当前存档的slotId
-      const slotId = await getCurrentSaveSlotId();
+    return new Promise((resolve, reject) => {
+      let isInterrupted = false;
+      const eventListeners: (() => void)[] = [];
 
-      // 调用SameLayerService的非流式生成方法，传递MVU数据
-      const result = await sameLayerService.generateWithSaveHistorySync(
-        {
-          user_input: userInput,
-          slotId: slotId || undefined,
-          // 使用默认的智能历史管理配置
-        },
-        oldMvuData,
-      );
+      try {
+        isSending.value = true;
 
-      return result;
-    } catch (error) {
-      console.error('[usePlayingLogic] 非流式生成失败:', error);
-      throw error;
-    } finally {
-      isSending.value = false;
-    }
+        // 监听生成中断事件
+        const onGenerationStopped = () => {
+          isInterrupted = true;
+          console.warn('[usePlayingLogic] 检测到非流式生成被中断');
+          const errorMessage = createEphemeralMessage('API生成出错，请重试');
+          messages.value.push(errorMessage);
+
+          // 清理状态
+          isSending.value = false;
+
+          // 清理事件监听器
+          eventListeners.forEach(cleanup => cleanup());
+
+          // 移除"少女祈祷中..."的临时消息
+          const messageIndex = messages.value.findIndex(msg => msg.id === prayingMessage.id);
+          if (messageIndex !== -1) {
+            messages.value.splice(messageIndex, 1);
+          }
+
+          reject(new Error('生成被中断'));
+        };
+
+        // 添加中断事件监听器
+        if (typeof eventOn === 'function') {
+          eventOn(tavern_events.GENERATION_STOPPED, onGenerationStopped);
+          eventListeners.push(() => {
+            if (typeof eventRemoveListener === 'function') {
+              eventRemoveListener(tavern_events.GENERATION_STOPPED, onGenerationStopped);
+            }
+          });
+        }
+
+        // 获取当前存档的slotId并执行生成
+        getCurrentSaveSlotId()
+          .then(async slotId => {
+            if (isInterrupted) return;
+
+            // 调用SameLayerService的非流式生成方法，传递MVU数据和注入提示词
+            const result = await sameLayerService.generateWithSaveHistorySync(
+              {
+                user_input: userInput,
+                slotId: slotId || undefined,
+                // 使用默认的智能历史管理配置
+              },
+              oldMvuData,
+              extraInjects,
+            );
+
+            if (isInterrupted) return;
+
+            // 清理事件监听器
+            eventListeners.forEach(cleanup => cleanup());
+
+            // 移除"少女祈祷中..."的临时消息
+            const messageIndex = messages.value.findIndex(msg => msg.id === prayingMessage.id);
+            if (messageIndex !== -1) {
+              messages.value.splice(messageIndex, 1);
+            }
+
+            isSending.value = false;
+            resolve(result);
+          })
+          .catch(error => {
+            console.error('[usePlayingLogic] 非流式生成失败:', error);
+
+            // 清理事件监听器
+            eventListeners.forEach(cleanup => cleanup());
+
+            // 移除"少女祈祷中..."的临时消息
+            const messageIndex = messages.value.findIndex(msg => msg.id === prayingMessage.id);
+            if (messageIndex !== -1) {
+              messages.value.splice(messageIndex, 1);
+            }
+
+            isSending.value = false;
+
+            // 添加错误消息
+            const errorMessage = createEphemeralMessage('API生成出错，请重试');
+            messages.value.push(errorMessage);
+
+            reject(error);
+          });
+      } catch (error) {
+        console.error('[usePlayingLogic] 非流式生成失败:', error);
+
+        // 清理事件监听器
+        eventListeners.forEach(cleanup => cleanup());
+
+        // 移除"少女祈祷中..."的临时消息
+        const messageIndex = messages.value.findIndex(msg => msg.id === prayingMessage.id);
+        if (messageIndex !== -1) {
+          messages.value.splice(messageIndex, 1);
+        }
+
+        isSending.value = false;
+
+        // 添加错误消息
+        const errorMessage = createEphemeralMessage('API生成出错，请重试');
+        messages.value.push(errorMessage);
+
+        reject(error);
+      }
+    });
   };
 
   /**
@@ -599,6 +703,7 @@ export function usePlayingLogic() {
   const generateMessageStream = async (
     userInput: string,
     oldMvuData?: Mvu.MvuData,
+    extraInjects?: Omit<InjectionPrompt, 'id'>[],
   ): Promise<{ html: string; newMvuData?: Mvu.MvuData } | null> => {
     if (!sameLayerService) {
       console.error('[usePlayingLogic] SameLayerService 不可用');
@@ -607,14 +712,44 @@ export function usePlayingLogic() {
     }
 
     return new Promise((resolve, reject) => {
+      let isInterrupted = false;
+      let eventListeners: (() => void)[] = [];
+
       try {
         isStreaming.value = true;
         streamingHtml.value = '';
 
+        // 监听生成中断事件
+        const onGenerationStopped = () => {
+          isInterrupted = true;
+          console.warn('[usePlayingLogic] 检测到生成被中断');
+          const errorMessage = createEphemeralMessage('API生成出错，请重试');
+          messages.value.push(errorMessage);
+
+          // 清理状态
+          streamingHtml.value = '';
+          isStreaming.value = false;
+
+          // 清理事件监听器
+          eventListeners.forEach(cleanup => cleanup());
+
+          reject(new Error('生成被中断'));
+        };
+
+        // 添加中断事件监听器
+        if (typeof eventOn === 'function') {
+          eventOn(tavern_events.GENERATION_STOPPED, onGenerationStopped);
+          eventListeners.push(() => {
+            if (typeof eventRemoveListener === 'function') {
+              eventRemoveListener(tavern_events.GENERATION_STOPPED, onGenerationStopped);
+            }
+          });
+        }
+
         // 获取当前存档的slotId
         getCurrentSaveSlotId()
           .then(slotId => {
-            // 调用SameLayerService的流式生成方法，传递MVU数据
+            // 调用SameLayerService的流式生成方法，传递MVU数据和注入提示词
             const handle = sameLayerService.generateWithSaveHistory(
               {
                 user_input: userInput,
@@ -624,53 +759,62 @@ export function usePlayingLogic() {
               {
                 onStart: () => {},
                 onFullText: (text: string) => {
+                  // 如果已被中断，不处理流式文本
+                  if (isInterrupted) return;
+
                   // 处理流式文本，转换为HTML
                   try {
                     const html = (window as any).formatAsDisplayedMessage?.(text, { message_id: 'last' }) ?? text;
                     streamingHtml.value = html;
-                    scrollToBottom();
+                    // 根据设置决定是否在流式生成时自动滚动
+                    if (autoScrollDuringStreaming.value) {
+                      scrollToBottom();
+                    }
                   } catch (error) {
                     console.warn('[usePlayingLogic] 格式化流式文本失败:', error);
                     streamingHtml.value = text;
-                    scrollToBottom();
+                    // 根据设置决定是否在流式生成时自动滚动
+                    if (autoScrollDuringStreaming.value) {
+                      scrollToBottom();
+                    }
                   }
                 },
-                onIncremental: (text: string) => {
-                  // 增量更新流式文本
-                  try {
-                    const html = (window as any).formatAsDisplayedMessage?.(text, { message_id: 'last' }) ?? text;
-                    streamingHtml.value = html;
-                    scrollToBottom();
-                  } catch (error) {
-                    console.warn('[usePlayingLogic] 格式化增量文本失败:', error);
-                    streamingHtml.value = text;
-                    scrollToBottom();
-                  }
-                },
-                onEnd: async () => {
-                  // 流式生成完成
+                onEnd: async (_finalText?: string) => {
+                  // 如果已被中断，直接返回
+                  if (isInterrupted) return;
 
+                  // 流式生成完成
                   // 清理流式状态
                   streamingHtml.value = '';
                   isStreaming.value = false;
+                  // 生成完成时始终滚动到底部
                   scrollToBottom();
+
+                  // 清理事件监听器
+                  eventListeners.forEach(cleanup => cleanup());
+                  eventListeners = [];
 
                   // 获取最终结果
                   try {
                     const result = await handle.getResult();
-                    if (result) {
+                    if (result && result.html) {
                       resolve(result);
                     } else {
-                      console.warn('[usePlayingLogic] 流式生成未返回结果');
-                      reject(new Error('流式生成未返回结果'));
+                      console.warn('[usePlayingLogic] 流式生成未返回有效结果');
+                      const errorMessage = createEphemeralMessage('API生成出错，请重试');
+                      messages.value.push(errorMessage);
+                      reject(new Error('流式生成未返回有效结果'));
                     }
                   } catch (error) {
                     console.error('[usePlayingLogic] 获取流式生成结果失败:', error);
+                    const errorMessage = createEphemeralMessage('API生成出错，请重试');
+                    messages.value.push(errorMessage);
                     reject(error);
                   }
                 },
               },
               oldMvuData, // 传递MVU数据
+              extraInjects, // 传递注入提示词
             );
 
             // 存储handle以便可以停止生成
@@ -678,14 +822,19 @@ export function usePlayingLogic() {
           })
           .catch(error => {
             console.error('[usePlayingLogic] 获取存档slotId失败:', error);
+            // 清理事件监听器
+            eventListeners.forEach(cleanup => cleanup());
             reject(error);
           });
       } catch (error) {
         console.error('[usePlayingLogic] 流式生成失败:', error);
         ui?.error?.('生成失败', '服务异常');
 
+        // 清理事件监听器
+        eventListeners.forEach(cleanup => cleanup());
+
         // 添加错误消息
-        const errorMessage = createEphemeralMessage('生成失败，请重试。');
+        const errorMessage = createEphemeralMessage('API生成出错，请重试');
         messages.value.push(errorMessage);
 
         // 清理状态
@@ -703,20 +852,45 @@ export function usePlayingLogic() {
    */
   const generateMessage = async (userInput: string, shouldStream?: boolean): Promise<boolean> => {
     try {
-      // 1. 先添加用户消息到UI
+      // 1. 先保存用户消息到存档，获取存档返回的消息ID
       let html = '';
       try {
         html = (window as any).formatAsDisplayedMessage?.(userInput, { message_id: 'last' }) ?? userInput;
       } catch {
         html = userInput;
       }
-      addUserMessage(userInput, html);
 
-      // 2. 保存用户消息到存档
-      const userMessageSaved = await saveUserMessage(userInput, html);
-      if (!userMessageSaved) {
-        console.warn('[usePlayingLogic] 用户消息保存失败，继续生成');
+      const slotId = await getCurrentSaveSlotId();
+      if (!slotId || !saveLoadManager) {
+        console.warn(
+          '[usePlayingLogic] 无法保存用户消息到存档，slotId:',
+          slotId,
+          'saveLoadManager:',
+          !!saveLoadManager,
+        );
+        return false;
       }
+
+      let savedUserMessage: any = null;
+      try {
+        // 先保存用户消息到存档，获取存档返回的消息对象
+        savedUserMessage = await saveLoadManager.addUserMessage(slotId, userInput, html);
+        console.log('[usePlayingLogic] 用户消息已成功保存到存档:', savedUserMessage.id);
+      } catch (error) {
+        console.error('[usePlayingLogic] 保存用户消息到存档失败:', error);
+        return false; // 保存失败，返回false
+      }
+
+      // 2. 使用存档返回的消息ID创建UI消息对象并添加到UI
+      const userMessage: SaveMessage = {
+        id: savedUserMessage.id, // 使用存档返回的ID
+        role: 'user',
+        content: userInput,
+        html: html,
+        timestamp: savedUserMessage.timestamp || new Date().toISOString(),
+      };
+      messages.value.push(userMessage);
+      scrollToBottom();
 
       let useStream = shouldStream;
 
@@ -739,17 +913,20 @@ export function usePlayingLogic() {
       // 获取当前MVU数据
       const oldMvuData = statDataBinding?.getMvuData({ type: 'message', message_id: 0 });
 
+      // 收集注入提示词
+      const extraInjects = promptInjector.collectForNextGeneration();
+
       let result: { html: string; newMvuData?: Mvu.MvuData } | null;
 
       if (useStream) {
         // 流式生成 - 现在直接返回Promise结果
-        result = await generateMessageStream(userInput, oldMvuData);
+        result = await generateMessageStream(userInput, oldMvuData, extraInjects);
         if (!result) {
           throw new Error('流式生成失败');
         }
       } else {
         // 非流式生成
-        result = await generateMessageSync(userInput, oldMvuData);
+        result = await generateMessageSync(userInput, oldMvuData, extraInjects);
       }
 
       // 确保result不为null
@@ -769,7 +946,7 @@ export function usePlayingLogic() {
       ui?.error?.('生成失败', '请重试');
 
       // 添加错误消息
-      const errorMessage = createEphemeralMessage('生成失败，请重试。');
+      const errorMessage = createEphemeralMessage('API生成出错，请重试');
       messages.value.push(errorMessage);
 
       return false;
@@ -797,8 +974,6 @@ export function usePlayingLogic() {
   const cleanup = () => {
     cleanupResizeObserver();
     cleanupPlayingLogic();
-    // 清理所有待处理的保存操作
-    pendingSaveOperations.clear();
   };
 
   // ==================== 重新生成和编辑功能 ====================
@@ -894,20 +1069,6 @@ export function usePlayingLogic() {
             const messageExists = saveData.messages.some(msg => msg.id === messageId);
             console.log('[usePlayingLogic] 消息在存档中存在:', messageExists);
 
-            // 检查是否有正在进行的保存操作
-            const pendingSave = pendingSaveOperations.get(messageId);
-            if (pendingSave) {
-              console.log('[usePlayingLogic] 消息正在保存中，等待保存完成...');
-              try {
-                await pendingSave; // 等待保存完成
-                console.log('[usePlayingLogic] 保存操作完成，继续删除流程');
-                pendingSaveOperations.delete(messageId);
-              } catch (error) {
-                console.warn('[usePlayingLogic] 等待保存完成时出错:', error);
-                pendingSaveOperations.delete(messageId);
-              }
-            }
-
             const deleteSuccess = await saveLoadManager.deleteMessage(slotId, messageId);
             console.log('[usePlayingLogic] 删除操作结果:', deleteSuccess);
 
@@ -979,18 +1140,41 @@ export function usePlayingLogic() {
       // 获取当前MVU数据
       const oldMvuData = statDataBinding?.getMvuData({ type: 'message', message_id: 0 });
 
+      // 收集注入提示词
+      const extraInjects = promptInjector.collectForNextGeneration();
+
+      // 添加"少女祈祷中..."的临时消息（仅非流式生成时）
+      let prayingMessage: any = null;
+      if (!useStream) {
+        prayingMessage = createEphemeralMessage(
+          '<div style="text-align: center; color: #ffd700; font-style: italic;">少女祈祷中...</div>',
+        );
+        messages.value.push(prayingMessage);
+        scrollToBottom();
+      }
+
       // 直接生成AI消息，不添加用户消息
       let result: { html: string; newMvuData?: Mvu.MvuData } | null;
 
-      if (useStream) {
-        // 流式生成
-        result = await generateMessageStream(userInput, oldMvuData);
-        if (!result) {
-          throw new Error('流式生成失败');
+      try {
+        if (useStream) {
+          // 流式生成
+          result = await generateMessageStream(userInput, oldMvuData, extraInjects);
+          if (!result) {
+            throw new Error('流式生成失败');
+          }
+        } else {
+          // 非流式生成
+          result = await generateMessageSync(userInput, oldMvuData, extraInjects);
         }
-      } else {
-        // 非流式生成
-        result = await generateMessageSync(userInput, oldMvuData);
+      } finally {
+        // 移除"少女祈祷中..."的临时消息（仅非流式生成时）
+        if (prayingMessage) {
+          const prayingMessageIndex = messages.value.findIndex(msg => msg.id === prayingMessage.id);
+          if (prayingMessageIndex !== -1) {
+            messages.value.splice(prayingMessageIndex, 1);
+          }
+        }
       }
 
       // 确保result不为null
@@ -1003,6 +1187,9 @@ export function usePlayingLogic() {
       return success;
     } catch (error) {
       console.error('[usePlayingLogic] 重新生成消息失败:', error);
+      // 添加错误消息
+      const errorMessage = createEphemeralMessage('API生成出错，请重试');
+      messages.value.push(errorMessage);
       return false;
     }
   };
@@ -1115,5 +1302,8 @@ export function usePlayingLogic() {
 
     // 状态管理协调
     registerPlayingLogic,
+
+    // 提示注入器方法
+    ...promptInjector,
   };
 }

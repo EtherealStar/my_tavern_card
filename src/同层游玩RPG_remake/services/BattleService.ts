@@ -1,6 +1,9 @@
 import { inject, injectable } from 'inversify';
 import { EventBus } from '../core/EventBus';
 import { TYPES } from '../core/ServiceIdentifiers';
+import { CUSTOM_SKILL_DESCRIPTIONS, MAGICAL_DESCRIPTIONS, PHYSICAL_DESCRIPTIONS } from '../data/battleDescriptions';
+import { getSkillDescriptionConfig } from '../data/skillDescriptionMapping';
+import { BattleLogItem, BattleLogStats, DescriptionStyle, DescriptionType } from '../models/BattleLogSchemas';
 import {
   BattleAction,
   BattleActionSchema,
@@ -45,6 +48,19 @@ import { SaveLoadManagerService } from './SaveLoadManagerService';
 @injectable()
 export class BattleService {
   private skills: Map<string, Skill> = new Map();
+
+  // 战斗日志描述系统相关属性
+  private battleLog: BattleLogItem[] = []; // 战斗日志收集
+  private descriptionCache = new Map<string, string>(); // 描述缓存
+  private maxCacheSize = 1000; // 缓存大小限制
+  private maxBattleLogSize = 1000; // 日志大小限制
+
+  // 描述模板
+  private descriptions = {
+    physical: PHYSICAL_DESCRIPTIONS,
+    magical: MAGICAL_DESCRIPTIONS,
+    custom: CUSTOM_SKILL_DESCRIPTIONS,
+  };
 
   constructor(
     @inject(TYPES.EventBus) private eventBus: EventBus,
@@ -230,7 +246,16 @@ export class BattleService {
     // 先发送战斗事件，让UI组件处理伤害显示
     events.forEach(event => {
       console.log('[BattleService] Emitting event:', event.type, 'with data:', event.data);
-      this.eventBus.emit(event.type, event.data);
+
+      // 生成描述并记录到战斗日志
+      const description = this.generateDescription(event);
+      this.recordBattleEvent(event, description);
+
+      // 发送带描述的增强事件
+      this.eventBus.emit(event.type, {
+        ...event.data,
+        description,
+      });
     });
 
     // 然后发送状态更新事件，确保状态同步正确
@@ -283,7 +308,15 @@ export class BattleService {
 
     // 先发送 AI 事件（包括battle:skill-used）
     aiEvents.forEach(event => {
-      this.eventBus.emit(event.type, event.data);
+      // 生成描述并记录到战斗日志
+      const description = this.generateDescription(event);
+      this.recordBattleEvent(event, description);
+
+      // 发送带描述的增强事件
+      this.eventBus.emit(event.type, {
+        ...event.data,
+        description,
+      });
     });
 
     // 然后发送状态更新事件
@@ -303,7 +336,8 @@ export class BattleService {
 
   private async onBattleEnd(result: BattleResult): Promise<void> {
     // 保存简要结果到IndexedDB settings
-    await this.resultHandler.persistAndAnnounce(result);
+    const battleLog = this.getBattleLog();
+    await this.resultHandler.persistAndAnnounce(result, battleLog);
 
     this.eventBus.emit('battle:result', result);
   }
@@ -427,5 +461,263 @@ export class BattleService {
     ];
     this.skills.clear();
     for (const s of list) this.skills.set(s.id, s);
+  }
+
+  // ==================== 战斗日志描述系统 ====================
+
+  /**
+   * 生成战斗日志描述
+   * @param event 战斗事件
+   * @returns 生成的描述文本
+   */
+  private generateDescription(event: any): string {
+    const cacheKey = this.generateCacheKey(event);
+
+    if (this.descriptionCache.has(cacheKey)) {
+      return this.descriptionCache.get(cacheKey)!;
+    }
+
+    const description = this.generateDescriptionInternal(event);
+    this.descriptionCache.set(cacheKey, description);
+
+    // 清理缓存
+    this.cleanupCache();
+
+    return description;
+  }
+
+  /**
+   * 内部描述生成方法
+   */
+  private generateDescriptionInternal(event: any): string {
+    const { data } = event;
+    const { actorId, targetId, skillId, damage, isCritical, isMiss } = data;
+
+    // 获取参与者名称
+    const actor = this.getParticipantName(actorId);
+    const target = this.getParticipantName(targetId);
+
+    // 根据技能类型选择描述模板
+    const skillConfig = getSkillDescriptionConfig(skillId);
+    let template: string;
+
+    if (skillConfig?.type === DescriptionType.CUSTOM) {
+      template = this.getCustomDescription(skillConfig.customDescription!, isCritical, isMiss);
+    } else {
+      template = this.getGenericDescription(skillConfig?.type || DescriptionType.PHYSICAL, isCritical, isMiss);
+    }
+
+    // 替换占位符
+    return template
+      .replace(/{actor}/g, actor)
+      .replace(/{target}/g, target)
+      .replace(/{damage}/g, damage?.toString() || '0');
+  }
+
+  /**
+   * 生成缓存键
+   */
+  private generateCacheKey(event: any): string {
+    const { data } = event;
+    const { actorId, targetId, skillId, isCritical, isMiss } = data;
+    return `${actorId}-${targetId}-${skillId}-${isCritical}-${isMiss}`;
+  }
+
+  /**
+   * 清理缓存
+   */
+  private cleanupCache() {
+    if (this.descriptionCache.size > this.maxCacheSize) {
+      const entries = Array.from(this.descriptionCache.entries());
+      const toDelete = entries.slice(0, entries.length - this.maxCacheSize);
+      toDelete.forEach(([key]) => this.descriptionCache.delete(key));
+    }
+  }
+
+  /**
+   * 获取专属技能描述
+   */
+  private getCustomDescription(skillKey: string, isCritical: boolean, isMiss: boolean): string {
+    const skillDescs = this.descriptions.custom[skillKey];
+    if (!skillDescs) return this.getGenericDescription(DescriptionType.PHYSICAL, isCritical, isMiss);
+
+    if (isMiss) return skillDescs.miss;
+    if (isCritical) return skillDescs.critical;
+    return skillDescs.hit;
+  }
+
+  /**
+   * 获取通用描述
+   */
+  private getGenericDescription(type: DescriptionType, isCritical: boolean, isMiss: boolean): string {
+    // 只处理物理和魔法描述
+    if (type === DescriptionType.CUSTOM) {
+      return this.getGenericDescription(DescriptionType.PHYSICAL, isCritical, isMiss);
+    }
+
+    const descs = this.descriptions[type];
+    if (!descs) return this.getGenericDescription(DescriptionType.PHYSICAL, isCritical, isMiss);
+
+    if (isMiss) return this.randomSelect(descs.miss);
+    if (isCritical) return this.randomSelect(descs.critical);
+    return this.randomSelect(descs.hit);
+  }
+
+  /**
+   * 随机选择描述
+   */
+  private randomSelect(descriptions: string[]): string {
+    return descriptions[Math.floor(Math.random() * descriptions.length)];
+  }
+
+  /**
+   * 获取参与者名称
+   */
+  private getParticipantName(participantId?: string): string {
+    if (!participantId) return '未知';
+    // 这里需要从当前战斗状态中获取参与者信息
+    // 具体实现依赖于现有的参与者管理逻辑
+    return '未知'; // 临时实现
+  }
+
+  /**
+   * 记录战斗事件
+   */
+  private recordBattleEvent(event: any, description: string) {
+    const logItem: BattleLogItem = {
+      id: `${Date.now()}-${this.battleLog.length}`,
+      timestamp: Date.now(),
+      type: event.type,
+      actorId: event.data.actorId,
+      targetId: event.data.targetId,
+      skillId: event.data.skillId,
+      damage: event.data.damage,
+      isCritical: event.data.isCritical,
+      isMiss: event.data.isMiss,
+      description,
+    };
+
+    this.battleLog.push(logItem);
+
+    // 限制日志大小
+    if (this.battleLog.length > this.maxBattleLogSize) {
+      this.battleLog = this.battleLog.slice(-this.maxBattleLogSize);
+    }
+  }
+
+  /**
+   * 获取战斗日志
+   */
+  public getBattleLog(): BattleLogItem[] {
+    return [...this.battleLog];
+  }
+
+  /**
+   * 清空战斗日志
+   */
+  public clearBattleLog() {
+    this.battleLog = [];
+  }
+
+  /**
+   * 设置描述风格
+   */
+  public setDescriptionStyle(style: DescriptionStyle) {
+    // 暂时不实现，保留接口
+    console.log('[BattleService] Description style set to:', style);
+  }
+
+  /**
+   * 获取战斗日志统计
+   */
+  public getBattleLogStats(): BattleLogStats {
+    const totalEvents = this.battleLog.length;
+    const criticalHits = this.battleLog.filter(log => log.isCritical).length;
+    const misses = this.battleLog.filter(log => log.isMiss).length;
+    const damageEvents = this.battleLog.filter(log => log.damage && log.damage > 0);
+    const averageDamage =
+      damageEvents.length > 0 ? damageEvents.reduce((sum, log) => sum + (log.damage || 0), 0) / damageEvents.length : 0;
+
+    const participants = [
+      ...new Set([...this.battleLog.map(log => log.actorId), ...this.battleLog.map(log => log.targetId)]),
+    ].filter(id => id && id !== '未知');
+
+    const battleDuration =
+      this.battleLog.length > 0 ? this.battleLog[this.battleLog.length - 1].timestamp - this.battleLog[0].timestamp : 0;
+
+    return {
+      totalEvents,
+      criticalHits,
+      misses,
+      averageDamage,
+      battleDuration,
+      participants,
+    };
+  }
+
+  /**
+   * 添加自定义技能描述
+   */
+  public addCustomSkillDescription(skillId: string, descriptions: any) {
+    this.descriptions.custom[skillId] = descriptions;
+  }
+
+  /**
+   * 添加通用描述模板
+   */
+  public addGenericDescriptions(type: DescriptionType, descriptions: any) {
+    this.descriptions[type] = { ...this.descriptions[type], ...descriptions };
+  }
+
+  /**
+   * 清空描述缓存
+   */
+  public clearDescriptionCache() {
+    this.descriptionCache.clear();
+  }
+
+  /**
+   * 获取缓存统计信息
+   */
+  public getCacheStats() {
+    return {
+      cacheSize: this.descriptionCache.size,
+      maxCacheSize: this.maxCacheSize,
+      battleLogSize: this.battleLog.length,
+      maxBattleLogSize: this.maxBattleLogSize,
+    };
+  }
+
+  /**
+   * 设置缓存大小限制
+   */
+  public setCacheSizeLimit(maxSize: number) {
+    this.maxCacheSize = Math.max(100, maxSize); // 最小100
+    this.cleanupCache();
+  }
+
+  /**
+   * 设置日志大小限制
+   */
+  public setLogSizeLimit(maxSize: number) {
+    this.maxBattleLogSize = Math.max(100, maxSize); // 最小100
+    if (this.battleLog.length > this.maxBattleLogSize) {
+      this.battleLog = this.battleLog.slice(-this.maxBattleLogSize);
+    }
+  }
+
+  /**
+   * 批量清理旧数据
+   */
+  public cleanupOldData() {
+    // 清理缓存
+    this.cleanupCache();
+
+    // 清理日志
+    if (this.battleLog.length > this.maxBattleLogSize) {
+      this.battleLog = this.battleLog.slice(-this.maxBattleLogSize);
+    }
+
+    console.log('[BattleService] Cleanup completed:', this.getCacheStats());
   }
 }

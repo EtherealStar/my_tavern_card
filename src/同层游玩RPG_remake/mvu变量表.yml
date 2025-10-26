@@ -56,27 +56,13 @@ relationships:
       relationship: 陌生人
       others: 未知
       events: []
-      attributes:
-        strength: 10
-        agility: 10
-        defense: 10
-        constitution: 10
-        charisma: 10
-        willpower: 10
-        luck: 10
       affinity: 0
 enemies:
   $meta:
     recursiveExtensible: true
-    template:
-      variantId: 未知
+    Id:
+      template: 未知敌人名称
+      variantId: 未知敌人变体ID
       gender: 未知
       race: 未知
-      attributes:
-        strength: 10
-        agility: 10
-        defense: 10
-        constitution: 10
-        charisma: 10
-        willpower: 10
-        luck: 10
+      defeated: false

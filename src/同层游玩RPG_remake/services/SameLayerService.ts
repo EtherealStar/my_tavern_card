@@ -11,6 +11,10 @@ const TextSchema = z.string().min(1);
 interface GenerationResult {
   html: string;
   newMvuData?: Mvu.MvuData;
+  summary?: {
+    short?: string;
+    long?: string;
+  };
 }
 
 interface StreamGenerationResult {
@@ -55,7 +59,6 @@ export class SameLayerService {
     handlers: {
       onStart?: () => void;
       onFullText?: (text: string) => void;
-      onIncremental?: (text: string) => void;
       onEnd?: (finalText: string) => void;
     } = {},
   ): { abort: () => void; cleanup: () => void } {
@@ -66,11 +69,9 @@ export class SameLayerService {
     // 使用字符串常量以避免运行期缺少 iframe_events 变量
     const EVT_STARTED = 'js_generation_started';
     const EVT_FULL = 'js_stream_token_received_fully';
-    const EVT_INC = 'js_stream_token_received_incrementally';
     const EVT_END = 'js_generation_ended';
 
     const fullListener = (text: string) => handlers?.onFullText?.(text);
-    const incListener = (text: string) => handlers?.onIncremental?.(text);
     const endListener = (text: string) => {
       try {
         handlers?.onEnd?.(text);
@@ -83,7 +84,6 @@ export class SameLayerService {
     try {
       eventOn?.(EVT_STARTED, startListener);
       eventOn?.(EVT_FULL, fullListener);
-      eventOn?.(EVT_INC, incListener);
       eventOn?.(EVT_END, endListener);
     } catch (_) {
       /* ignore */
@@ -107,11 +107,6 @@ export class SameLayerService {
       }
       try {
         eventRemoveListener?.(EVT_FULL, fullListener);
-      } catch {
-        /* no-op */ void 0;
-      }
-      try {
-        eventRemoveListener?.(EVT_INC, incListener);
       } catch {
         /* no-op */ void 0;
       }
@@ -209,10 +204,40 @@ export class SameLayerService {
   }
 
   /**
+   * 从文本中提取总结标签内容
+   * @param text 包含总结标签的文本
+   * @returns 提取的总结内容，如果没有找到则返回 undefined
+   */
+  private extractSummaryTags(text: string): { short?: string; long?: string } | undefined {
+    try {
+      // 正则表达式匹配总结标签
+      const shortSummaryMatch = text.match(/<sm_summary>(.*?)<\/sm_summary>/s);
+      const longSummaryMatch = text.match(/<bi_summary>(.*?)<\/bi_summary>/s);
+
+      const shortSummary = shortSummaryMatch?.[1]?.trim();
+      const longSummary = longSummaryMatch?.[1]?.trim();
+
+      // 如果没有任何总结标签，返回 undefined
+      if (!shortSummary && !longSummary) {
+        return undefined;
+      }
+
+      return {
+        short: shortSummary,
+        long: longSummary,
+      };
+    } catch (error) {
+      console.warn('[SameLayerService] 总结标签解析失败:', error);
+      return undefined;
+    }
+  }
+
+  /**
    * 使用存档消息历史进行流式生成
    * 使用酒馆当前预设，通过 overrides 注入存档消息作为聊天历史，保持世界书开启
    * 使用智能历史管理，根据消息数量自动选择使用完整内容或摘要
    * 支持 MVU 变量解析，在生成完成后自动解析文本中的 MVU 命令
+   * 支持额外注入提示词，通过 injects 参数注入到用户输入位置
    *
    * @example
    * // 基本使用 - 通过存档名获取历史
@@ -255,6 +280,18 @@ export class SameLayerService {
    * );
    *
    * @example
+   * // 使用额外注入提示词
+   * const extraInjects = [
+   *   { role: 'system', content: '你现在处于战斗状态...', position: 'in_chat', should_scan: true }
+   * ];
+   * const handle = sameLayerService.generateWithSaveHistory(
+   *   { user_input: "攻击敌人" },
+   *   undefined,
+   *   oldMvuData,
+   *   extraInjects
+   * );
+   *
+   * @example
    * // 停止生成
    * handle.abort();
    * handle.cleanup();
@@ -274,10 +311,10 @@ export class SameLayerService {
     handlers?: {
       onStart?: () => void;
       onFullText?: (text: string) => void;
-      onIncremental?: (text: string) => void;
       onEnd?: (finalText: string) => void;
     },
     oldMvuData?: Mvu.MvuData,
+    extraInjects?: Omit<InjectionPrompt, 'id'>[],
   ): StreamGenerationResult {
     let lastFull = '';
     let cancelled = false;
@@ -316,6 +353,7 @@ export class SameLayerService {
             user_input: config.user_input,
             should_stream: true,
             overrides,
+            injects: extraInjects, // 注入额外提示词
           },
           {
             onStart: () => handlers?.onStart?.(),
@@ -324,12 +362,12 @@ export class SameLayerService {
               // 流式过程中传递原始文本，不进行HTML处理
               handlers?.onFullText?.(text);
             },
-            onIncremental: (text: string) => {
-              // 流式过程中传递原始文本，不进行HTML处理
-              handlers?.onIncremental?.(text);
-            },
             onEnd: async (finalText: string) => {
               const text = finalText || lastFull || '';
+
+              // 在应用酒馆正则之前先解析总结标签
+              const summary = this.extractSummaryTags(text);
+
               // 只在最终完成时使用 formatAsDisplayedMessage 处理为 HTML 格式
               const htmlText = formatAsDisplayedMessage(text, { message_id: 0 });
 
@@ -340,9 +378,10 @@ export class SameLayerService {
               finalResult = {
                 html: htmlText,
                 newMvuData: newMvuData,
+                summary: summary,
               };
 
-              handlers?.onEnd?.(htmlText);
+              handlers?.onEnd?.(text);
             },
           },
         );
@@ -374,6 +413,7 @@ export class SameLayerService {
             user_input: config.user_input,
             should_stream: true,
             overrides,
+            injects: extraInjects, // 注入额外提示词
           },
           {
             onStart: () => handlers?.onStart?.(),
@@ -382,12 +422,12 @@ export class SameLayerService {
               // 流式过程中传递原始文本，不进行HTML处理
               handlers?.onFullText?.(text);
             },
-            onIncremental: (text: string) => {
-              // 流式过程中传递原始文本，不进行HTML处理
-              handlers?.onIncremental?.(text);
-            },
             onEnd: async (finalText: string) => {
               const text = finalText || lastFull || '';
+
+              // 在应用酒馆正则之前先解析总结标签
+              const summary = this.extractSummaryTags(text);
+
               // 只在最终完成时使用 formatAsDisplayedMessage 处理为 HTML 格式
               const htmlText = formatAsDisplayedMessage(text, { message_id: 0 });
 
@@ -398,9 +438,10 @@ export class SameLayerService {
               finalResult = {
                 html: htmlText,
                 newMvuData: newMvuData,
+                summary: summary,
               };
 
-              handlers?.onEnd?.(htmlText);
+              handlers?.onEnd?.(text);
             },
           },
         );
@@ -442,6 +483,7 @@ export class SameLayerService {
    * 使用酒馆当前预设，通过 overrides 注入存档消息作为聊天历史，保持世界书开启
    * 使用智能历史管理，根据消息数量自动选择使用完整内容或摘要
    * 支持 MVU 变量解析，在生成完成后自动解析文本中的 MVU 命令
+   * 支持额外注入提示词，通过 injects 参数注入到用户输入位置
    *
    * @example
    * // 基本使用 - 通过存档名获取历史
@@ -481,6 +523,17 @@ export class SameLayerService {
    *     char_description: "一个温柔的角色"
    *   }
    * }, oldMvuData);
+   *
+   * @example
+   * // 使用额外注入提示词
+   * const extraInjects = [
+   *   { role: 'system', content: '你现在处于战斗状态...', position: 'in_chat', should_scan: true }
+   * ];
+   * const result = await sameLayerService.generateWithSaveHistorySync(
+   *   { user_input: "攻击敌人" },
+   *   oldMvuData,
+   *   extraInjects
+   * );
    */
   public async generateWithSaveHistorySync(
     config: {
@@ -495,6 +548,7 @@ export class SameLayerService {
       longSummaryThreshold?: number;
     },
     oldMvuData?: Mvu.MvuData,
+    extraInjects?: Omit<InjectionPrompt, 'id'>[],
   ): Promise<GenerationResult> {
     try {
       // 获取存档消息和智能历史管理设置
@@ -530,6 +584,7 @@ export class SameLayerService {
         user_input: config.user_input,
         should_stream: false,
         overrides,
+        injects: extraInjects, // 注入额外提示词
       });
 
       // 验证返回结果
@@ -537,6 +592,9 @@ export class SameLayerService {
       if (!res.success) {
         throw new Error('生成结果无效');
       }
+
+      // 在应用酒馆正则之前先解析总结标签
+      const summary = this.extractSummaryTags(result);
 
       // 使用 formatAsDisplayedMessage 处理为 HTML 格式
       const htmlResult = formatAsDisplayedMessage(result, { message_id: 0 });
@@ -547,6 +605,7 @@ export class SameLayerService {
       return {
         html: htmlResult,
         newMvuData: newMvuData,
+        summary: summary,
       };
     } catch (error) {
       console.error('[SameLayerService] 非流式生成失败:', error);
@@ -565,12 +624,16 @@ export class SameLayerService {
           user_input: config.user_input,
           should_stream: false,
           overrides,
+          injects: extraInjects, // 注入额外提示词
         });
 
         const res = TextSchema.safeParse(result);
         if (!res.success) {
           throw new Error('生成结果无效');
         }
+
+        // 在应用酒馆正则之前先解析总结标签
+        const summary = this.extractSummaryTags(result);
 
         // 使用 formatAsDisplayedMessage 处理为 HTML 格式
         const htmlResult = formatAsDisplayedMessage(result, { message_id: 0 });
@@ -581,6 +644,7 @@ export class SameLayerService {
         return {
           html: htmlResult,
           newMvuData: newMvuData,
+          summary: summary,
         };
       } catch (fallbackError) {
         console.error('[SameLayerService] 无历史生成也失败:', fallbackError);

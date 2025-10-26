@@ -81,26 +81,94 @@ async function ensureJQueryLoaded(): Promise<void> {
         // 使用Symbol作为key确保类型安全和唯一性，与inject保持一致
         try {
           app.provide(TYPES.EventBus, serviceContainer.get(TYPES.EventBus));
+        } catch (error) {
+          console.error('[index.ts] EventBus 服务获取失败:', error);
+        }
+
+        try {
           app.provide(TYPES.UIService, serviceContainer.get(TYPES.UIService));
+        } catch (error) {
+          console.error('[index.ts] UIService 服务获取失败:', error);
+        }
+
+        try {
           app.provide(TYPES.SameLayerService, serviceContainer.get(TYPES.SameLayerService));
-          // app.provide('storage', serviceContainer.get(TYPES.StorageService)); // StorageService 不存在
+        } catch (error) {
+          console.error('[index.ts] SameLayerService 服务获取失败:', error);
+        }
+
+        try {
           app.provide(TYPES.AchievementService, serviceContainer.get(TYPES.AchievementService));
+        } catch (error) {
+          console.error('[index.ts] AchievementService 服务获取失败:', error);
+        }
+
+        try {
           app.provide(TYPES.StatDataBindingService, serviceContainer.get(TYPES.StatDataBindingService));
+        } catch (error) {
+          console.error('[index.ts] StatDataBindingService 服务获取失败:', error);
+        }
+
+        try {
           app.provide(TYPES.SaveLoadManagerService, serviceContainer.get(TYPES.SaveLoadManagerService));
-          // LoadManager功能已整合到useSaveLoad中，不再需要单独提供
+        } catch (error) {
+          console.error('[index.ts] SaveLoadManagerService 服务获取失败:', error);
+        }
+
+        try {
           app.provide(TYPES.ResponsiveService, serviceContainer.get(TYPES.ResponsiveService));
+        } catch (error) {
+          console.error('[index.ts] ResponsiveService 服务获取失败:', error);
+        }
+
+        try {
           app.provide(TYPES.CommandQueueService, serviceContainer.get(TYPES.CommandQueueService));
-          // 提供战斗与Phaser相关服务
+        } catch (error) {
+          console.error('[index.ts] CommandQueueService 服务获取失败:', error);
+        }
+
+        // 提供战斗与Phaser相关服务
+        try {
           app.provide(TYPES.PhaserManager, serviceContainer.get(TYPES.PhaserManager));
+        } catch (error) {
+          console.error('[index.ts] PhaserManager 服务获取失败:', error);
+        }
+
+        try {
           app.provide(TYPES.BattleService, serviceContainer.get(TYPES.BattleService));
+        } catch (error) {
+          console.error('[index.ts] BattleService 服务获取失败:', error);
+        }
+
+        try {
           app.provide(TYPES.BattleEngine, serviceContainer.get(TYPES.BattleEngine));
+        } catch (error) {
+          console.error('[index.ts] BattleEngine 服务获取失败:', error);
+        }
+
+        try {
           app.provide(TYPES.BattleResultHandler, serviceContainer.get(TYPES.BattleResultHandler));
+        } catch (error) {
+          console.error('[index.ts] BattleResultHandler 服务获取失败:', error);
+        }
+
+        try {
           app.provide(TYPES.BattleConfigService, serviceContainer.get(TYPES.BattleConfigService));
+        } catch (error) {
+          console.error('[index.ts] BattleConfigService 服务获取失败:', error);
+        }
+
+        try {
           app.provide(TYPES.BattleConfigInitializer, serviceContainer.get(TYPES.BattleConfigInitializer));
-          // 提供游戏状态服务给状态管理器使用
+        } catch (error) {
+          console.error('[index.ts] BattleConfigInitializer 服务获取失败:', error);
+        }
+
+        // 提供游戏状态服务给状态管理器使用
+        try {
           app.provide(TYPES.GameStateService, serviceContainer.get(TYPES.GameStateService));
-        } catch {
-          /* no-op */ void 0;
+        } catch (error) {
+          console.error('[index.ts] GameStateService 服务获取失败:', error);
         }
         (window as any).__RPG_VUE_REMOUNT__ = (el: Element) => {
           try {
@@ -111,28 +179,95 @@ async function ensureJQueryLoaded(): Promise<void> {
           const next = createApp(App);
           (window as any).__RPG_VUE_APP__ = next;
           try {
-            // 使用Symbol作为key确保类型安全和唯一性，与inject保持一致
             next.provide(TYPES.EventBus, serviceContainer.get(TYPES.EventBus));
+          } catch (error) {
+            console.error('[index.ts] EventBus 服务获取失败 (remount):', error);
+          }
+
+          try {
             next.provide(TYPES.UIService, serviceContainer.get(TYPES.UIService));
+          } catch (error) {
+            console.error('[index.ts] UIService 服务获取失败 (remount):', error);
+          }
+
+          try {
             next.provide(TYPES.SameLayerService, serviceContainer.get(TYPES.SameLayerService));
-            // next.provide('storage', serviceContainer.get(TYPES.StorageService)); // StorageService 不存在
+          } catch (error) {
+            console.error('[index.ts] SameLayerService 服务获取失败 (remount):', error);
+          }
+
+          try {
             next.provide(TYPES.AchievementService, serviceContainer.get(TYPES.AchievementService));
+          } catch (error) {
+            console.error('[index.ts] AchievementService 服务获取失败 (remount):', error);
+          }
+
+          try {
             next.provide(TYPES.StatDataBindingService, serviceContainer.get(TYPES.StatDataBindingService));
+          } catch (error) {
+            console.error('[index.ts] StatDataBindingService 服务获取失败 (remount):', error);
+          }
+
+          try {
             next.provide(TYPES.SaveLoadManagerService, serviceContainer.get(TYPES.SaveLoadManagerService));
-            // LoadManager功能已整合到useSaveLoad中，不再需要单独提供
+          } catch (error) {
+            console.error('[index.ts] SaveLoadManagerService 服务获取失败 (remount):', error);
+          }
+
+          try {
             next.provide(TYPES.ResponsiveService, serviceContainer.get(TYPES.ResponsiveService));
+          } catch (error) {
+            console.error('[index.ts] ResponsiveService 服务获取失败 (remount):', error);
+          }
+
+          try {
             next.provide(TYPES.CommandQueueService, serviceContainer.get(TYPES.CommandQueueService));
-            // 提供战斗与Phaser相关服务
+          } catch (error) {
+            console.error('[index.ts] CommandQueueService 服务获取失败 (remount):', error);
+          }
+
+          // 提供战斗与Phaser相关服务
+          try {
             next.provide(TYPES.PhaserManager, serviceContainer.get(TYPES.PhaserManager));
+          } catch (error) {
+            console.error('[index.ts] PhaserManager 服务获取失败 (remount):', error);
+          }
+
+          try {
             next.provide(TYPES.BattleService, serviceContainer.get(TYPES.BattleService));
+          } catch (error) {
+            console.error('[index.ts] BattleService 服务获取失败 (remount):', error);
+          }
+
+          try {
             next.provide(TYPES.BattleEngine, serviceContainer.get(TYPES.BattleEngine));
+          } catch (error) {
+            console.error('[index.ts] BattleEngine 服务获取失败 (remount):', error);
+          }
+
+          try {
             next.provide(TYPES.BattleResultHandler, serviceContainer.get(TYPES.BattleResultHandler));
+          } catch (error) {
+            console.error('[index.ts] BattleResultHandler 服务获取失败 (remount):', error);
+          }
+
+          try {
             next.provide(TYPES.BattleConfigService, serviceContainer.get(TYPES.BattleConfigService));
+          } catch (error) {
+            console.error('[index.ts] BattleConfigService 服务获取失败 (remount):', error);
+          }
+
+          try {
             next.provide(TYPES.BattleConfigInitializer, serviceContainer.get(TYPES.BattleConfigInitializer));
-            // 提供游戏状态服务给状态管理器使用
+          } catch (error) {
+            console.error('[index.ts] BattleConfigInitializer 服务获取失败 (remount):', error);
+          }
+
+          // 提供游戏状态服务给状态管理器使用
+          try {
             next.provide(TYPES.GameStateService, serviceContainer.get(TYPES.GameStateService));
-          } catch {
-            /* no-op */ void 0;
+          } catch (error) {
+            console.error('[index.ts] GameStateService 服务获取失败 (remount):', error);
           }
           next.mount(el);
         };

@@ -327,96 +327,105 @@ const setupBattleEventListeners = () => {
   battleEventUnsubscribers.push(
     eventBus.on('battle:damage', (data: any) => {
       console.log('[BattleRoot] Damage event:', data);
-      console.log('[BattleRoot] ActorId:', data?.actorId, 'TargetId:', data?.targetId);
-      setTimeout(() => {
-        const attacker = battleState.getParticipant(data?.actorId);
-        const target = battleState.getParticipant(data?.targetId);
-        console.log('[BattleRoot] Attacker found:', attacker);
-        console.log('[BattleRoot] Target found:', target);
-        console.log('[BattleRoot] All participants:', battleState.battleState.value?.participants);
-        let attackerName = attacker?.name || '未知';
-        let targetName = target?.name || '未知';
-        if (attackerName === '未知' && data?.actorId) {
-          const allParticipants = battleState.battleState.value?.participants || [];
-          const foundAttacker = allParticipants.find((p: any) => p.id === data.actorId);
-          if (foundAttacker) {
-            attackerName = foundAttacker.name;
-            console.log('[BattleRoot] Found attacker via fallback:', foundAttacker);
+
+      // 使用生成的描述而不是简单文本
+      if (data.description) {
+        addBattleLog(data.description, 'info');
+      } else {
+        // 降级到原有逻辑
+        setTimeout(() => {
+          const attacker = battleState.getParticipant(data?.actorId);
+          const target = battleState.getParticipant(data?.targetId);
+          let attackerName = attacker?.name || '未知';
+          let targetName = target?.name || '未知';
+          if (attackerName === '未知' && data?.actorId) {
+            const allParticipants = battleState.battleState.value?.participants || [];
+            const foundAttacker = allParticipants.find((p: any) => p.id === data.actorId);
+            if (foundAttacker) {
+              attackerName = foundAttacker.name;
+            }
           }
-        }
-        if (targetName === '未知' && data?.targetId) {
-          const allParticipants = battleState.battleState.value?.participants || [];
-          const foundTarget = allParticipants.find((p: any) => p.id === data.targetId);
-          if (foundTarget) {
-            targetName = foundTarget.name;
-            console.log('[BattleRoot] Found target via fallback:', foundTarget);
+          if (targetName === '未知' && data?.targetId) {
+            const allParticipants = battleState.battleState.value?.participants || [];
+            const foundTarget = allParticipants.find((p: any) => p.id === data.targetId);
+            if (foundTarget) {
+              targetName = foundTarget.name;
+            }
           }
-        }
-        if (typeof data?.damage === 'number') {
-          addBattleLog(`${attackerName} 对 ${targetName} 造成了 ${data.damage} 点伤害！`, 'info');
-          if (battleLayoutRef.value && data.targetId) {
-            battleLayoutRef.value.showEnemyDamage(data.targetId, data.damage, false);
+          if (typeof data?.damage === 'number') {
+            addBattleLog(`${attackerName} 对 ${targetName} 造成了 ${data.damage} 点伤害！`, 'info');
           }
-        }
-      }, 0);
+        }, 0);
+      }
+
+      // 显示伤害数字
+      if (battleLayoutRef.value && data.targetId) {
+        battleLayoutRef.value.showEnemyDamage(data.targetId, data.damage, false);
+      }
     }),
   );
 
   battleEventUnsubscribers.push(
     eventBus.on('battle:miss', (data: any) => {
       console.log('[BattleRoot] Miss event:', data);
-      console.log('[BattleRoot] Miss ActorId:', data?.actorId);
-      setTimeout(() => {
-        const attacker = battleState.getParticipant(data?.actorId);
-        console.log('[BattleRoot] Miss Attacker found:', attacker);
-        let attackerName = attacker?.name || '未知';
-        if (attackerName === '未知' && data?.actorId) {
-          const allParticipants = battleState.battleState.value?.participants || [];
-          const foundAttacker = allParticipants.find((p: any) => p.id === data.actorId);
-          if (foundAttacker) {
-            attackerName = foundAttacker.name;
-            console.log('[BattleRoot] Found miss attacker via fallback:', foundAttacker);
+
+      if (data.description) {
+        addBattleLog(data.description, 'warning');
+      } else {
+        // 降级到原有逻辑
+        setTimeout(() => {
+          const attacker = battleState.getParticipant(data?.actorId);
+          let attackerName = attacker?.name || '未知';
+          if (attackerName === '未知' && data?.actorId) {
+            const allParticipants = battleState.battleState.value?.participants || [];
+            const foundAttacker = allParticipants.find((p: any) => p.id === data.actorId);
+            if (foundAttacker) {
+              attackerName = foundAttacker.name;
+            }
           }
-        }
-        addBattleLog(`${attackerName} 的攻击未命中！`, 'warning');
-      }, 0);
+          addBattleLog(`${attackerName} 的攻击未命中！`, 'warning');
+        }, 0);
+      }
     }),
   );
 
   battleEventUnsubscribers.push(
     eventBus.on('battle:critical', (data: any) => {
       console.log('[BattleRoot] Critical event:', data);
-      console.log('[BattleRoot] Critical ActorId:', data?.actorId, 'TargetId:', data?.targetId);
-      setTimeout(() => {
-        const attacker = battleState.getParticipant(data?.actorId);
-        const target = battleState.getParticipant(data?.targetId);
-        console.log('[BattleRoot] Critical Attacker found:', attacker);
-        console.log('[BattleRoot] Critical Target found:', target);
-        let attackerName = attacker?.name || '未知';
-        let targetName = target?.name || '未知';
-        if (attackerName === '未知' && data?.actorId) {
-          const allParticipants = battleState.battleState.value?.participants || [];
-          const foundAttacker = allParticipants.find((p: any) => p.id === data.actorId);
-          if (foundAttacker) {
-            attackerName = foundAttacker.name;
-            console.log('[BattleRoot] Found critical attacker via fallback:', foundAttacker);
+
+      if (data.description) {
+        addBattleLog(data.description, 'success');
+      } else {
+        // 降级到原有逻辑
+        setTimeout(() => {
+          const attacker = battleState.getParticipant(data?.actorId);
+          const target = battleState.getParticipant(data?.targetId);
+          let attackerName = attacker?.name || '未知';
+          let targetName = target?.name || '未知';
+          if (attackerName === '未知' && data?.actorId) {
+            const allParticipants = battleState.battleState.value?.participants || [];
+            const foundAttacker = allParticipants.find((p: any) => p.id === data.actorId);
+            if (foundAttacker) {
+              attackerName = foundAttacker.name;
+            }
           }
-        }
-        if (targetName === '未知' && data?.targetId) {
-          const allParticipants = battleState.battleState.value?.participants || [];
-          const foundTarget = allParticipants.find((p: any) => p.id === data.targetId);
-          if (foundTarget) {
-            targetName = foundTarget.name;
-            console.log('[BattleRoot] Found critical target via fallback:', foundTarget);
+          if (targetName === '未知' && data?.targetId) {
+            const allParticipants = battleState.battleState.value?.participants || [];
+            const foundTarget = allParticipants.find((p: any) => p.id === data.targetId);
+            if (foundTarget) {
+              targetName = foundTarget.name;
+            }
           }
-        }
-        if (typeof data?.damage === 'number') {
-          addBattleLog(`暴击！${attackerName} 对 ${targetName} 造成了 ${data.damage} 点伤害！`, 'success');
-          if (battleLayoutRef.value && data.targetId) {
-            battleLayoutRef.value.showEnemyDamage(data.targetId, data.damage, true);
+          if (typeof data?.damage === 'number') {
+            addBattleLog(`暴击！${attackerName} 对 ${targetName} 造成了 ${data.damage} 点伤害！`, 'success');
           }
-        }
-      }, 0);
+        }, 0);
+      }
+
+      // 显示伤害数字
+      if (battleLayoutRef.value && data.targetId) {
+        battleLayoutRef.value.showEnemyDamage(data.targetId, data.damage, true);
+      }
     }),
   );
 

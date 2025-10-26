@@ -245,13 +245,13 @@ const handleEquip = (item: EquipmentItem) => {
   }
 
   // 如果当前有装备，使用更换指令；否则使用装备指令
-  if (equipment && equipment.name) {
-    const success = addEquipSwapCommand(equipmentType, item, equipment);
+  if (equipment.value && equipment.value.name) {
+    const success = addEquipSwapCommand(equipmentType.value, item, equipment.value);
     if (success) {
       close();
     }
   } else {
-    const success = addEquipCommand(equipmentType, item);
+    const success = addEquipCommand(equipmentType.value, item);
     if (success) {
       close();
     }
@@ -260,7 +260,7 @@ const handleEquip = (item: EquipmentItem) => {
 
 // 卸下操作
 const handleUnequip = () => {
-  const success = addUnequipCommand(equipmentType);
+  const success = addUnequipCommand(equipmentType.value);
   if (success) {
     close();
   }
@@ -268,11 +268,26 @@ const handleUnequip = () => {
 
 // 检查物品是否为当前装备
 const isItemCurrentlyEquipped = (item: EquipmentItem): boolean => {
-  return !!(equipment && item.name === equipment.name);
+  return !!(equipment.value && item.name === equipment.value.name);
 };
 
 const getEquipmentTypeName = (): string => {
-  return EQUIPMENT_TYPE_NAMES[equipmentType] || '未知类型';
+  const typeName = EQUIPMENT_TYPE_NAMES[equipmentType.value];
+  if (typeName) {
+    return typeName;
+  }
+
+  // 如果映射中没有找到，根据 equipmentType 值返回默认名称
+  switch (equipmentType.value) {
+    case 'weapon':
+      return '武器';
+    case 'armor':
+      return '防具';
+    case 'accessory':
+      return '饰品';
+    default:
+      return '装备';
+  }
 };
 
 const getChineseAttributeName = (englishName: string): string => {
@@ -280,8 +295,8 @@ const getChineseAttributeName = (englishName: string): string => {
 };
 
 const getRarityClass = (): string => {
-  if (!equipment?.rarity) return 'bg-gray-100 text-gray-800';
-  return RARITY_COLORS[equipment.rarity] || 'bg-gray-100 text-gray-800';
+  if (!equipment.value?.rarity) return 'bg-gray-100 text-gray-800';
+  return RARITY_COLORS[equipment.value.rarity] || 'bg-gray-100 text-gray-800';
 };
 
 const getItemRarityClass = (item: EquipmentItem): string => {
@@ -290,8 +305,8 @@ const getItemRarityClass = (item: EquipmentItem): string => {
 };
 
 const getEquipmentIcon = (): string => {
-  if (equipment?.icon) {
-    return equipment.icon;
+  if (equipment.value?.icon) {
+    return equipment.value.icon;
   }
 
   // 默认图标
@@ -305,7 +320,7 @@ const getEquipmentIcon = (): string => {
     accessory: '<circle cx="12" cy="8" r="4"/><path d="M6 21c2-3 14-3 12 0"/>',
   };
 
-  const path = iconPaths[equipmentType] || iconPaths.weapon;
+  const path = iconPaths[equipmentType.value] || iconPaths.weapon;
   return base + path + close;
 };
 
@@ -325,7 +340,7 @@ const getItemIcon = (item: EquipmentItem): string => {
     accessory: '<circle cx="12" cy="8" r="4"/><path d="M6 21c2-3 14-3 12 0"/>',
   };
 
-  const path = iconPaths[equipmentType] || iconPaths.weapon;
+  const path = iconPaths[equipmentType.value] || iconPaths.weapon;
   return base + path + close;
 };
 

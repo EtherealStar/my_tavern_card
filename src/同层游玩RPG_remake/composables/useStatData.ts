@@ -15,9 +15,9 @@
  * 4. 性能更好，逻辑更清晰
  */
 
-import { inject, onMounted, onUnmounted, ref } from 'vue';
+import { computed, inject, onMounted, onUnmounted, ref } from 'vue';
 import { TYPES } from '../core/ServiceIdentifiers';
-import { ATTRIBUTE_NAME_MAP } from '../models/CreationSchemas';
+import { ATTRIBUTE_NAME_MAP, CHINESE_ATTRIBUTE_NAMES } from '../models/CreationSchemas';
 import type { GameState } from '../models/GameState';
 import { GamePhase } from '../models/GameState';
 import type { StatDataBindingService } from '../services/StatDataBindingService';
@@ -317,7 +317,7 @@ export function useStatData() {
 
           characters.push({
             id: characterId,
-            name: charInfo.name || `角色${characterId}`,
+            name: characterId,
             gender: charInfo.gender || '未知',
             race: charInfo.race || '未知',
             age: charInfo.age || 16,
@@ -393,7 +393,6 @@ export function useStatData() {
   const getCharacterBasicInfo = async (characterId: string | number): Promise<any> => {
     try {
       // 通过MVU变量获取人物基础信息，使用正确的路径结构
-      const name = (await statDataBinding?.getAttributeValue(`relationships.${characterId}.name`, '')) || '';
       const gender =
         (await statDataBinding?.getAttributeValue(`relationships.${characterId}.gender`, '未知')) || '未知';
       const race = (await statDataBinding?.getAttributeValue(`relationships.${characterId}.race`, '未知')) || '未知';
@@ -413,7 +412,6 @@ export function useStatData() {
       const events = (await statDataBinding?.getAttributeValue(`relationships.${characterId}.events`, [])) || [];
 
       return {
-        name,
         gender,
         race,
         age,
@@ -428,7 +426,6 @@ export function useStatData() {
     } catch (error) {
       console.error('[useStatData] 获取人物基础信息失败:', error);
       return {
-        name: '',
         gender: '未知',
         race: '未知',
         age: 16,
@@ -449,9 +446,7 @@ export function useStatData() {
   const getCharacterAttributes = async (characterId: string | number): Promise<Record<string, number>> => {
     try {
       const attributes: Record<string, number> = {};
-      const attrNames = ['力量', '敏捷', '防御', '体质', '魅力', '幸运', '意志'];
-
-      for (const attrName of attrNames) {
+      for (const attrName of CHINESE_ATTRIBUTE_NAMES) {
         // 使用英文属性名获取数据，因为MVU变量表中存储的是英文属性名
         const englishName = getEnglishAttributeName(attrName);
         const value =
@@ -520,7 +515,6 @@ export function useStatData() {
       enemies.value = enemyRoot && typeof enemyRoot === 'object' ? enemyRoot : {};
 
       const out: any[] = [];
-      const attrNames = ['力量', '敏捷', '防御', '体质', '魅力', '幸运', '意志'];
 
       for (const [enemyId, _enemyData] of Object.entries(enemies.value)) {
         const variantId = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.variantId`, '未知')) || '未知';
@@ -528,7 +522,7 @@ export function useStatData() {
         const race = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.race`, '未知')) || '未知';
 
         const attributes: Record<string, number> = {};
-        for (const attrName of attrNames) {
+        for (const attrName of CHINESE_ATTRIBUTE_NAMES) {
           const englishName = getEnglishAttributeName(attrName);
           const v = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.attributes.${englishName}`, 0)) || 0;
           attributes[attrName] = Number(v);
@@ -562,9 +556,8 @@ export function useStatData() {
       const gender = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.gender`, '未知')) || '未知';
       const race = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.race`, '未知')) || '未知';
 
-      const attrNames = ['力量', '敏捷', '防御', '体质', '魅力', '幸运', '意志'];
       const attributes: Record<string, number> = {};
-      for (const attrName of attrNames) {
+      for (const attrName of CHINESE_ATTRIBUTE_NAMES) {
         const englishName = getEnglishAttributeName(attrName);
         const v = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.attributes.${englishName}`, 0)) || 0;
         attributes[attrName] = Number(v);
@@ -574,6 +567,74 @@ export function useStatData() {
     } catch (error) {
       console.error('[useStatData] 获取敌人详情失败:', error);
       return null;
+    }
+  };
+
+  // 基于服务封装的敌人基础信息API（不含立绘/背景）
+
+  /**
+   * 获取单个敌人的基础信息（name/variantId/gender/race/defeated）
+   */
+  const getEnemyBasicInfo = async (
+    enemyId: string,
+  ): Promise<{
+    id: string;
+    name: string;
+    variantId: string;
+    gender: string;
+    race: string;
+    defeated: boolean;
+  } | null> => {
+    try {
+      return (await statDataBinding?.getEnemyBasicInfo(enemyId)) || null;
+    } catch (error) {
+      console.error('[useStatData] 获取敌人基础信息失败:', error);
+      return null;
+    }
+  };
+
+  /**
+   * 获取所有敌人的基础信息列表
+   */
+  const getAllEnemiesBasicInfo = async (): Promise<
+    Array<{
+      id: string;
+      name: string;
+      variantId: string;
+      gender: string;
+      race: string;
+      defeated: boolean;
+    }>
+  > => {
+    try {
+      return (await statDataBinding?.getAllEnemiesBasicInfo()) || [];
+    } catch (error) {
+      console.error('[useStatData] 获取全部敌人基础信息失败:', error);
+      return [];
+    }
+  };
+
+  /**
+   * 获取敌人击败状态
+   */
+  const getEnemyDefeated = async (enemyId: string, defaultValue: boolean = false): Promise<boolean> => {
+    try {
+      return (await statDataBinding?.getEnemyDefeated(enemyId, defaultValue)) ?? defaultValue;
+    } catch (error) {
+      console.error('[useStatData] 获取敌人击败状态失败:', error);
+      return defaultValue;
+    }
+  };
+
+  /**
+   * 设置敌人击败状态
+   */
+  const setEnemyDefeated = async (enemyId: string, defeated: boolean, reason?: string): Promise<boolean> => {
+    try {
+      return (await statDataBinding?.setEnemyDefeated(enemyId, defeated, reason)) || false;
+    } catch (error) {
+      console.error('[useStatData] 设置敌人击败状态失败:', error);
+      return false;
     }
   };
 
@@ -921,6 +982,134 @@ export function useStatData() {
     }
   };
 
+  // ==================== 库存相关 computed 属性和方法 ====================
+
+  // 格式化库存数据，包含 fromMvu 标记
+  const displayInventory = computed(() => {
+    const result: Record<string, any[]> = {
+      weapons: [],
+      armors: [],
+      accessories: [],
+      others: [],
+    };
+
+    if (inventory.value && typeof inventory.value === 'object') {
+      ['weapons', 'armors', 'accessories', 'others'].forEach(category => {
+        const items = inventory.value[category];
+        if (Array.isArray(items)) {
+          result[category] = items
+            .filter(item => item && item.name && item.name.trim() !== '')
+            .map(item => ({
+              ...item,
+              fromMvu: true,
+            }));
+        }
+      });
+    }
+
+    return result;
+  });
+
+  // 获取背包总数量
+  const getTotalInventoryCount = (): number => {
+    if (!displayInventory.value || typeof displayInventory.value !== 'object') {
+      return 0;
+    }
+
+    let total = 0;
+    ['weapons', 'armors', 'accessories', 'others'].forEach(category => {
+      const items = displayInventory.value[category];
+      if (Array.isArray(items)) {
+        total += items.length;
+      }
+    });
+
+    return total;
+  };
+
+  // 获取用于显示的背包物品列表（扁平化）
+  const getDisplayInventoryItems = (): any[] => {
+    if (!displayInventory.value || typeof displayInventory.value !== 'object') {
+      return [];
+    }
+
+    const result: any[] = [];
+    ['weapons', 'armors', 'accessories', 'others'].forEach(category => {
+      const items = displayInventory.value[category];
+      if (Array.isArray(items)) {
+        items.forEach(item => {
+          result.push({
+            ...item,
+            category,
+          });
+        });
+      }
+    });
+
+    return result;
+  };
+
+  // ==================== 属性相关工具方法 ====================
+
+  // 获取当前属性值（向后兼容方法）
+  const getCurrentAttributeValue = (name: string) => {
+    return getAttributeDisplay(name);
+  };
+
+  // 格式化数字显示，处理 null/undefined 值
+  const displayAttr = (v: number | null | undefined): string => {
+    const n = Number(v);
+    return Number.isFinite(n) ? String(n) : '—';
+  };
+
+  // 获取基础值/当前值格式的属性显示
+  const getAttributeBaseCurrentValue = (name: string): string => {
+    try {
+      // 获取基础属性值 - 使用英文属性名
+      const englishName = getEnglishAttributeName(name);
+      const baseValue = getAttributeValue(englishName, 0);
+
+      // 获取当前属性值（包含装备加成等）- 使用更新后的函数
+      const currentValue = getAttributeDisplay(name);
+
+      // 如果当前值包含数字，提取数字部分
+      const currentNum = Number(String(currentValue).replace(/[^\d]/g, ''));
+      const baseNum = Number(baseValue);
+
+      // 如果两个值都有效，显示为 "基础值/当前值" 格式
+      if (Number.isFinite(baseNum) && Number.isFinite(currentNum)) {
+        return `${baseNum}/${currentNum}`;
+      }
+
+      // 回退到原来的显示方式
+      return String(currentValue || baseValue || '—');
+    } catch (error) {
+      console.error('[useStatData] 获取属性基础当前值失败:', error);
+      return '—';
+    }
+  };
+
+  // ==================== 物品相关工具方法 ====================
+
+  // 安全地获取物品名称，处理各种数据类型
+  const itemName = (it: any): string => {
+    try {
+      if (!it) return '未知物品';
+      if (typeof it === 'string') return it || '未知物品';
+      if (typeof it.name === 'string' && it.name) return it.name;
+    } catch (error) {
+      console.warn('[useStatData] 获取物品名称失败:', error);
+    }
+    return '未知物品';
+  };
+
+  // 生成装备显示文本，处理未装备状态
+  const equipmentText = (it: any, label: string): string => {
+    const name = itemName(it);
+    if (!it || name === '未知物品') return `未装备${label}`;
+    return name;
+  };
+
   // 组件挂载时设置事件订阅和初始数据加载
   onMounted(async () => {
     try {
@@ -1013,6 +1202,12 @@ export function useStatData() {
     getEnemies,
     getEnemy,
 
+    // 敌人基础信息（基于服务封装）
+    getEnemyBasicInfo,
+    getAllEnemiesBasicInfo,
+    getEnemyDefeated,
+    setEnemyDefeated,
+
     // 属性显示方法
     getAttributeDisplay,
     getAttributeDisplayAsync,
@@ -1041,6 +1236,20 @@ export function useStatData() {
     getInventoryArmors,
     getInventoryAccessories,
     getInventoryOthers,
+
+    // 库存显示相关方法
+    displayInventory,
+    getTotalInventoryCount,
+    getDisplayInventoryItems,
+
+    // 属性显示相关方法
+    getCurrentAttributeValue,
+    displayAttr,
+    getAttributeBaseCurrentValue,
+
+    // 物品相关工具方法
+    itemName,
+    equipmentText,
 
     // 数据更新触发器（用于强制重新渲染）
     dataUpdateTrigger,

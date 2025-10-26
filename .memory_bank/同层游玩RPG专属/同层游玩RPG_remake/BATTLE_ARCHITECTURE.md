@@ -1,7 +1,7 @@
 # 战斗子系统架构设计
 
-> 最后更新: 2025-10-03
-> 版本: 2.1 (Vue架构修复后)
+> 最后更新: 2025-01-27
+> 版本: 2.2 (集成战斗日志描述系统)
 
 ## 架构概览
 
@@ -37,7 +37,24 @@
 │  │  协调器      │  │ 计算引擎   │  │  资源验证         │   │
 │  │  - 初始化    │  │ - 伤害计算 │  │  - URL 验证       │   │
 │  │  - AI 处理   │  │ - 命中判定 │  │  - 路径解析       │   │
+│  │  - 日志描述  │  │ - 状态更新 │  │                   │   │
+│  │  - 缓存管理  │  │ - 事件生成 │  │                   │   │
 │  └──────────────┘  └────────────┘  └───────────────────┘   │
+│  ┌──────────────┐  ┌─────────────────────────────────────┐   │
+│  │BattleResult  │  │       战斗日志描述系统                │   │
+│  │Handler       │  │  ┌─────────────────────────────────┐ │   │
+│  │  - 结果处理  │  │  │    描述模板系统                 │ │   │
+│  │  - 故事生成  │  │  │  - 通用描述模板                │ │   │
+│  │  - 日志集成  │  │  │  - 专属技能描述                │ │   │
+│  └──────────────┘  │  │  - 技能映射配置                │ │   │
+│                    │  └─────────────────────────────────┘ │   │
+│                    │  ┌─────────────────────────────────┐ │   │
+│                    │  │    描述生成引擎                 │ │   │
+│                    │  │  - 描述生成逻辑                │ │   │
+│                    │  │  - 缓存机制                    │ │   │
+│                    │  │  - 性能优化                    │ │   │
+│                    │  └─────────────────────────────────┘ │   │
+│                    └─────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
                               ↕
 ┌─────────────────────────────────────────────────────────────┐
@@ -69,6 +86,10 @@
   - 监听战斗事件（伤害、暴击、未命中）
   - 显示战斗消息和日志
   - 显示战斗结果对话框
+  - **战斗日志描述系统集成**:
+    - 使用生成的描述文本显示战斗事件
+    - 支持降级到原有简单文本显示
+    - 保持向后兼容性
 - **数据来源**:
   - 从 `useBattleState` 获取响应式战斗数据
   - 从 `useBattleSystem` 调用方法处理行动
@@ -149,12 +170,17 @@
   - 处理玩家行动（调用 BattleEngine、发送事件）
   - 处理 AI 回合（简单 AI 逻辑）
   - 处理战斗结束（保存结果、触发后续流程）
+  - **战斗日志描述系统**:
+    - 生成战斗事件描述（通用描述 + 专属技能描述）
+    - 收集和管理战斗日志
+    - 描述缓存和性能优化
+    - 支持动态描述配置
 - **数据流**:
 
   ```
   Input: 从 useBattleSystem 接收配置和行动
-  Processing: 调用 BattleEngine 计算
-  Output: 通过 EventBus 发送事件
+  Processing: 调用 BattleEngine 计算 + 生成描述
+  Output: 通过 EventBus 发送带描述的事件
   ```
 
 #### BattleEngine (计算引擎)
@@ -236,6 +262,10 @@
   - 处理战斗结束后的结果保存
   - 触发后续游戏流程
   - 更新游戏状态和成就
+  - **战斗故事生成**:
+    - 基于战斗日志生成战后故事
+    - 整合战斗叙述和结果总结
+    - 支持故事结构化管理
 
 ### 4. Phaser 层
 
@@ -482,8 +512,12 @@ GameCore
    
 5. 发送事件
    BattleService 遍历 events
+   ↓ 生成描述
+   - 根据技能类型选择描述模板
+   - 生成战斗事件描述文本
+   - 记录到战斗日志
    ↓ eventBus.emit
-   - battle:damage
+   - battle:damage (带描述文本)
    - battle:state-updated
    
 6. 状态更新
@@ -515,13 +549,17 @@ GameCore
    如果 newState.ended === true
    ↓
    BattleService.onBattleEnd(result)
+   ↓ 调用 BattleResultHandler
+   - 获取战斗日志
+   - 生成战斗故事
+   - 保存结果和故事
    ↓ 发送 battle:result 事件
    
 10. 结束处理
     useBattleSystem.handleBattleEnd(result)
     - gameState.exitBattle()
     - battleState.endBattle()
-    - 显示战斗结果对话框
+    - 显示战斗结果对话框（包含战斗故事）
 ```
 
 ### 状态同步机制
@@ -1139,9 +1177,197 @@ console.log('[BattleScene] 消息');
    - 验证内存泄漏
    - 测试长时间运行
 
+## 战斗日志描述系统架构
+
+### 系统概述
+
+战斗日志描述系统为战斗事件提供丰富、生动的叙述性文本，支持通用描述和专属技能描述，最终实现战斗日志驱动的战后故事生成。
+
+### 架构设计理念
+
+- **集成式架构**：将战斗日志功能直接集成到现有服务中，而非创建独立服务
+- **分层描述架构**：通用描述 + 专属技能描述
+- **最小化改动**：只需要修改现有文件，无需新增服务
+- **向后兼容**：Vue 组件支持降级处理，确保系统稳定性
+
+### 核心组件
+
+#### 1. 数据结构层
+
+**文件**: `models/BattleLogSchemas.ts`
+
+- `DescriptionType` - 描述类型枚举（物理、魔法、专属）
+- `BattleLogItem` - 战斗日志项接口
+- `SkillDescriptionConfig` - 技能描述配置接口
+- `BattleStoryResult` - 战斗故事生成结果接口
+- `BattleLogStats` - 战斗日志统计接口
+
+#### 2. 描述模板层
+
+**文件**: `data/battleDescriptions.ts`
+
+- `PHYSICAL_DESCRIPTIONS` - 通用物理攻击描述模板
+- `MAGICAL_DESCRIPTIONS` - 通用魔法攻击描述模板
+- `CUSTOM_SKILL_DESCRIPTIONS` - 专属技能描述模板
+
+**文件**: `data/skillDescriptionMapping.ts`
+
+- `SKILL_DESCRIPTION_MAPPING` - 技能描述映射配置
+- 工具函数：`getSkillDescriptionConfig`, `hasCustomDescription`
+
+#### 3. 服务集成层
+
+**BattleService 扩展**:
+
+```typescript
+// 新增属性
+private battleLog: BattleLogItem[] = [];
+private descriptionCache = new Map<string, string>();
+private descriptions = {
+  physical: PHYSICAL_DESCRIPTIONS,
+  magical: MAGICAL_DESCRIPTIONS,
+  custom: CUSTOM_SKILL_DESCRIPTIONS
+};
+
+// 新增方法
+private generateDescription(event: any): string
+private recordBattleEvent(event: any, description: string)
+public getBattleLog(): BattleLogItem[]
+public getBattleLogStats(): BattleLogStats
+```
+
+**BattleResultHandler 扩展**:
+
+```typescript
+// 新增方法
+private generateBattleStory(battleLog: BattleLogItem[], result: BattleResult): BattleStoryResult
+private generateBattleIntroduction(battleLog: BattleLogItem[]): string
+private generateBattleNarrative(battleLog: BattleLogItem[]): string
+private generateBattleConclusion(result: BattleResult): string
+```
+
+#### 4. UI 集成层
+
+**BattleRoot.vue 优化**:
+
+```typescript
+// 事件监听优化
+eventBus.on('battle:damage', (data: any) => {
+  if (data.description) {
+    addBattleLog(data.description, 'info');
+  } else {
+    // 降级到原有逻辑
+  }
+});
+```
+
+### 数据流
+
+#### 描述生成流程
+
+```
+战斗事件 → BattleService.generateDescription()
+  ↓
+根据技能类型选择描述模板
+  ↓
+替换占位符 ({actor}, {target}, {damage})
+  ↓
+缓存描述文本
+  ↓
+记录到战斗日志
+  ↓
+发送带描述的事件
+```
+
+#### 故事生成流程
+
+```
+战斗结束 → BattleResultHandler.persistAndAnnounce()
+  ↓
+获取战斗日志
+  ↓
+生成战斗故事
+  ├─ 战斗介绍
+  ├─ 战斗叙述
+  └─ 战斗结论
+  ↓
+保存结果和故事
+  ↓
+发送故事数据
+```
+
+### 性能优化
+
+#### 缓存机制
+
+- **描述缓存**：避免重复生成相同描述
+- **缓存大小限制**：默认1000条，自动清理旧缓存
+- **缓存键生成**：基于事件特征生成唯一键
+
+#### 内存管理
+
+- **日志大小限制**：默认1000条，自动清理旧日志
+- **批量清理**：`cleanupOldData()` 方法
+- **统计信息**：提供缓存和日志使用统计
+
+### 扩展性
+
+#### 添加新技能描述
+
+1. 在 `battleDescriptions.ts` 中添加专属描述
+2. 在 `skillDescriptionMapping.ts` 中添加映射配置
+3. 系统自动识别并使用专属描述
+
+#### 动态配置
+
+```typescript
+// 运行时添加技能描述
+battleService.addCustomSkillDescription('new_skill', descriptions);
+
+// 运行时添加通用描述
+battleService.addGenericDescriptions(DescriptionType.PHYSICAL, descriptions);
+```
+
+### 维护指南
+
+#### 添加新技能描述
+
+1. **在描述模板中添加**：
+   ```typescript
+   CUSTOM_SKILL_DESCRIPTIONS['new_skill'] = {
+     hit: "新技能的命中描述",
+     critical: "新技能的暴击描述", 
+     miss: "新技能的未命中描述"
+   };
+   ```
+
+2. **在技能映射中添加**：
+   ```typescript
+   SKILL_DESCRIPTION_MAPPING['new_skill'] = {
+     skillId: 'new_skill',
+     type: DescriptionType.CUSTOM,
+     customDescription: 'new_skill'
+   };
+   ```
+
+#### 性能调优
+
+```typescript
+// 调整缓存大小
+battleService.setCacheSizeLimit(2000);
+
+// 调整日志大小
+battleService.setLogSizeLimit(500);
+
+// 手动清理
+battleService.cleanupOldData();
+```
+
 ## 相关文档
 
 - `BATTLE_EVENTS.md` - 事件契约详细说明
+- `BATTLE_LOG_DESCRIPTION_SYSTEM.md` - 战斗日志描述系统设计
+- `BATTLE_LOG_MAINTENANCE.md` - 战斗日志系统维护指南
 - `progress.md` - 项目进度和已完成功能
 - `activeContext.md` - 当前开发上下文
 - `basicBattles.ts` - 基础战斗配置定义
