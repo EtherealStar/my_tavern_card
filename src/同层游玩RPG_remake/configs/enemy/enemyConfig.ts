@@ -1052,4 +1052,3 @@ export function isValidRaceVariantCombination(race: string, variantId: string): 
   const raceMapping = ENEMY_TYPE_MAPPING[race];
   return raceMapping ? variantId in raceMapping : false;
 }
-

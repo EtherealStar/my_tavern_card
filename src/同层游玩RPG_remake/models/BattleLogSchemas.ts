@@ -77,4 +77,3 @@ export interface BattleLogStats {
   battleDuration: number; // 毫秒
   participants: string[];
 }
-

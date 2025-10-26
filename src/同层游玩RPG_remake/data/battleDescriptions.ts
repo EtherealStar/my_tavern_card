@@ -117,4 +117,3 @@ export const CUSTOM_SKILL_DESCRIPTIONS: Record<string, CustomSkillDescriptions> 
     miss: '{actor}的圣光术被{target}的黑暗护盾阻挡，神圣能量消散',
   },
 };
-

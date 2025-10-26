@@ -153,7 +153,7 @@ export const normalBattles: BattleConfigItem[] = [
             },
           },
           mvuAttributes: {
-            力量: 1, 
+            力量: 1,
             敏捷: 1,
             防御: 2,
             体质: 3,
