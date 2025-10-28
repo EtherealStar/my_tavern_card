@@ -1,14 +1,4 @@
-/**
- * 敌人只读配置层 - 核心配置文件
- *
- * 包含所有敌人相关的配置数据和函数：
- * - 敌人类型定义和映射
- * - 1-20级硬编码战斗属性配置
- * - 基于种族和变体的技能映射
- * - 基于种族和变体的立绘映射
- * - 基于地点的背景映射
- * - 核心查询函数
- */
+import { isValidSkillId } from '../../data/skills';
 
 // ==================== 类型定义 ====================
 
@@ -847,31 +837,31 @@ export const ENEMY_BATTLE_STATS_CONFIG: Record<number, Record<EnemyType, EnemyBa
 
 /**
  * 基于种族和变体的技能映射表
- * 不同种族和职业有不同的技能配置
+ * 现在引用技能数据文件中的技能ID
  */
 export const ENEMY_SKILLS_MAPPING: Record<string, Record<string, string[]>> = {
   人类: {
     战士: ['power_strike', 'defend'],
-    法师: ['fireball', 'magic_missile'],
+    法师: ['fireball', 'ice_shard'],
     盗贼: ['precise_strike', 'stealth'],
     弓箭手: ['precise_strike', 'multi_shot'],
     牧师: ['heal', 'bless'],
   },
   兽人: {
-    战士: ['power_strike', 'berserker_rage'],
-    萨满: ['lightning_bolt', 'heal'],
+    战士: ['power_strike', 'defend'],
+    萨满: ['fireball', 'heal'],
     狂战士: ['power_strike', 'berserker_rage'],
     猎手: ['precise_strike', 'track'],
   },
   精灵: {
     弓箭手: ['precise_strike', 'nature_arrow'],
-    德鲁伊: ['nature_bolt', 'heal'],
+    德鲁伊: ['heal', 'nature_bolt'],
     法师: ['fireball', 'ice_shard'],
     游侠: ['precise_strike', 'animal_companion'],
   },
   矮人: {
     战士: ['power_strike', 'shield_bash'],
-    工匠: ['repair', 'craft'],
+    工匠: ['defend', 'repair'],
     牧师: ['heal', 'bless'],
   },
   龙族: {
@@ -976,10 +966,8 @@ export function getEnemyBattleStats(level: number, type: EnemyType): EnemyBattle
 }
 
 /**
- * 根据种族和变体获取技能列表
- * @param race 种族
- * @param variantId 变体ID
- * @returns 技能ID列表
+ * 根据种族和变体获取技能列表（增强版）
+ * 现在会验证技能ID的有效性
  */
 export function getSkillsByRaceAndVariant(race: string, variantId: string): string[] {
   const raceSkills = ENEMY_SKILLS_MAPPING[race];
@@ -988,7 +976,20 @@ export function getSkillsByRaceAndVariant(race: string, variantId: string): stri
   }
 
   const variantSkills = raceSkills[variantId];
-  return variantSkills || ['power_strike']; // 默认技能
+  if (!variantSkills) {
+    return ['power_strike']; // 默认技能
+  }
+
+  // 验证所有技能ID的有效性
+  const validSkills = variantSkills.filter(skillId => isValidSkillId(skillId));
+
+  // 如果有无效技能，记录警告
+  const invalidSkills = variantSkills.filter(skillId => !isValidSkillId(skillId));
+  if (invalidSkills.length > 0) {
+    console.warn(`[enemyConfig] 发现无效技能ID: ${invalidSkills.join(', ')}`);
+  }
+
+  return validSkills.length > 0 ? validSkills : ['power_strike'];
 }
 
 /**

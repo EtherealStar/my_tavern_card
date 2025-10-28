@@ -1,7 +1,22 @@
 <template>
   <div class="enemy-status-panel" :style="positionStyle">
     <div class="enemy-name">{{ enemyName }}</div>
-    <BattleHealthBar label="HP" :current="currentHp" :max="maxHp" type="hp" />
+    <div class="status-container">
+      <div class="horizontal-bars">
+        <BattleHealthBar label="HP" :current="currentHp" :max="maxHp" type="hp" />
+        <BattleHealthBar v-if="mpBar" :label="mpBar.label" :current="mpBar.current" :max="mpBar.max" :type="mpBar.type" />
+      </div>
+      <div class="vertical-bars">
+        <BattleVerticalHealthBar
+          v-if="hhpBar"
+          :label="hhpBar.label"
+          :current="hhpBar.current"
+          :max="hhpBar.max"
+          :color="hhpBar.color"
+          class="enemy-style"
+        />
+      </div>
+    </div>
     <!-- 伤害数字显示 -->
     <div v-if="showDamage" class="damage-number" :class="damageClass">
       {{ damageValue }}
@@ -12,12 +27,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import BattleHealthBar from './BattleHealthBar.vue';
+import BattleVerticalHealthBar from './BattleVerticalHealthBar.vue';
 
 interface EnemyData {
   id: string;
   name: string;
   hp: number;
   maxHp: number;
+  mp?: number;
+  maxMp?: number;
+  stats?: {
+    hhp?: number;
+  };
   position?: {
     x: number;
     y: number;
@@ -45,6 +66,32 @@ const damageClass = ref('');
 const enemyName = computed(() => props.enemyData?.name || '敌人');
 const currentHp = computed(() => props.enemyData?.hp ?? 0);
 const maxHp = computed(() => props.enemyData?.maxHp ?? 1);
+
+// MP条数据
+const mpBar = computed(() => {
+  if (props.enemyData?.mp === undefined || props.enemyData?.maxMp === undefined) return null;
+
+  return {
+    type: 'mp',
+    label: 'MP',
+    current: props.enemyData.mp ?? 0,
+    max: props.enemyData.maxMp ?? 1,
+    color: undefined,
+  };
+});
+
+// H血量条数据
+const hhpBar = computed(() => {
+  if (!props.enemyData?.stats?.hhp) return null;
+
+  return {
+    type: 'hhp',
+    label: 'H血量',
+    current: props.enemyData.stats.hhp,
+    max: props.enemyData.stats.hhp, // H血量通常等于最大值
+    color: undefined,
+  };
+});
 
 const positionStyle = computed(() => {
   const pos = props.position || props.enemyData?.position;
@@ -116,6 +163,24 @@ defineExpose({
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
 }
 
+.status-container {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.horizontal-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vertical-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .damage-number {
   position: absolute;
   top: -30px;
@@ -174,6 +239,10 @@ defineExpose({
 
   .enemy-name {
     font-size: 12px;
+  }
+
+  .status-container {
+    gap: 6px;
   }
 
   .damage-number {

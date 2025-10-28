@@ -27,6 +27,8 @@ export const BattleParticipantSchema = z.object({
   name: z.string().default('Unknown'),
   maxHp: z.number().int().nonnegative().optional(), // 血量由体质*20自动计算
   hp: z.number().int().nonnegative().optional(), // 血量由体质*20自动计算
+  maxMp: z.number().int().nonnegative().optional(), // 魔法值由智力*5自动计算
+  mp: z.number().int().nonnegative().optional(), // 魔法值由智力*5自动计算
   side: z.enum(['player', 'enemy']).default('enemy'),
   level: z.number().int().min(1).max(20).default(1), // 等级属性 1-20级
   // 仅为敌人添加立绘字段（仅支持URL）
@@ -63,6 +65,7 @@ export const BattleParticipantSchema = z.object({
       critDamageMultiplier: z.number().min(1).max(5).default(1.5), // 暴击伤害倍数
       hhp: z.number().nonnegative().default(0), // H血量
       calculatedHp: z.number().nonnegative().optional(), // 计算出的血量（临时字段）
+      calculatedMp: z.number().nonnegative().optional(), // 计算出的魔法值（临时字段）
     })
     .optional(),
   // 参与者已学习的技能（引用 Skill.id）
@@ -95,6 +98,8 @@ export const BattleConfigSchema = z.object({
     })
     .optional(),
   participants: z.array(BattleParticipantSchema).min(2),
+  // 调试模式标记
+  isDebugMode: z.boolean().optional().default(false),
 });
 
 export type BattleConfig = z.infer<typeof BattleConfigSchema>;
@@ -111,6 +116,7 @@ export const SkillSchema = z.object({
   hitModifier: z.number().default(0),
   critBonus: z.number().default(0),
   critDamageOverride: z.number().optional(),
+  mpCost: z.number().int().nonnegative().default(0), // MP消耗
   animationKey: z.string().optional(),
   tags: z.array(z.string()).optional(),
 });

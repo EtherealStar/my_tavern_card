@@ -1,16 +1,21 @@
 <template>
   <div class="player-status-panel">
     <div class="player-name">{{ playerName }}</div>
-    <div class="status-bars">
-      <BattleHealthBar
-        v-for="bar in statusBars"
-        :key="bar.type"
-        :label="bar.label"
-        :current="bar.current"
-        :max="bar.max"
-        :type="bar.type"
-        :color="bar.color"
-      />
+    <div class="status-container">
+      <div class="status-bars">
+        <BattleHealthBar
+          v-for="bar in statusBars"
+          :key="bar.type"
+          :label="bar.label"
+          :current="bar.current"
+          :max="bar.max"
+          :type="bar.type"
+          :color="bar.color"
+        />
+      </div>
+      <div class="vertical-bars">
+        <BattleVerticalHealthBar v-if="hhpBar" :max="hhpBar.max" :type="hhpBar.type" :color="hhpBar.color" />
+      </div>
     </div>
   </div>
 </template>
@@ -18,6 +23,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import BattleHealthBar from './BattleHealthBar.vue';
+import BattleVerticalHealthBar from './BattleVerticalHealthBar.vue';
 
 interface PlayerData {
   id: string;
@@ -28,6 +34,9 @@ interface PlayerData {
   maxMp?: number;
   endurance?: number;
   maxEndurance?: number;
+  stats?: {
+    hhp?: number;
+  };
 }
 
 interface Props {
@@ -77,6 +86,19 @@ const statusBars = computed(() => {
 
   return bars;
 });
+
+// H血量条数据
+const hhpBar = computed(() => {
+  if (!props.playerData?.stats?.hhp) return null;
+
+  return {
+    type: 'hhp',
+    label: 'H血量',
+    current: props.playerData.stats.hhp,
+    max: props.playerData.stats.hhp, // H血量通常等于最大值
+    color: undefined,
+  };
+});
 </script>
 
 <style scoped>
@@ -103,7 +125,19 @@ const statusBars = computed(() => {
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
 }
 
+.status-container {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
 .status-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vertical-bars {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -120,6 +154,10 @@ const statusBars = computed(() => {
 
   .player-name {
     font-size: 14px;
+  }
+
+  .status-container {
+    gap: 8px;
   }
 }
 

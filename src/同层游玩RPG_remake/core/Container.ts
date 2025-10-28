@@ -9,6 +9,7 @@ import { BattleEngine } from '同层游玩RPG_remake/services/BattleEngine';
 import { BattleResourceService } from '同层游玩RPG_remake/services/BattleResourceService';
 import { BattleResultHandler } from '同层游玩RPG_remake/services/BattleResultHandler';
 import { BattleService } from '同层游玩RPG_remake/services/BattleService';
+import { DynamicEnemyService } from '同层游玩RPG_remake/services/DynamicEnemyService';
 import { PhaserManager } from '同层游玩RPG_remake/services/PhaserManager';
 import { AchievementService } from '../services/AchievementService';
 import { CommandQueueService } from '../services/CommandQueueService';
@@ -105,6 +106,7 @@ export class ServiceContainer {
     this.container.bind<BattleEngine>(TYPES.BattleEngine).to(BattleEngine).inSingletonScope();
     this.container.bind<BattleResultHandler>(TYPES.BattleResultHandler).to(BattleResultHandler).inSingletonScope();
     this.container.bind<BattleService>(TYPES.BattleService).to(BattleService).inSingletonScope();
+    this.container.bind<DynamicEnemyService>(TYPES.DynamicEnemyService).to(DynamicEnemyService).inSingletonScope();
     this.container.bind<PhaserManager>(TYPES.PhaserManager).to(PhaserManager).inSingletonScope();
   }
 

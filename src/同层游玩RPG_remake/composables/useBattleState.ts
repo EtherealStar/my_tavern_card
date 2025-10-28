@@ -34,12 +34,33 @@ import type { EventBus } from '../core/EventBus';
 import { TYPES } from '../core/ServiceIdentifiers';
 import type { BattleConfig, BattleParticipant } from '../models/BattleSchemas';
 
-export interface BattleParticipantExtended extends BattleParticipant {
+export interface BattleParticipantExtended {
+  id: string;
+  name: string;
+  side: 'player' | 'enemy';
+  level: number;
+  hp: number;
+  maxHp: number;
+  mp?: number;
+  maxMp?: number;
+  stats?: {
+    hhp?: number;
+    [key: string]: any;
+  };
+  skills?: string[];
+  background?: string;
   mvuAttributes?: Record<string, number>;
+  enemyPortrait?: {
+    image?: string;
+    [key: string]: any;
+  };
 }
 
-export interface BattleConfigExtended extends BattleConfig {
+export interface BattleConfigExtended {
   participants: BattleParticipantExtended[];
+  background?: string | { image?: string; [key: string]: any };
+  id?: string;
+  name?: string;
 }
 
 export interface BattleStateExtended {
@@ -51,6 +72,10 @@ export interface BattleStateExtended {
   participants: BattleParticipantExtended[];
   round: number;
   summary?: string;
+  // 确保包含所有必需的属性
+  id?: string;
+  name?: string;
+  background?: string;
 }
 
 export function useBattleState() {
@@ -82,7 +107,16 @@ export function useBattleState() {
     const configParticipants = battleConfig.value?.participants;
     return Array.isArray(configParticipants) ? configParticipants.filter(p => p.side === 'enemy') : [];
   });
-  const backgroundImage = computed(() => battleConfig.value?.background?.image);
+  const backgroundImage = computed(() => {
+    const background = battleConfig.value?.background;
+    if (typeof background === 'string') {
+      return background;
+    }
+    if (background && typeof background === 'object' && 'image' in background) {
+      return (background as any).image;
+    }
+    return undefined;
+  });
   const currentTurn = computed(() => battleState.value?.currentTurn || 'player');
   const battleRound = computed(() => battleState.value?.round || 1);
   const isBattleEnded = computed(() => battleState.value?.ended || false);
@@ -214,7 +248,7 @@ export function useBattleState() {
    */
   const updateParticipant = (participantId: string, updates: Partial<BattleParticipantExtended>) => {
     if (battleState.value) {
-      const participantIndex = battleState.value.participants.findIndex(p => p.id === participantId);
+      const participantIndex = battleState.value.participants.findIndex((p: any) => p.id === participantId);
       if (participantIndex !== -1) {
         // hp 变化日志（仅当 hp 实际变化时输出）
         try {
@@ -226,6 +260,38 @@ export function useBattleState() {
               name: battleState.value.participants[participantIndex].name,
               oldHp: prevHp,
               newHp: nextHp,
+            });
+          }
+        } catch {
+          // ignore logging errors
+        }
+
+        // mp 变化日志（仅当 mp 实际变化时输出）
+        try {
+          const prevMp = battleState.value.participants[participantIndex].mp;
+          const nextMp = updates.mp ?? prevMp;
+          if (typeof prevMp === 'number' && typeof nextMp === 'number' && prevMp !== nextMp) {
+            console.log('[useBattleState] mp changed (partial):', {
+              participantId,
+              name: battleState.value.participants[participantIndex].name,
+              oldMp: prevMp,
+              newMp: nextMp,
+            });
+          }
+        } catch {
+          // ignore logging errors
+        }
+
+        // hhp 变化日志（仅当 hhp 实际变化时输出）
+        try {
+          const prevHhp = battleState.value.participants[participantIndex].stats?.hhp;
+          const nextHhp = updates.stats?.hhp ?? prevHhp;
+          if (typeof prevHhp === 'number' && typeof nextHhp === 'number' && prevHhp !== nextHhp) {
+            console.log('[useBattleState] hhp changed (partial):', {
+              participantId,
+              name: battleState.value.participants[participantIndex].name,
+              oldHhp: prevHhp,
+              newHhp: nextHhp,
             });
           }
         } catch {

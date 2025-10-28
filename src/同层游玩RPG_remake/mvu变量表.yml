@@ -8,11 +8,12 @@ race: 未知
 age: 16
 level: 1
 exp: 0
-random_event: 无
+event: 无
 base_attributes:
   $meta:
     recursiveExtensible: false
   strength: 10
+  intelligence: 10
   agility: 10
   defense: 10
   constitution: 10
@@ -23,6 +24,7 @@ current_attributes:
   $meta:
     recursiveExtensible: false
   strength: 10
+  intelligence: 10
   agility: 10
   defense: 10
   constitution: 10
@@ -65,4 +67,4 @@ enemies:
       variantId: 未知敌人变体ID
       gender: 未知
       race: 未知
-      defeated: false
+      battle_end: false

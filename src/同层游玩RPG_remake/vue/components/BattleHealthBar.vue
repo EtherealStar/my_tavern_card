@@ -16,7 +16,7 @@ interface Props {
   label: string;
   current: number;
   max: number;
-  type?: 'hp' | 'mp' | 'endurance' | 'custom';
+  type?: 'hp' | 'mp' | 'endurance' | 'hhp' | 'custom';
   color?: string;
 }
 
@@ -40,6 +40,8 @@ const barClass = computed(() => {
       return 'mp-bar';
     case 'endurance':
       return 'endurance-bar';
+    case 'hhp':
+      return 'hhp-bar';
     default:
       return 'hp-bar';
   }
@@ -89,8 +91,12 @@ const barClass = computed(() => {
   background: linear-gradient(90deg, #8b5cf6, #7c3aed);
 }
 
+.health-bar-fill.hhp-bar {
+  background: linear-gradient(90deg, #ec4899, #be185d);
+}
+
 .health-bar-fill.custom-color {
-  background: v-bind(color);
+  background: v-bind('props.color');
 }
 
 .health-bar-decoration {
@@ -124,6 +130,10 @@ const barClass = computed(() => {
 
 .health-bar-container.enemy-style .health-bar-fill.hp-bar {
   background: linear-gradient(90deg, #dc2626, #b91c1c);
+}
+
+.health-bar-container.enemy-style .health-bar-fill.hhp-bar {
+  background: linear-gradient(90deg, #be185d, #9d174d);
 }
 
 .health-bar-container.enemy-style .health-bar-value {

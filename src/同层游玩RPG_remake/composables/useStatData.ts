@@ -33,6 +33,7 @@ export function useStatData() {
   // 中文属性名到英文属性名的反向映射
   const CHINESE_TO_ENGLISH_ATTRIBUTE_MAP: Record<string, string> = {
     力量: 'strength',
+    智力: 'intelligence',
     敏捷: 'agility',
     防御: 'defense',
     体质: 'constitution',
@@ -123,6 +124,9 @@ export function useStatData() {
   const enemiesLoading = ref(false);
   const enemiesError = ref<string | null>(null);
 
+  // 敌人战斗状态 - 跟踪每个敌人的battle_end状态
+  const enemiesBattleStatus = ref<Record<string, boolean>>({});
+
   // 统一的数据更新方法
   const updateGameState = (newState: {
     currentDate?: string;
@@ -172,6 +176,9 @@ export function useStatData() {
       try {
         const enemyRoot = (await statDataBinding?.getAttributeValue('enemies', {})) || {};
         enemies.value = enemyRoot && typeof enemyRoot === 'object' ? enemyRoot : {};
+
+        // 更新敌人战斗状态
+        await updateEnemiesBattleStatus();
       } catch {
         enemies.value = {};
       }
@@ -570,10 +577,51 @@ export function useStatData() {
     }
   };
 
+  /**
+   * 获取单个敌人的战斗状态（battle_end）
+   */
+  const getEnemyBattleStatus = async (enemyId: string): Promise<boolean> => {
+    try {
+      const battleEnd = await statDataBinding?.getAttributeValue(`enemies.${enemyId}.battle_end`, true);
+      return battleEnd === true;
+    } catch (error) {
+      console.error('[useStatData] 获取敌人战斗状态失败:', error);
+      return true; // 默认允许发送
+    }
+  };
+
+  /**
+   * 获取所有敌人的战斗状态
+   */
+  const getAllEnemiesBattleStatus = async (): Promise<Record<string, boolean>> => {
+    try {
+      const statusMap: Record<string, boolean> = {};
+      for (const [enemyId, _enemyData] of Object.entries(enemies.value)) {
+        statusMap[enemyId] = await getEnemyBattleStatus(enemyId);
+      }
+      return statusMap;
+    } catch (error) {
+      console.error('[useStatData] 获取所有敌人战斗状态失败:', error);
+      return {};
+    }
+  };
+
+  /**
+   * 更新敌人战斗状态缓存
+   */
+  const updateEnemiesBattleStatus = async (): Promise<void> => {
+    try {
+      const statusMap = await getAllEnemiesBattleStatus();
+      enemiesBattleStatus.value = statusMap;
+    } catch (error) {
+      console.error('[useStatData] 更新敌人战斗状态失败:', error);
+    }
+  };
+
   // 基于服务封装的敌人基础信息API（不含立绘/背景）
 
   /**
-   * 获取单个敌人的基础信息（name/variantId/gender/race/defeated）
+   * 获取单个敌人的基础信息（name/variantId/gender/race/battle_end）
    */
   const getEnemyBasicInfo = async (
     enemyId: string,
@@ -583,7 +631,7 @@ export function useStatData() {
     variantId: string;
     gender: string;
     race: string;
-    defeated: boolean;
+    battleEnd: boolean;
   } | null> => {
     try {
       return (await statDataBinding?.getEnemyBasicInfo(enemyId)) || null;
@@ -603,7 +651,7 @@ export function useStatData() {
       variantId: string;
       gender: string;
       race: string;
-      defeated: boolean;
+      battleEnd: boolean;
     }>
   > => {
     try {
@@ -615,25 +663,25 @@ export function useStatData() {
   };
 
   /**
-   * 获取敌人击败状态
+   * 获取敌人战斗状态（battle_end）
    */
-  const getEnemyDefeated = async (enemyId: string, defaultValue: boolean = false): Promise<boolean> => {
+  const getEnemyBattleEnd = async (enemyId: string, defaultValue: boolean = false): Promise<boolean> => {
     try {
-      return (await statDataBinding?.getEnemyDefeated(enemyId, defaultValue)) ?? defaultValue;
+      return (await statDataBinding?.getEnemyBattleEnd(enemyId, defaultValue)) ?? defaultValue;
     } catch (error) {
-      console.error('[useStatData] 获取敌人击败状态失败:', error);
+      console.error('[useStatData] 获取敌人战斗状态失败:', error);
       return defaultValue;
     }
   };
 
   /**
-   * 设置敌人击败状态
+   * 设置敌人战斗状态（battle_end）
    */
-  const setEnemyDefeated = async (enemyId: string, defeated: boolean, reason?: string): Promise<boolean> => {
+  const setEnemyBattleEnd = async (enemyId: string, battleEnd: boolean, reason?: string): Promise<boolean> => {
     try {
-      return (await statDataBinding?.setEnemyDefeated(enemyId, defeated, reason)) || false;
+      return (await statDataBinding?.setEnemyBattleEnd(enemyId, battleEnd, reason)) || false;
     } catch (error) {
-      console.error('[useStatData] 设置敌人击败状态失败:', error);
+      console.error('[useStatData] 设置敌人战斗状态失败:', error);
       return false;
     }
   };
@@ -1172,6 +1220,9 @@ export function useStatData() {
     enemiesLoading,
     enemiesError,
 
+    // 敌人战斗状态
+    enemiesBattleStatus,
+
     // ==================== 数据操作方法 ====================
     loadGameStateData,
     updateGameState,
@@ -1202,11 +1253,16 @@ export function useStatData() {
     getEnemies,
     getEnemy,
 
+    // 敌人战斗状态方法
+    getEnemyBattleStatus,
+    getAllEnemiesBattleStatus,
+    updateEnemiesBattleStatus,
+
     // 敌人基础信息（基于服务封装）
     getEnemyBasicInfo,
     getAllEnemiesBasicInfo,
-    getEnemyDefeated,
-    setEnemyDefeated,
+    getEnemyBattleEnd,
+    setEnemyBattleEnd,
 
     // 属性显示方法
     getAttributeDisplay,

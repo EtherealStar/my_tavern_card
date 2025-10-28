@@ -269,6 +269,21 @@
                   {{ isBusy ? '施法中...' : '发送' }}
                 </span>
               </button>
+
+              <!-- 动态战斗按钮：当有敌人battle_end为false时显示 -->
+              <div v-if="showBattleButton" class="battle-buttons">
+                <div v-for="enemy in availableEnemies" :key="enemy.id" class="mb-1">
+                  <button class="btn battle-btn w-full" @click="startDynamicBattle(enemy.id)" :disabled="isBusy">
+                    <span class="flex items-center gap-2">
+                      <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      与 {{ enemy.name || enemy.id }} 战斗
+                    </span>
+                  </button>
+                </div>
+              </div>
+
               <!-- 测试战斗按钮：紧邻发送按钮 -->
               <button class="btn" @click="onTestBattle">测试战斗</button>
             </div>
@@ -1021,15 +1036,9 @@
 
           <!-- 错误状态 -->
           <div v-else class="flex items-center justify-center py-8">
-            <div class="text-center text-red-600">
-              <div class="mb-2 text-lg">⚠️</div>
+            <div class="text-center text-gray-500">
+              <div class="mb-2 text-2xl">⚠️</div>
               <div>无法加载人物详情</div>
-              <button
-                class="mt-3 rounded-lg bg-pink-500 px-4 py-2 text-sm text-white hover:bg-pink-600"
-                @click="closeCharacterDetail"
-              >
-                关闭
-              </button>
             </div>
           </div>
         </div>
@@ -1112,8 +1121,12 @@ const {
   enemiesList,
   enemiesLoading,
   enemiesError,
+  enemiesBattleStatus,
   getEnemies,
   getEnemy,
+  getEnemyBattleStatus,
+  getAllEnemiesBattleStatus,
+  updateEnemiesBattleStatus,
   relationshipCharacters,
   relationshipCharactersLoading,
   relationshipCharactersError,
@@ -1169,7 +1182,7 @@ const {
 // 指令队列状态现在通过 useCommandQueue 组合式函数管理
 
 // 使用战斗配置服务
-const { startBattle } = useBattleConfig();
+const { startBattle, startTestBattle, startDynamicBattle: startDynamicBattleFromConfig } = useBattleConfig();
 
 // 使用指令队列组合式函数
 const {
@@ -1249,7 +1262,7 @@ const contextMenu = ref<{
   isLatestMessage: false,
 });
 
-const attrOrder = ref<string[]>(['力量', '敏捷', '防御', '体质', '魅力', '幸运', '意志']);
+const attrOrder = ref<string[]>(['力量', '智力', '敏捷', '防御', '体质', '魅力', '意志', '幸运']);
 
 const isMvuDataLoaded = computed(() => {
   // 通过检查数据是否存在来判断MVU数据是否已加载
@@ -1546,6 +1559,7 @@ const icon = (name: string): string => {
     accessory: '<circle cx="12" cy="8" r="4"/><path d="M6 21c2-3 14-3 12 0"/>',
     other: '<rect x="4" y="4" width="16" height="16" rx="3"/>',
     力量: '<path d="M5 12h4l1-4 3 10 2-6h4"/>',
+    智力: '<path d="M9 12l2 2 4-4M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.5 0 2.9.37 4.12 1.02"/>',
     敏捷: '<path d="M4 20l16-16M14 4h6v6"/>',
     防御: '<path d="M12 2l7 4v6c0 5-3 8-7 10-4-2-7-5-7-10V6l7-4z"/>',
     体质: '<rect x="6" y="6" width="12" height="12" rx="6"/>',
@@ -1566,7 +1580,22 @@ const containerClass = computed(() => ({
   'right-open': rightOpen.value,
 }));
 
-const canSend = computed(() => inputText.value.trim().length > 0);
+const canSend = computed(() => {
+  const hasText = inputText.value.trim().length > 0;
+  const hasActiveBattle = Object.values(enemiesBattleStatus.value).some(status => !status);
+  return hasText && !hasActiveBattle; // 有文本且没有进行中的战斗
+});
+
+// 判断是否显示战斗按钮
+const showBattleButton = computed(() => {
+  return Object.values(enemiesBattleStatus.value).some(status => !status);
+});
+
+// 获取可以进行战斗的敌人列表
+const availableEnemies = computed(() => {
+  return enemiesList.value.filter(enemy => !enemiesBattleStatus.value[enemy.id]);
+});
+
 const isBusy = computed(() => isSending.value || isStreaming.value);
 
 // 渲染列表：简化逻辑，分隔线现在直接在用户消息后显示
@@ -1657,8 +1686,8 @@ async function onSend() {
 // 触发一次MVP战斗
 async function onTestBattle() {
   try {
-    // 启动妖怪战斗（普通难度）
-    const success = await startBattle('yokai_battle', undefined, {
+    // 启动测试战斗（调试模式）
+    const success = await startTestBattle('yokai_battle', undefined, {
       returnToPrevious: true,
       silent: false,
     });
@@ -1669,6 +1698,23 @@ async function onTestBattle() {
   } catch (e) {
     console.error('[PlayingRoot] 启动测试战斗失败:', e);
     showError('启动战斗失败');
+  }
+}
+
+// 启动动态战斗
+async function startDynamicBattle(enemyId: string) {
+  try {
+    const success = await startDynamicBattleFromConfig(enemyId, {
+      returnToPrevious: true,
+      silent: false,
+    });
+
+    if (!success) {
+      showError('启动动态战斗失败');
+    }
+  } catch (error) {
+    console.error('[PlayingRoot] 启动动态战斗失败:', error);
+    showError('启动动态战斗失败');
   }
 }
 
@@ -1836,6 +1882,13 @@ onMounted(async () => {
 
   // 使用usePlayingLogic的initialize方法统一管理初始化逻辑
   await initialize(onDialogLoaded, loadUserPanel, loadMvuData, loadGameStateData, updateFromPlayingLogic);
+
+  // 初始化敌人战斗状态
+  try {
+    await updateEnemiesBattleStatus();
+  } catch (error) {
+    console.warn('[PlayingRoot] 初始化敌人战斗状态失败:', error);
+  }
 });
 onUnmounted(() => {
   // 清理状态管理器
@@ -2030,6 +2083,34 @@ onUnmounted(() => {
 
 .equip-row {
   position: relative;
+}
+
+/* 战斗按钮样式 */
+.battle-buttons {
+  margin-top: 8px;
+}
+
+.battle-btn {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  border: 1px solid #dc2626;
+  font-size: 12px;
+  padding: 6px 12px;
+  transition: all 0.3s ease;
+}
+
+.battle-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
+}
+
+.battle-btn:disabled {
+  background: #9ca3af;
+  border-color: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* 指令队列按钮样式 */

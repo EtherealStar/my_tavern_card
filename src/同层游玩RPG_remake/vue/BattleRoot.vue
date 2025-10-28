@@ -6,6 +6,8 @@ import { useGameServices } from '../composables/useGameServices';
 import { useGameStateManager } from '../composables/useGameStateManager';
 import type { EventBus } from '../core/EventBus';
 import { TYPES } from '../core/ServiceIdentifiers';
+import { historyManager } from '../services/HistoryManager';
+import BattleDebugPanel from './components/BattleDebugPanel.vue';
 import BattleLayout from './components/BattleLayout.vue';
 import BattleResultDialog from './components/BattleResultDialog.vue';
 const gameState = useGameStateManager();
@@ -18,6 +20,7 @@ const { showSuccess, showError, showWarning } = useGameServices();
 const battleSystem = useBattleSystem();
 const battleState = (battleSystem as any).battleState; // 从 battleSystem 中获取 battleState
 const eventBus = inject<EventBus>(TYPES.EventBus);
+const battleConfigService = inject<BattleConfigService>(TYPES.BattleConfigService);
 
 // 战斗结果相关状态
 const showBattleResult = ref(false);
@@ -28,6 +31,21 @@ const hasRequestedInitialBattle = ref(false);
 
 // 技能选择相关状态
 const showSkillSelection = ref(false);
+const showSkillCreator = ref(false);
+const newSkill = ref({
+  id: '',
+  name: '',
+  description: '',
+  category: 'physical',
+  target: 'single',
+  powerMultiplier: 1.0,
+  flatPower: 0,
+  hitModifier: 0,
+  critBonus: 0,
+  animationKey: '',
+  tags: [],
+});
+const skillValidationErrors = ref<Record<string, string>>({});
 
 // 战斗行动数据 - 动态计算按钮是否可用
 const battleActions = computed(() => [
@@ -68,13 +86,13 @@ const activePlayer = computed(() => {
   }
 
   // 优先查找存活的玩家（HP > 0）
-  const alive = list.filter(p => p?.side === 'player' && (p?.hp ?? 0) > 0);
+  const alive = list.filter((p: any) => p?.side === 'player' && (p?.hp ?? 0) > 0);
   if (alive.length > 0) {
     return alive[0];
   }
 
   // 如果没找到存活的，查找任何玩家（包括HP为0或未初始化的）
-  const anyPlayer = list.find(p => p?.side === 'player');
+  const anyPlayer = list.find((p: any) => p?.side === 'player');
   if (anyPlayer) {
     return anyPlayer;
   }
@@ -92,13 +110,13 @@ const activeEnemy = computed(() => {
   }
 
   // 优先查找存活的敌人（HP > 0）
-  const alive = list.filter(p => p?.side === 'enemy' && (p?.hp ?? 0) > 0);
+  const alive = list.filter((p: any) => p?.side === 'enemy' && (p?.hp ?? 0) > 0);
   if (alive.length > 0) {
     return alive[0];
   }
 
   // 如果没找到存活的，查找任何敌人（包括HP为0或未初始化的）
-  const anyEnemy = list.find(p => p?.side === 'enemy');
+  const anyEnemy = list.find((p: any) => p?.side === 'enemy');
   if (anyEnemy) {
     return anyEnemy;
   }
@@ -148,6 +166,9 @@ const activeEnemies = computed(() => {
       name: enemy.name,
       hp: enemy.hp ?? 0,
       maxHp: enemy.maxHp ?? 1,
+      mp: enemy.mp ?? 0,
+      maxMp: enemy.maxMp ?? 0,
+      stats: enemy.stats,
       enemyPortrait: {
         ...enemy.enemyPortrait,
         position,
@@ -161,6 +182,11 @@ const battleInfo = computed(() => ({
   title: '战斗',
   subtitle: `回合 ${battleState.battleRound.value}`,
 }));
+
+// 调试模式判断
+const isDebugMode = computed(() => {
+  return battleState.battleConfig.value?.isDebugMode === true;
+});
 
 // 可用技能计算属性
 const availableSkills = computed(() => activePlayer.value?.skills || []);
@@ -183,6 +209,89 @@ const skillNames: Record<string, string> = {
 
 function getSkillName(skillId: string): string {
   return skillNames[skillId] || skillId;
+}
+
+function validateNewSkill(): boolean {
+  const errors: Record<string, string> = {};
+
+  if (!newSkill.value.id?.trim()) {
+    errors.id = '技能ID不能为空';
+  } else if (battleConfigService?.isValidSkillId(newSkill.value.id)) {
+    errors.id = '技能ID已存在';
+  }
+
+  if (!newSkill.value.name?.trim()) {
+    errors.name = '技能名称不能为空';
+  }
+
+  if (newSkill.value.powerMultiplier === undefined || newSkill.value.powerMultiplier < 0) {
+    errors.powerMultiplier = '威力倍数不能为负数';
+  }
+
+  if (newSkill.value.flatPower === undefined || newSkill.value.flatPower < 0) {
+    errors.flatPower = '固定威力不能为负数';
+  }
+
+  skillValidationErrors.value = errors;
+  return Object.keys(errors).length === 0;
+}
+
+function createAndAddSkill() {
+  if (!validateNewSkill() || !battleConfigService) return;
+
+  const skill = {
+    id: newSkill.value.id!,
+    name: newSkill.value.name!,
+    description: newSkill.value.description || '',
+    category: newSkill.value.category as 'physical' | 'magical',
+    target: newSkill.value.target as 'single' | 'all' | 'self',
+    powerMultiplier: newSkill.value.powerMultiplier || 1.0,
+    flatPower: newSkill.value.flatPower || 0,
+    hitModifier: newSkill.value.hitModifier || 0,
+    critBonus: newSkill.value.critBonus || 0,
+    animationKey: newSkill.value.animationKey || '',
+    tags: newSkill.value.tags || [],
+  };
+
+  // 注册技能到服务
+  battleConfigService.registerCustomSkill(skill);
+
+  // 添加到当前玩家技能列表
+  if (activePlayer.value && !activePlayer.value.skills?.includes(skill.id)) {
+    const currentSkills = [...(activePlayer.value.skills || [])];
+    currentSkills.push(skill.id);
+
+    // 更新玩家技能
+    battleState.updateParticipant(activePlayer.value.id, { skills: currentSkills });
+  }
+
+  console.log('[BattleRoot] 创建并添加新技能:', skill);
+
+  // 关闭创建器
+  showSkillCreator.value = false;
+  clearNewSkillForm();
+}
+
+function clearNewSkillForm() {
+  newSkill.value = {
+    id: '',
+    name: '',
+    description: '',
+    category: 'physical',
+    target: 'single',
+    powerMultiplier: 1.0,
+    flatPower: 0,
+    hitModifier: 0,
+    critBonus: 0,
+    animationKey: '',
+    tags: [],
+  };
+  skillValidationErrors.value = {};
+}
+
+function openSkillCreator() {
+  showSkillCreator.value = true;
+  clearNewSkillForm();
 }
 
 function onActionSelected(actionId: string) {
@@ -455,6 +564,11 @@ const setupBattleEventListeners = () => {
       try {
         console.log('[BattleRoot] Syncing battle state from BattleService event');
         battleState.updateBattleState(resolvedState);
+
+        // 记录历史（仅在调试模式下）
+        if (isDebugMode.value) {
+          historyManager.recordChange(resolvedState, '战斗状态更新');
+        }
       } catch (error) {
         console.error('[BattleRoot] Failed to sync battle state from event:', error);
       } finally {
@@ -468,6 +582,182 @@ const setupBattleEventListeners = () => {
       console.log('[BattleRoot] Battle result:', result);
       battleResult.value = result;
       showBattleResult.value = true;
+    }),
+  );
+
+  // 调试面板事件监听器
+  battleEventUnsubscribers.push(
+    eventBus.on('battle:debug-update-enemy', (data: any) => {
+      console.log('[BattleRoot] Debug update enemy:', data);
+      if (data.participantId && data.updates) {
+        battleState.updateParticipant(data.participantId, data.updates);
+      }
+    }),
+  );
+
+  battleEventUnsubscribers.push(
+    eventBus.on('battle:debug-update-player', (data: any) => {
+      console.log('[BattleRoot] Debug update player:', data);
+      if (data.participantId && data.updates) {
+        battleState.updateParticipant(data.participantId, data.updates);
+      }
+    }),
+  );
+
+  battleEventUnsubscribers.push(
+    eventBus.on('battle:debug-reset-enemy', (data: any) => {
+      console.log('[BattleRoot] Debug reset enemy:', data);
+      // 重置敌人到初始状态
+      if (data.participantId && battleState.battleConfig.value) {
+        const initialEnemy = battleState.battleConfig.value.participants.find((p: any) => p.id === data.participantId);
+        if (initialEnemy) {
+          battleState.updateParticipant(data.participantId, initialEnemy);
+        }
+      }
+    }),
+  );
+
+  battleEventUnsubscribers.push(
+    eventBus.on('battle:debug-reset-player', (data: any) => {
+      console.log('[BattleRoot] Debug reset player:', data);
+      // 重置玩家到初始状态
+      if (data.participantId && battleState.battleConfig.value) {
+        const initialPlayer = battleState.battleConfig.value.participants.find((p: any) => p.id === data.participantId);
+        if (initialPlayer) {
+          battleState.updateParticipant(data.participantId, initialPlayer);
+        }
+      }
+    }),
+  );
+
+  battleEventUnsubscribers.push(
+    eventBus.on('battle:debug-import-enemy', (data: any) => {
+      console.log('[BattleRoot] Debug import enemy:', data);
+      if (activeEnemy.value) {
+        battleState.updateParticipant(activeEnemy.value.id, data);
+      }
+    }),
+  );
+
+  battleEventUnsubscribers.push(
+    eventBus.on('battle:debug-import-full-config', (data: any) => {
+      console.log('[BattleRoot] Debug import full config:', data);
+      if (data.enemy && activeEnemy.value) {
+        battleState.updateParticipant(activeEnemy.value.id, data.enemy);
+      }
+      if (data.player && activePlayer.value) {
+        battleState.updateParticipant(activePlayer.value.id, data.player);
+      }
+    }),
+  );
+
+  // 历史管理事件监听器
+  battleEventUnsubscribers.push(
+    eventBus.on('battle:debug-undo', () => {
+      console.log('[BattleRoot] Debug undo requested');
+      const previousState = historyManager.undo();
+      if (previousState) {
+        battleState.updateBattleState(previousState);
+        showSuccess('已撤销到上一个状态');
+      } else {
+        showWarning('没有可撤销的操作');
+      }
+    }),
+  );
+
+  battleEventUnsubscribers.push(
+    eventBus.on('battle:debug-redo', () => {
+      console.log('[BattleRoot] Debug redo requested');
+      const nextState = historyManager.redo();
+      if (nextState) {
+        battleState.updateBattleState(nextState);
+        showSuccess('已重做到下一个状态');
+      } else {
+        showWarning('没有可重做的操作');
+      }
+    }),
+  );
+
+  battleEventUnsubscribers.push(
+    eventBus.on('battle:debug-reset', () => {
+      console.log('[BattleRoot] Debug reset requested');
+      if (battleState.battleConfig.value) {
+        const initialState = battleState.createInitialState(battleState.battleConfig.value);
+        battleState.updateBattleState(initialState);
+        historyManager.clear();
+        showSuccess('已重置到初始状态');
+      }
+    }),
+  );
+
+  battleEventUnsubscribers.push(
+    eventBus.on('battle:debug-preset', (preset: string) => {
+      console.log('[BattleRoot] Debug preset requested:', preset);
+      // 根据预设调整敌人属性
+      if (activeEnemy.value) {
+        let updates: any = {};
+        switch (preset) {
+          case 'easy':
+            updates = {
+              hp: 50,
+              maxHp: 50,
+              level: 1,
+              stats: {
+                atk: 8,
+                hatk: 5,
+                def: 2,
+                hdef: 0.1,
+                hit: 0.7,
+                evade: 0.05,
+                critRate: 0.02,
+                critDamageMultiplier: 1.2,
+                hhp: 0,
+              },
+            };
+            break;
+          case 'normal':
+            updates = {
+              hp: 100,
+              maxHp: 100,
+              level: 3,
+              stats: {
+                atk: 15,
+                hatk: 12,
+                def: 5,
+                hdef: 0.2,
+                hit: 0.8,
+                evade: 0.1,
+                critRate: 0.05,
+                critDamageMultiplier: 1.5,
+                hhp: 10,
+              },
+            };
+            break;
+          case 'hard':
+            updates = {
+              hp: 200,
+              maxHp: 200,
+              level: 5,
+              stats: {
+                atk: 25,
+                hatk: 20,
+                def: 10,
+                hdef: 0.3,
+                hit: 0.9,
+                evade: 0.15,
+                critRate: 0.1,
+                critDamageMultiplier: 2.0,
+                hhp: 30,
+              },
+            };
+            break;
+        }
+
+        if (Object.keys(updates).length > 0) {
+          battleState.updateParticipant(activeEnemy.value.id, updates);
+          showSuccess(`已应用${preset}预设`);
+        }
+      }
     }),
   );
 
@@ -562,13 +852,111 @@ async function initializeBattleFromStore() {
           <button v-for="skill in availableSkills" :key="skill" @click="onSkillSelected(skill)" class="skill-button">
             {{ getSkillName(skill) }}
           </button>
+          <button class="add-skill-button" @click="openSkillCreator">➕ 添加新技能</button>
           <button class="cancel-button" @click="showSkillSelection = false">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 技能创建器弹窗 -->
+    <div v-if="showSkillCreator" class="skill-creator-overlay">
+      <div class="skill-creator-panel">
+        <h3>创建新技能</h3>
+        <div class="skill-form">
+          <div class="form-group">
+            <label>技能ID *</label>
+            <input v-model="newSkill.id" type="text" placeholder="例如: fire_ball" />
+            <div v-if="skillValidationErrors.id" class="error-message">{{ skillValidationErrors.id }}</div>
+          </div>
+
+          <div class="form-group">
+            <label>技能名称 *</label>
+            <input v-model="newSkill.name" type="text" placeholder="例如: 火球术" />
+            <div v-if="skillValidationErrors.name" class="error-message">{{ skillValidationErrors.name }}</div>
+          </div>
+
+          <div class="form-group">
+            <label>技能描述</label>
+            <textarea v-model="newSkill.description" placeholder="技能描述..."></textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>技能类型</label>
+              <select v-model="newSkill.category">
+                <option value="physical">物理</option>
+                <option value="magical">魔法</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>目标类型</label>
+              <select v-model="newSkill.target">
+                <option value="single">单体</option>
+                <option value="all">全体</option>
+                <option value="self">自身</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>威力倍数</label>
+              <input v-model.number="newSkill.powerMultiplier" type="number" step="0.1" min="0" />
+              <div v-if="skillValidationErrors.powerMultiplier" class="error-message">
+                {{ skillValidationErrors.powerMultiplier }}
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>固定威力</label>
+              <input v-model.number="newSkill.flatPower" type="number" min="0" />
+              <div v-if="skillValidationErrors.flatPower" class="error-message">
+                {{ skillValidationErrors.flatPower }}
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>命中修正</label>
+              <input v-model.number="newSkill.hitModifier" type="number" step="0.01" />
+            </div>
+
+            <div class="form-group">
+              <label>暴击加成</label>
+              <input v-model.number="newSkill.critBonus" type="number" step="0.01" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>动画键</label>
+            <input v-model="newSkill.animationKey" type="text" placeholder="例如: fireball_cast" />
+          </div>
+
+          <div class="form-group">
+            <label>标签 (用逗号分隔)</label>
+            <input v-model="newSkill.tags" type="text" placeholder="例如: fire, magical, ranged" />
+          </div>
+
+          <div class="form-actions">
+            <button @click="createAndAddSkill" class="create-btn">创建并添加</button>
+            <button @click="showSkillCreator = false" class="cancel-btn">取消</button>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- 战斗结果弹窗 -->
     <BattleResultDialog v-if="showBattleResult && battleResult" :result="battleResult" @close="closeBattleResult" />
+
+    <!-- 调试面板 -->
+    <BattleDebugPanel
+      v-if="isDebugMode"
+      :battle-state="battleState"
+      :active-player="activePlayer"
+      :active-enemy="activeEnemy"
+    />
   </div>
 </template>
 
@@ -670,5 +1058,146 @@ async function initializeBattleFromStore() {
 .cancel-button:hover {
   background: #b91c1c;
   transform: translateY(-1px);
+}
+
+.add-skill-button {
+  padding: 12px 16px;
+  background: #38a169;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+  margin-bottom: 8px;
+}
+
+.add-skill-button:hover {
+  background: #2f855a;
+}
+
+/* 技能创建器弹窗样式 */
+.skill-creator-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+}
+
+.skill-creator-panel {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 500px;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.skill-creator-panel h3 {
+  margin: 0 0 20px 0;
+  text-align: center;
+  color: #333;
+  font-size: 18px;
+}
+
+.skill-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 14px;
+  color: #333;
+  font-weight: 600;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #3182ce;
+  box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.2);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+.error-message {
+  font-size: 12px;
+  color: #e53e3e;
+  margin-top: 4px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.create-btn,
+.cancel-btn {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+.create-btn {
+  background: #38a169;
+  color: white;
+}
+
+.create-btn:hover {
+  background: #2f855a;
+}
+
+.cancel-btn {
+  background: #f56565;
+  color: white;
+}
+
+.cancel-btn:hover {
+  background: #e53e3e;
 }
 </style>

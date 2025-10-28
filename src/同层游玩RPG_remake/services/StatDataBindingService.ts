@@ -51,7 +51,7 @@ export interface StatDataBindingConfig {
 }
 
 // 从 PlayerService 迁移的类型定义
-export type AttrCN = '力量' | '敏捷' | '防御' | '体质' | '魅力' | '幸运' | '意志';
+export type AttrCN = '力量' | '智力' | '敏捷' | '防御' | '体质' | '魅力' | '意志' | '幸运';
 export type AttrMap = Record<AttrCN, number | null>;
 
 export interface EquipmentSet {
@@ -91,6 +91,7 @@ export class StatDataBindingService {
   // 中文属性名到英文属性名的反向映射
   private readonly chineseToEnglishMap: Record<string, string> = {
     力量: 'strength',
+    智力: 'intelligence',
     敏捷: 'agility',
     防御: 'defense',
     体质: 'constitution',
@@ -782,12 +783,13 @@ export class StatDataBindingService {
   public async readUserPanel(): Promise<UserPanelData> {
     const emptyAttrs: AttrMap = {
       力量: null,
+      智力: null,
       敏捷: null,
       防御: null,
       体质: null,
       魅力: null,
-      幸运: null,
       意志: null,
+      幸运: null,
     };
     const empty: UserPanelData = {
       baseAttributes: { ...emptyAttrs },

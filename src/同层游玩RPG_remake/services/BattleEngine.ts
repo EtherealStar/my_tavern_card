@@ -19,12 +19,14 @@ import { BattleAction, BattleResult, BattleState, Skill } from '../models/Battle
  */
 
 export interface BattleEvent {
-  type: 'battle:damage' | 'battle:miss' | 'battle:critical' | 'battle:state-updated' | 'battle:skill-used';
+  type: 'battle:damage' | 'battle:miss' | 'battle:critical' | 'battle:state-updated' | 'battle:skill-used' | 'battle:mp-consumed' | 'battle:hhp-changed' | 'battle:insufficient-mp';
   data: {
     actorId?: string;
     targetId?: string;
     damage?: number;
     skillId?: string;
+    mpCost?: number;
+    hhpChange?: number;
     [key: string]: any;
   };
 }
@@ -53,7 +55,7 @@ export class BattleEngine {
       state: state
         ? {
             ended: state.ended,
-            participants: state.participants?.map(p => ({ id: p.id, name: p.name, side: p.side, hp: p.hp })),
+            participants: state.participants?.map((p: any) => ({ id: p.id, name: p.name, side: p.side, hp: p.hp })),
           }
         : null,
     });
@@ -71,20 +73,20 @@ export class BattleEngine {
       next: next
         ? {
             ended: next.ended,
-            participants: next.participants?.map(p => ({ id: p.id, name: p.name, side: p.side, hp: p.hp })),
+            participants: next.participants?.map((p: any) => ({ id: p.id, name: p.name, side: p.side, hp: p.hp })),
           }
         : null,
     });
 
-    const actor = next.participants.find(p => p.id === action.actorId);
-    const target = next.participants.find(p => p.id === action.targetId);
+    const actor = next.participants.find((p: any) => p.id === action.actorId);
+    const target = next.participants.find((p: any) => p.id === action.targetId);
 
     // 验证参与者存在
     if (!actor || !target) {
       console.warn('[BattleEngine] 无效的行动者或目标:', action);
       console.warn(
         '[BattleEngine] 可用参与者:',
-        next.participants.map(p => ({ id: p.id, name: p.name })),
+        next.participants.map((p: any) => ({ id: p.id, name: p.name })),
       );
       return { newState: next, events: [] };
     }
@@ -112,6 +114,39 @@ export class BattleEngine {
           skillId: action.skillId,
         },
       });
+
+      // 检查MP消耗
+      if (skill?.mpCost && skill.mpCost > 0) {
+        if ((actor.mp || 0) < skill.mpCost) {
+          // MP不足，无法使用技能
+          events.push({
+            type: 'battle:insufficient-mp',
+            data: {
+              actorId: actor.id,
+              skillId: action.skillId,
+              requiredMp: skill.mpCost,
+              currentMp: actor.mp || 0,
+            },
+          });
+          // 切换回合
+          next.turn = next.turn === 'player' ? 'enemy' : 'player';
+          return { newState: next, events };
+        }
+
+        // 扣除MP
+        actor.mp = Math.max(0, (actor.mp || 0) - skill.mpCost);
+        
+        // 发送MP消耗事件
+        events.push({
+          type: 'battle:mp-consumed',
+          data: {
+            actorId: actor.id,
+            skillId: action.skillId,
+            mpCost: skill.mpCost,
+            remainingMp: actor.mp,
+          },
+        });
+      }
     }
 
     // 命中判定：命中率 = 命中 - 闪避 + 技能修正
@@ -200,6 +235,24 @@ export class BattleEngine {
       target.hp = Math.min(target.hp, target.maxHp);
     }
 
+    // HHP变化处理（H攻击时减少目标HHP）
+    if (category === 'magical' && target.stats?.hhp && target.stats.hhp > 0) {
+      const hhpDamage = Math.min(target.stats.hhp, Math.max(1, Math.round(finalDamage * 0.1)));
+      target.stats.hhp = Math.max(0, target.stats.hhp - hhpDamage);
+      
+      if (hhpDamage > 0) {
+        events.push({
+          type: 'battle:hhp-changed',
+          data: {
+            actorId: actor.id,
+            targetId: target.id,
+            hhpChange: -hhpDamage,
+            remainingHhp: target.stats.hhp,
+          },
+        });
+      }
+    }
+
     // 伤害事件
     events.push({
       type: 'battle:damage',
@@ -221,8 +274,8 @@ export class BattleEngine {
     }
 
     // 结束判定
-    const playerAlive = next.participants.some(p => p.side === 'player' && (p.hp || 0) > 0);
-    const enemyAlive = next.participants.some(p => p.side === 'enemy' && (p.hp || 0) > 0);
+    const playerAlive = next.participants.some((p: any) => p.side === 'player' && (p.hp || 0) > 0);
+    const enemyAlive = next.participants.some((p: any) => p.side === 'enemy' && (p.hp || 0) > 0);
     if (!playerAlive || !enemyAlive) {
       next.ended = true;
       next.winner = playerAlive ? 'player' : 'enemy';
@@ -236,7 +289,7 @@ export class BattleEngine {
             ended: next.ended,
             turn: next.turn,
             round: next.round,
-            participants: next.participants?.map(p => ({ id: p.id, name: p.name, side: p.side, hp: p.hp })),
+            participants: next.participants?.map((p: any) => ({ id: p.id, name: p.name, side: p.side, hp: p.hp })),
           }
         : null,
       eventsCount: events.length,

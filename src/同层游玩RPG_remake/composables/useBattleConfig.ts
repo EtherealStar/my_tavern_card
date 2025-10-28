@@ -79,6 +79,104 @@ export function useBattleConfig() {
   const bossConfigs = computed(() => configsByDifficulty.value.boss || []);
 
   /**
+   * 启动动态战斗（基于敌人ID）
+   */
+  const startDynamicBattle = async (
+    enemyId: string,
+    options?: { returnToPrevious?: boolean; silent?: boolean },
+  ): Promise<boolean> => {
+    console.log('[useBattleConfig] startDynamicBattle called with:', { enemyId, options });
+
+    try {
+      isLoading.value = true;
+
+      // 获取服务容器
+      const container = (window as any).__RPG_SERVICE_CONTAINER__;
+      if (!container) {
+        const error = '服务容器不可用';
+        console.error('[useBattleConfig]', error);
+        if (!options?.silent) showError('启动战斗失败', error);
+        return false;
+      }
+
+      // 获取动态敌人生成服务
+      const dynamicEnemyService = container.get('DynamicEnemyService');
+      if (!dynamicEnemyService) {
+        const error = '动态敌人生成服务不可用';
+        console.error('[useBattleConfig]', error);
+        if (!options?.silent) showError('启动战斗失败', error);
+        return false;
+      }
+
+      // 生成战斗配置
+      const battleConfig = await dynamicEnemyService.generateEnemyBattleConfig(enemyId);
+
+      // 获取玩家真实名字
+      const playerName = (window as any).substitudeMacros?.('{{user}}') || '玩家';
+      console.log('[useBattleConfig] 获取到玩家名字:', playerName);
+
+      // 更新玩家名字
+      const playerParticipant = battleConfig.participants.find((p: any) => p.side === 'player');
+      if (playerParticipant) {
+        playerParticipant.name = playerName;
+      }
+
+      // 注册动态配置
+      const dynamicConfigId = `dynamic_enemy_${enemyId}`;
+      if (battleConfigService) {
+        battleConfigService.registerDynamicBattleConfig(dynamicConfigId, battleConfig);
+      }
+
+      // 启动战斗
+      const success = await startBattle(dynamicConfigId, undefined, {
+        returnToPrevious: options?.returnToPrevious ?? true,
+        silent: options?.silent ?? false,
+      });
+
+      if (success) {
+        console.log('[useBattleConfig] 动态战斗启动成功');
+        if (!options?.silent) {
+          showSuccess('战斗开始！');
+        }
+      } else {
+        console.error('[useBattleConfig] 动态战斗启动失败');
+        if (!options?.silent) {
+          showError('启动战斗失败');
+        }
+      }
+
+      return success;
+    } catch (error) {
+      console.error('[useBattleConfig] 启动动态战斗异常:', error);
+      if (!options?.silent) {
+        showError('启动战斗失败', '动态战斗配置生成失败');
+      }
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  };
+
+  /**
+   * 启动测试战斗（调试模式）
+   */
+  const startTestBattle = async (
+    configId: string,
+    overrides?: Partial<BattleConfig>,
+    options?: { returnToPrevious?: boolean; silent?: boolean },
+  ): Promise<boolean> => {
+    console.log('[useBattleConfig] startTestBattle called with:', { configId, overrides, options });
+
+    // 设置调试模式标记
+    const debugOverrides = {
+      ...overrides,
+      isDebugMode: true,
+    };
+
+    return await startBattle(configId, debugOverrides, options);
+  };
+
+  /**
    * 启动指定ID的战斗
    */
   const startBattle = async (
@@ -336,6 +434,8 @@ export function useBattleConfig() {
 
     // 方法
     startBattle,
+    startTestBattle,
+    startDynamicBattle,
     startRandomBattle,
     startBattleFromTemplate,
     getBattleConfigInfo,
@@ -348,7 +448,5 @@ export function useBattleConfig() {
     // Composable状态
     isInBattle: gameState.isInBattle,
     hasBattleConfig: gameState.hasBattleConfig,
-    battleConfig: gameState.currentState.battleConfig,
-    battleState: gameState.currentState.battleState,
   };
 }

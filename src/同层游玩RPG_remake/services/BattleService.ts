@@ -13,6 +13,7 @@ import {
   BattleState,
   Skill,
 } from '../models/BattleSchemas';
+import { BattleConfigService } from './BattleConfigService';
 import { BattleEngine } from './BattleEngine';
 import { BattleResultHandler } from './BattleResultHandler';
 import type { SameLayerService } from './SameLayerService';
@@ -47,13 +48,16 @@ import { SaveLoadManagerService } from './SaveLoadManagerService';
  */
 @injectable()
 export class BattleService {
-  private skills: Map<string, Skill> = new Map();
+  // 移除: private skills: Map<string, Skill> = new Map();
 
   // 战斗日志描述系统相关属性
   private battleLog: BattleLogItem[] = []; // 战斗日志收集
   private descriptionCache = new Map<string, string>(); // 描述缓存
   private maxCacheSize = 1000; // 缓存大小限制
   private maxBattleLogSize = 1000; // 日志大小限制
+
+  // 参与者名称映射表
+  private participantNameMap = new Map<string, string>();
 
   // 描述模板
   private descriptions = {
@@ -68,6 +72,7 @@ export class BattleService {
     @inject(TYPES.BattleResultHandler) private resultHandler: BattleResultHandler,
     @inject(TYPES.SameLayerService) private _sameLayer: SameLayerService,
     @inject(TYPES.SaveLoadManagerService) private _saveLoad: SaveLoadManagerService,
+    @inject(TYPES.BattleConfigService) private battleConfigService: BattleConfigService, // 使用合并后的服务
   ) {
     console.log('[BattleService] Service constructed');
   }
@@ -77,7 +82,7 @@ export class BattleService {
    *
    * 步骤：
    * 1. 验证战斗配置格式
-   * 2. 注册默认技能
+   * 2. 从战斗配置服务导入技能
    * 3. 映射 MVU 属性到战斗属性
    * 4. 设置 BattleEngine 的技能表
    * 5. 发送初始化完成事件
@@ -95,9 +100,16 @@ export class BattleService {
       throw new Error('Invalid BattleConfig');
     }
 
-    // Step 2: 注册默认技能
-    this.registerDefaultSkills();
-    console.log('[BattleService] Default skills registered');
+    // Step 2: 从战斗配置服务导入技能（替代原来的注册默认技能）
+    this.battleConfigService.importSkillsFromBattleConfig(parsed.data.participants);
+    console.log('[BattleService] Skills imported from battle config');
+
+    // Step 2.5: 建立参与者名称映射
+    this.participantNameMap.clear();
+    parsed.data.participants.forEach((participant: any) => {
+      this.participantNameMap.set(participant.id, participant.name);
+      console.log(`[BattleService] Mapped participant: ${participant.id} -> ${participant.name}`);
+    });
 
     // Step 3: 预加载提示（实际加载由 Phaser BattleScene.preload 处理）
     await this.preloadBattleResources(parsed.data);
@@ -105,13 +117,16 @@ export class BattleService {
     // Step 4: 映射 MVU 属性到战斗属性，并统一初始化HP
     const withStats: BattleConfig = {
       ...parsed.data,
-      participants: parsed.data.participants.map(p => {
+      participants: parsed.data.participants.map((p: any) => {
         const mvu = p.mvuAttributes || {};
         const battleStats = this.mapMvuToBattleStats(mvu, p.level || 1);
 
-        // 统一初始化：只在战斗开始时设置一次HP
+        // 统一初始化：只在战斗开始时设置一次HP和MP
         const maxHp = p.maxHp ?? battleStats.calculatedHp;
         const initialHp = p.hp ?? maxHp; // 如果已有HP则保持，否则设为maxHp
+
+        const maxMp = p.maxMp ?? battleStats.calculatedMp;
+        const initialMp = p.mp ?? maxMp; // 如果已有MP则保持，否则设为maxMp
 
         // 验证HP值的合理性
         if (!this.validateHp({ hp: initialHp, maxHp })) {
@@ -122,14 +137,22 @@ export class BattleService {
           ...p,
           maxHp,
           hp: initialHp,
+          maxMp,
+          mp: initialMp,
           _hpInitialized: true, // 标记HP已初始化
+          _mpInitialized: true, // 标记MP已初始化
           stats: p.stats || battleStats,
         };
       }),
     };
 
     // Step 5: 设置 BattleEngine 的技能表
-    this.engine.setSkillMap(this.skills);
+    const allSkills = this.battleConfigService.getAllSkills();
+    const skillMap = new Map<string, Skill>();
+    allSkills.forEach(skill => {
+      skillMap.set(skill.id, skill);
+    });
+    this.engine.setSkillMap(skillMap);
 
     // Step 6: 发送初始化完成事件
     this.eventBus.emit('battle:initialized', withStats);
@@ -217,7 +240,12 @@ export class BattleService {
       currentState: currentState
         ? {
             ended: currentState.ended,
-            participants: currentState.participants?.map(p => ({ id: p.id, name: p.name, side: p.side, hp: p.hp })),
+            participants: currentState.participants?.map((p: any) => ({
+              id: p.id,
+              name: p.name,
+              side: p.side,
+              hp: p.hp,
+            })),
           }
         : null,
     });
@@ -237,7 +265,7 @@ export class BattleService {
       newState: newState
         ? {
             ended: newState.ended,
-            participants: newState.participants?.map(p => ({ id: p.id, name: p.name, side: p.side, hp: p.hp })),
+            participants: newState.participants?.map((p: any) => ({ id: p.id, name: p.name, side: p.side, hp: p.hp })),
           }
         : null,
       eventsCount: events.length,
@@ -285,8 +313,8 @@ export class BattleService {
    * @returns 处理后的战斗状态
    */
   private async processEnemyTurn(state: BattleState): Promise<BattleState> {
-    const enemy = state.participants.find(p => p.side === 'enemy' && (p.hp || 0) > 0);
-    const player = state.participants.find(p => p.side === 'player' && (p.hp || 0) > 0);
+    const enemy = state.participants.find((p: any) => p.side === 'enemy' && (p.hp || 0) > 0);
+    const player = state.participants.find((p: any) => p.side === 'player' && (p.hp || 0) > 0);
 
     if (!enemy || !player) {
       return state;
@@ -340,6 +368,10 @@ export class BattleService {
     await this.resultHandler.persistAndAnnounce(result, battleLog);
 
     this.eventBus.emit('battle:result', result);
+
+    // 清理参与者名称映射表
+    this.participantNameMap.clear();
+    console.log('[BattleService] Participant name map cleared after battle end');
   }
 
   /**
@@ -376,11 +408,12 @@ export class BattleService {
 
   /**
    * MVU → 战斗属性 映射（可调整权重）
-   * 注意：此方法只计算基础属性，不包含HP（HP由调用方处理）
+   * 注意：此方法只计算基础属性，不包含HP和MP（HP和MP由调用方处理）
    */
   private mapMvuToBattleStats(mvu: Record<string, number>, level: number = 1) {
     const get = (k: string) => Number(mvu?.[k] ?? 0);
     const 力量 = get('力量');
+    const 智力 = get('智力');
     const 体质 = get('体质');
     const 魅力 = get('魅力');
     const 幸运 = get('幸运');
@@ -396,9 +429,11 @@ export class BattleService {
       evade: 0,
       critRate: Math.max(0, 0.002 * 幸运),
       critDamageMultiplier: 1.5,
-      hhp: Math.max(0, 意志 / 50), // H血量 = 意志 ÷ 50
+      hhp: Math.max(0, 意志 * 50), // H血量 = 意志 * 50
       // 血量计算：hp = 体质 * 20（仅用于初始化时的maxHp计算）
       calculatedHp: Math.max(1, 体质 * 20),
+      // 魔法值计算：mp = 智力 * 5（仅用于初始化时的maxMp计算）
+      calculatedMp: Math.max(0, 智力 * 5),
     };
   }
 
@@ -421,46 +456,10 @@ export class BattleService {
   }
 
   /**
-   * 注册默认技能：重击、精准打击、火球
+   * 获取技能（新增方法）
    */
-  private registerDefaultSkills(): void {
-    const list: Skill[] = [
-      {
-        id: 'power_strike',
-        name: '重击',
-        description: '高威力、略低命中',
-        category: 'physical',
-        target: 'single',
-        powerMultiplier: 1.5,
-        flatPower: 0,
-        hitModifier: -0.1,
-        critBonus: 0.05,
-      },
-      {
-        id: 'precise_strike',
-        name: '精准打击',
-        description: '低威力、高命中',
-        category: 'physical',
-        target: 'single',
-        powerMultiplier: 0.9,
-        flatPower: 0,
-        hitModifier: 0.15,
-        critBonus: 0,
-      },
-      {
-        id: 'fireball',
-        name: '火球',
-        description: '标准魔法伤害',
-        category: 'magical',
-        target: 'single',
-        powerMultiplier: 1.2,
-        flatPower: 5,
-        hitModifier: 0,
-        critBonus: 0.05,
-      },
-    ];
-    this.skills.clear();
-    for (const s of list) this.skills.set(s.id, s);
+  private getSkill(skillId: string): Skill | undefined {
+    return this.battleConfigService.getSkill(skillId);
   }
 
   // ==================== 战斗日志描述系统 ====================
@@ -491,11 +490,26 @@ export class BattleService {
    */
   private generateDescriptionInternal(event: any): string {
     const { data } = event;
-    const { actorId, targetId, skillId, damage, isCritical, isMiss } = data;
+    const { actorId, targetId, skillId, damage, isCritical, isMiss, mpCost, hhpChange } = data;
 
     // 获取参与者名称
     const actor = this.getParticipantName(actorId);
     const target = this.getParticipantName(targetId);
+
+    // 处理MP消耗事件
+    if (event.type === 'battle:mp-consumed') {
+      return `${actor} 消耗了 ${mpCost} 点MP`;
+    }
+
+    // 处理HHP变化事件
+    if (event.type === 'battle:hhp-changed') {
+      return `${target} 的H血量减少了 ${Math.abs(hhpChange)} 点`;
+    }
+
+    // 处理MP不足事件
+    if (event.type === 'battle:insufficient-mp') {
+      return `${actor} MP不足，无法使用技能`;
+    }
 
     // 根据技能类型选择描述模板
     const skillConfig = getSkillDescriptionConfig(skillId);
@@ -575,9 +589,16 @@ export class BattleService {
    */
   private getParticipantName(participantId?: string): string {
     if (!participantId) return '未知';
-    // 这里需要从当前战斗状态中获取参与者信息
-    // 具体实现依赖于现有的参与者管理逻辑
-    return '未知'; // 临时实现
+
+    // 从参与者名称映射表中获取名称
+    const name = this.participantNameMap.get(participantId);
+    if (name) {
+      return name;
+    }
+
+    // 如果映射表中没有找到，记录警告并返回默认值
+    console.warn(`[BattleService] Participant name not found for ID: ${participantId}`);
+    return '未知';
   }
 
   /**
@@ -719,5 +740,15 @@ export class BattleService {
     }
 
     console.log('[BattleService] Cleanup completed:', this.getCacheStats());
+  }
+
+  /**
+   * 获取参与者名称映射统计信息
+   */
+  public getParticipantNameMapStats() {
+    return {
+      mapSize: this.participantNameMap.size,
+      mappings: Array.from(this.participantNameMap.entries()).map(([id, name]) => ({ id, name })),
+    };
   }
 }

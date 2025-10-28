@@ -22,11 +22,20 @@ export const DestinyPointsSchema = z.object({
 });
 export type DestinyPoints = z.infer<typeof DestinyPointsSchema>;
 
-export type AttributeKey = 'strength' | 'agility' | 'defense' | 'constitution' | 'charisma' | 'willpower' | 'luck';
+export type AttributeKey =
+  | 'strength'
+  | 'agility'
+  | 'defense'
+  | 'constitution'
+  | 'charisma'
+  | 'willpower'
+  | 'luck'
+  | 'intelligence';
 
 // 统一的属性顺序定义
 export const ATTRIBUTE_KEYS: AttributeKey[] = [
   'strength',
+  'intelligence',
   'agility',
   'defense',
   'constitution',
@@ -35,11 +44,12 @@ export const ATTRIBUTE_KEYS: AttributeKey[] = [
   'luck',
 ];
 
-export const CHINESE_ATTRIBUTE_NAMES = ['力量', '敏捷', '防御', '体质', '魅力', '意志', '幸运'];
+export const CHINESE_ATTRIBUTE_NAMES = ['力量', '智力', '敏捷', '防御', '体质', '魅力', '意志', '幸运'];
 
 // 属性键到中文名的映射
 export const ATTRIBUTE_NAME_MAP: Record<AttributeKey, string> = {
   strength: '力量',
+  intelligence: '智力',
   agility: '敏捷',
   defense: '防御',
   constitution: '体质',
@@ -50,6 +60,7 @@ export const ATTRIBUTE_NAME_MAP: Record<AttributeKey, string> = {
 
 export interface Attributes {
   strength: number;
+  intelligence: number;
   agility: number;
   defense: number;
   constitution: number;
@@ -62,6 +73,7 @@ export interface Attributes {
 // Zod 验证模式
 export const AttributesSchema = z.object({
   strength: z.number().int().min(0),
+  intelligence: z.number().int().min(0),
   agility: z.number().int().min(0),
   defense: z.number().int().min(0),
   constitution: z.number().int().min(0),
@@ -74,6 +86,7 @@ export const AttributesSchema = z.object({
 // 中文属性对象验证模式
 export const ChineseAttributesSchema = z.object({
   力量: z.number().int().min(0),
+  智力: z.number().int().min(0),
   敏捷: z.number().int().min(0),
   防御: z.number().int().min(0),
   体质: z.number().int().min(0),
@@ -99,6 +112,7 @@ export interface Background {
 export function buildEmptyAttributes(maxPoints: number): Attributes {
   return {
     strength: 0,
+    intelligence: 0,
     agility: 0,
     defense: 0,
     constitution: 0,
@@ -135,10 +149,20 @@ export function validateAndCorrectAttributes(
   corrected?: boolean;
   errors?: string[];
 } {
-  const keys: AttributeKey[] = ['strength', 'agility', 'defense', 'constitution', 'charisma', 'willpower', 'luck'];
+  const keys: AttributeKey[] = [
+    'strength',
+    'intelligence',
+    'agility',
+    'defense',
+    'constitution',
+    'charisma',
+    'willpower',
+    'luck',
+  ];
 
   const clamped: Record<AttributeKey, number> = {
     strength: 0,
+    intelligence: 0,
     agility: 0,
     defense: 0,
     constitution: 0,
@@ -212,6 +236,7 @@ export const CharacterSchema = z.object({
   events: z.array(z.any()),
   attributes: z.object({
     strength: z.number(),
+    intelligence: z.number(),
     agility: z.number(),
     defense: z.number(),
     constitution: z.number(),

@@ -176,6 +176,9 @@ export const SKILL_DESCRIPTION_MAPPING: Record<string, SkillDescriptionConfig> =
 export class BattleService {
   private skills: Map<string, Skill> = new Map();
   private battleLog: BattleLogItem[] = []; // 新增：战斗日志收集
+  
+  // 新增：参与者名称映射表
+  private participantNameMap = new Map<string, string>();
 
   // 新增：描述模板
   private descriptions = {
@@ -250,9 +253,16 @@ export class BattleService {
    */
   private getParticipantName(participantId?: string): string {
     if (!participantId) return '未知';
-    // 这里需要从当前战斗状态中获取参与者信息
-    // 具体实现依赖于现有的参与者管理逻辑
-    return '未知'; // 临时实现
+    
+    // 从参与者名称映射表中获取名称
+    const name = this.participantNameMap.get(participantId);
+    if (name) {
+      return name;
+    }
+    
+    // 如果映射表中没有找到，记录警告并返回默认值
+    console.warn(`[BattleService] Participant name not found for ID: ${participantId}`);
+    return '未知';
   }
 }
 ```
@@ -722,5 +732,6 @@ src/同层游玩RPG_remake/
 
 - **v1.0** (2025-01-27): 初始设计，支持通用和专属描述
 - **v2.0** (2025-01-27): 集成式架构设计，无需独立服务
-- **v2.1** (计划): 支持自定义描述风格
-- **v2.2** (计划): 集成 AI 故事生成
+- **v2.1** (2025-01-27): 修复参与者名称显示问题，添加名称映射表
+- **v2.2** (计划): 支持自定义描述风格
+- **v2.3** (计划): 集成 AI 故事生成

@@ -24,9 +24,6 @@ export const TYPES = {
   AutoSaveManager: Symbol.for('AutoSaveManager'),
   SaveLoadManagerService: Symbol.for('SaveLoadManagerService'),
 
-  // 存档管理组件已整合到useSaveLoad中
-  // IndexDBSaveManager: Symbol.for('IndexDBSaveManager'),
-  // LoadManager: Symbol.for('LoadManager'),
 
   // 其他服务
   AchievementService: Symbol.for('AchievementService'),
@@ -43,6 +40,7 @@ export const TYPES = {
   BattleEngine: Symbol.for('BattleEngine'),
   BattleResultHandler: Symbol.for('BattleResultHandler'),
   BattleResourceService: Symbol.for('BattleResourceService'),
+  DynamicEnemyService: Symbol.for('DynamicEnemyService'),
 
   // Phaser相关服务
   PhaserManager: Symbol.for('PhaserManager'),
