@@ -19,7 +19,15 @@ import { BattleAction, BattleResult, BattleState, Skill } from '../models/Battle
  */
 
 export interface BattleEvent {
-  type: 'battle:damage' | 'battle:miss' | 'battle:critical' | 'battle:state-updated' | 'battle:skill-used' | 'battle:mp-consumed' | 'battle:hhp-changed' | 'battle:insufficient-mp';
+  type:
+    | 'battle:damage'
+    | 'battle:miss'
+    | 'battle:critical'
+    | 'battle:state-updated'
+    | 'battle:skill-used'
+    | 'battle:mp-consumed'
+    | 'battle:hhp-changed'
+    | 'battle:insufficient-mp';
   data: {
     actorId?: string;
     targetId?: string;
@@ -135,7 +143,7 @@ export class BattleEngine {
 
         // 扣除MP
         actor.mp = Math.max(0, (actor.mp || 0) - skill.mpCost);
-        
+
         // 发送MP消耗事件
         events.push({
           type: 'battle:mp-consumed',
@@ -239,7 +247,7 @@ export class BattleEngine {
     if (category === 'magical' && target.stats?.hhp && target.stats.hhp > 0) {
       const hhpDamage = Math.min(target.stats.hhp, Math.max(1, Math.round(finalDamage * 0.1)));
       target.stats.hhp = Math.max(0, target.stats.hhp - hhpDamage);
-      
+
       if (hhpDamage > 0) {
         events.push({
           type: 'battle:hhp-changed',

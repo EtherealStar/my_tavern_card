@@ -24,7 +24,6 @@ export const TYPES = {
   AutoSaveManager: Symbol.for('AutoSaveManager'),
   SaveLoadManagerService: Symbol.for('SaveLoadManagerService'),
 
-
   // 其他服务
   AchievementService: Symbol.for('AchievementService'),
   DomPortalService: Symbol.for('DomPortalService'),
