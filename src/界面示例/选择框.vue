@@ -1,12 +1,26 @@
 <template>
   <div class="roleplay_options">
     <div class="roleplay_options_back">
+<<<<<<< HEAD
       <div v-for="item in items" class="roleplay_options_item" tabindex="1"
         @click="handle_item_click(item)">
         <span class="roleplay_options_title">
           <strong>{{ item.title }}</strong>
         </span>
         <hr class="roleplay_options_hr">
+=======
+      <div
+        v-for="item in items"
+        :key="item.title"
+        class="roleplay_options_item"
+        tabindex="1"
+        @click="handleItemClick(item)"
+      >
+        <span class="roleplay_options_title">
+          <strong>{{ item.title }}</strong>
+        </span>
+        <hr class="roleplay_options_hr" />
+>>>>>>> b9c87dff9e7c9759a42bbc5a0675396be82983ad
         <span class="roleplay_options_content">{{ item.content }}</span>
       </div>
     </div>
@@ -14,8 +28,11 @@
 </template>
 
 <script setup lang="ts">
+<<<<<<< HEAD
 import { onMounted, ref } from 'vue';
 
+=======
+>>>>>>> b9c87dff9e7c9759a42bbc5a0675396be82983ad
 interface RoleplayOption {
   title: string;
   content: string;
@@ -23,22 +40,37 @@ interface RoleplayOption {
 
 const items = ref<RoleplayOption[]>([]);
 
+<<<<<<< HEAD
 function extract_items(): RoleplayOption[] {
+=======
+function extractItems(): RoleplayOption[] {
+>>>>>>> b9c87dff9e7c9759a42bbc5a0675396be82983ad
   const chat_message = getChatMessages(getCurrentMessageId())[0];
   const text = chat_message.message.match(/<roleplay_options>(.*?)<\/roleplay_options>/s)?.[1] ?? '';
 
   const item_matches = [...text.matchAll(/(.+?)[:：]\s*(.+)/gm)];
   return item_matches.map(match => ({
     title: match[1],
+<<<<<<< HEAD
     content: match[2].replace(/^\$\{(.+)\}$/, '$1').replace(/^「(.+)」$/, '$1')
+=======
+    content: match[2].replace(/^\$\{(.+)\}$/, '$1').replace(/^「(.+)」$/, '$1'),
+>>>>>>> b9c87dff9e7c9759a42bbc5a0675396be82983ad
   }));
 }
 
 onMounted(() => {
+<<<<<<< HEAD
   items.value = extract_items();
 });
 
 async function handle_item_click(item: RoleplayOption) {
+=======
+  items.value = extractItems();
+});
+
+async function handleItemClick(item: RoleplayOption) {
+>>>>>>> b9c87dff9e7c9759a42bbc5a0675396be82983ad
   await createChatMessages([{ role: 'user', message: item.content }]);
   triggerSlash('/trigger');
 }
