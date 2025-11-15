@@ -1,7 +1,7 @@
 import { inject, onUnmounted, ref } from 'vue';
-import { EventBus } from '../core/EventBus';
+import type { EventBus } from '../core/EventBus';
 import { TYPES } from '../core/ServiceIdentifiers';
-import { PhaserManager } from '../services/PhaserManager';
+import type { PhaserManager } from '../services/PhaserManager';
 
 export function usePhaserBattle() {
   const phaserManager = inject<PhaserManager>(TYPES.PhaserManager);

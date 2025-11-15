@@ -17,10 +17,12 @@
 
 import { computed, inject, onMounted, onUnmounted, ref } from 'vue';
 import { TYPES } from '../core/ServiceIdentifiers';
+import { calculateLevelByTotalExp, getExpRequiredByLevel, getTotalExpByLevel } from '../data/levelExpTable';
 import { ATTRIBUTE_NAME_MAP, CHINESE_ATTRIBUTE_NAMES } from '../models/CreationSchemas';
 import type { GameState } from '../models/GameState';
 import { GamePhase } from '../models/GameState';
 import type { StatDataBindingService } from '../services/StatDataBindingService';
+import { useCommandQueue } from './useCommandQueue';
 
 export function useStatData() {
   const statDataBinding = inject<StatDataBindingService>(TYPES.StatDataBindingService);
@@ -28,6 +30,9 @@ export function useStatData() {
   if (!statDataBinding) {
     throw new Error('StatDataBindingService not found. Make sure it is provided in the Vue app.');
   }
+
+  // 指令队列接口，用于添加升级指令
+  const { addLevelUpCommand } = useCommandQueue();
 
   // ==================== 属性名映射工具 ====================
   // 中文属性名到英文属性名的反向映射
@@ -96,7 +101,7 @@ export function useStatData() {
   const currentDate = ref('未知日期');
   const currentTime = ref('未知时间');
   const currentLocation = ref('未知地点');
-  const currentRandomEvent = ref('无');
+  const currentEvent = ref('无');
   const relationships = ref({} as Record<string, any>);
 
   // ==================== 角色基本信息数据 ====================
@@ -132,16 +137,16 @@ export function useStatData() {
     currentDate?: string;
     currentTime?: string;
     currentLocation?: string;
-    currentRandomEvent?: string;
+    currentEvent?: string;
     relationships?: Record<string, any>;
   }) => {
     if (newState.currentDate !== undefined) currentDate.value = newState.currentDate;
     if (newState.currentTime !== undefined) currentTime.value = newState.currentTime;
     if (newState.currentLocation !== undefined) currentLocation.value = newState.currentLocation;
-    if (newState.currentRandomEvent !== undefined) currentRandomEvent.value = newState.currentRandomEvent;
+    if (newState.currentEvent !== undefined) currentEvent.value = newState.currentEvent;
     if (newState.relationships !== undefined) relationships.value = newState.relationships;
     // 更新随机事件活跃状态
-    isRandomEventActive.value = currentRandomEvent.value !== '无' && currentRandomEvent.value.trim() !== '';
+    isRandomEventActive.value = currentEvent.value !== '无' && currentEvent.value.trim() !== '';
   };
 
   // 角色信息更新方法
@@ -154,11 +159,11 @@ export function useStatData() {
   // 异步加载游戏状态数据
   const loadGameStateData = async () => {
     try {
-      const [date, time, location, randomEvent, relData, charInfo] = await Promise.all([
+      const [date, time, location, event, relData, charInfo] = await Promise.all([
         statDataBinding?.getCurrentDate() || '未知日期',
         statDataBinding?.getCurrentTime() || '未知时间',
         statDataBinding?.getCurrentLocation() || '未知地点',
-        statDataBinding?.getCurrentRandomEvent() || '无',
+        statDataBinding?.getCurrentEvent() || '无',
         statDataBinding?.getMvuRelationships() || {},
         statDataBinding?.getCharacterInfo() || { gender: '未知', race: '未知', age: 16 },
       ]);
@@ -167,7 +172,7 @@ export function useStatData() {
         currentDate: date,
         currentTime: time,
         currentLocation: location,
-        currentRandomEvent: randomEvent,
+        currentEvent: event,
         relationships: relData,
       });
 
@@ -304,39 +309,35 @@ export function useStatData() {
       relationshipCharactersError.value = null;
 
       // 从MVU变量中获取关系人物数据
-      const relationships = (await statDataBinding?.getMvuRelationships()) || {};
+      const relationshipsData = (await statDataBinding?.getMvuRelationships()) || {};
       const characters: any[] = [];
 
       // 遍历关系数据，提取人物信息
-      for (const [characterId, relationshipData] of Object.entries(relationships)) {
+      for (const [characterId, relationshipData] of Object.entries(relationshipsData)) {
+        // 过滤掉元数据键
+        if (characterId.startsWith('$') || characterId === 'template') {
+          continue;
+        }
+
         if (relationshipData && typeof relationshipData === 'object') {
-          // 获取人物基础信息
-          const charInfo = await getCharacterBasicInfo(characterId);
-
-          // 获取人物属性
-          const charAttributes = await getCharacterAttributes(characterId);
-
-          // 获取人物装备
-          const charEquipment = await getCharacterEquipment(characterId);
-
-          // 获取好感度
-          const affinity = await getMvuAffinity(characterId);
+          // 直接使用 relationshipData 中的数据，而不是重新通过路径获取
+          const affinity = relationshipData.affinity || 0;
 
           characters.push({
             id: characterId,
             name: characterId,
-            gender: charInfo.gender || '未知',
-            race: charInfo.race || '未知',
-            age: charInfo.age || 16,
-            background: charInfo.background || '未知',
-            personality: charInfo.personality || '未知',
-            outfit: charInfo.outfit || '未知',
-            thoughts: charInfo.thoughts || '未知',
-            relationship: charInfo.relationship || '陌生人',
-            others: charInfo.others || '未知',
-            events: charInfo.events || [],
-            attributes: charAttributes,
-            equipment: charEquipment,
+            gender: relationshipData.gender || '未知',
+            race: relationshipData.race || '未知',
+            age: relationshipData.age || 16,
+            background: relationshipData.background || '未知',
+            personality: relationshipData.personality || '未知',
+            outfit: relationshipData.outfit || '未知',
+            thoughts: relationshipData.thoughts || '未知',
+            relationship: relationshipData.relationship || '陌生人',
+            others: relationshipData.others || '未知',
+            events: relationshipData.events || [],
+            attributes: {}, // 如果需要属性，可以单独获取
+            equipment: {}, // 如果需要装备，可以单独获取
             affinity,
             relationshipData,
           });
@@ -400,10 +401,11 @@ export function useStatData() {
   const getCharacterBasicInfo = async (characterId: string | number): Promise<any> => {
     try {
       // 通过MVU变量获取人物基础信息，使用正确的路径结构
-      const gender =
+      const charGender =
         (await statDataBinding?.getAttributeValue(`relationships.${characterId}.gender`, '未知')) || '未知';
-      const race = (await statDataBinding?.getAttributeValue(`relationships.${characterId}.race`, '未知')) || '未知';
-      const age = (await statDataBinding?.getAttributeValue(`relationships.${characterId}.age`, 16)) || 16;
+      const charRace =
+        (await statDataBinding?.getAttributeValue(`relationships.${characterId}.race`, '未知')) || '未知';
+      const charAge = (await statDataBinding?.getAttributeValue(`relationships.${characterId}.age`, 16)) || 16;
       const background =
         (await statDataBinding?.getAttributeValue(`relationships.${characterId}.background`, '未知')) || '未知';
       const personality =
@@ -419,9 +421,9 @@ export function useStatData() {
       const events = (await statDataBinding?.getAttributeValue(`relationships.${characterId}.events`, [])) || [];
 
       return {
-        gender,
-        race,
-        age,
+        gender: charGender,
+        race: charRace,
+        age: charAge,
         background,
         personality,
         outfit,
@@ -524,9 +526,8 @@ export function useStatData() {
       const out: any[] = [];
 
       for (const [enemyId, _enemyData] of Object.entries(enemies.value)) {
-        const variantId = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.variantId`, '未知')) || '未知';
-        const gender = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.gender`, '未知')) || '未知';
-        const race = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.race`, '未知')) || '未知';
+        const variant = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.variant`, '未知')) || '未知';
+        const enemyRace = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.race`, '未知')) || '未知';
 
         const attributes: Record<string, number> = {};
         for (const attrName of CHINESE_ATTRIBUTE_NAMES) {
@@ -535,7 +536,7 @@ export function useStatData() {
           attributes[attrName] = Number(v);
         }
 
-        out.push({ id: enemyId, variantId, gender, race, attributes });
+        out.push({ id: enemyId, variantId: variant, race: enemyRace, attributes });
       }
 
       enemiesList.value = out;
@@ -559,9 +560,8 @@ export function useStatData() {
       const cached = enemiesList.value.find(e => e.id === enemyId);
       if (cached) return cached;
 
-      const variantId = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.variantId`, '未知')) || '未知';
-      const gender = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.gender`, '未知')) || '未知';
-      const race = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.race`, '未知')) || '未知';
+      const variant = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.variant`, '未知')) || '未知';
+      const enemyRace = (await statDataBinding?.getAttributeValue(`enemies.${enemyId}.race`, '未知')) || '未知';
 
       const attributes: Record<string, number> = {};
       for (const attrName of CHINESE_ATTRIBUTE_NAMES) {
@@ -570,7 +570,7 @@ export function useStatData() {
         attributes[attrName] = Number(v);
       }
 
-      return { id: enemyId, variantId, gender, race, attributes };
+      return { id: enemyId, variantId: variant, race: enemyRace, attributes };
     } catch (error) {
       console.error('[useStatData] 获取敌人详情失败:', error);
       return null;
@@ -621,7 +621,8 @@ export function useStatData() {
   // 基于服务封装的敌人基础信息API（不含立绘/背景）
 
   /**
-   * 获取单个敌人的基础信息（name/variantId/gender/race/battle_end）
+   * 获取单个敌人的基础信息（name/variant/race/battle_end）
+   * 注意：返回对象中使用 variantId 和 defeated 字段名以保持API一致性
    */
   const getEnemyBasicInfo = async (
     enemyId: string,
@@ -629,9 +630,8 @@ export function useStatData() {
     id: string;
     name: string;
     variantId: string;
-    gender: string;
     race: string;
-    battleEnd: boolean;
+    defeated: boolean;
   } | null> => {
     try {
       return (await statDataBinding?.getEnemyBasicInfo(enemyId)) || null;
@@ -649,9 +649,8 @@ export function useStatData() {
       id: string;
       name: string;
       variantId: string;
-      gender: string;
       race: string;
-      battleEnd: boolean;
+      defeated: boolean;
     }>
   > => {
     try {
@@ -665,26 +664,12 @@ export function useStatData() {
   /**
    * 获取敌人战斗状态（battle_end）
    */
-  const getEnemyBattleEnd = async (enemyId: string, defaultValue: boolean = false): Promise<boolean> => {
-    try {
-      return (await statDataBinding?.getEnemyBattleEnd(enemyId, defaultValue)) ?? defaultValue;
-    } catch (error) {
-      console.error('[useStatData] 获取敌人战斗状态失败:', error);
-      return defaultValue;
-    }
-  };
+  // 已移除：使用 getEnemyBattleStatus 读取 battle_end
 
   /**
    * 设置敌人战斗状态（battle_end）
    */
-  const setEnemyBattleEnd = async (enemyId: string, battleEnd: boolean, reason?: string): Promise<boolean> => {
-    try {
-      return (await statDataBinding?.setEnemyBattleEnd(enemyId, battleEnd, reason)) || false;
-    } catch (error) {
-      console.error('[useStatData] 设置敌人战斗状态失败:', error);
-      return false;
-    }
-  };
+  // 已移除：不在此层直接设置 battle_end
 
   // 游戏状态数据加载方法已恢复，用于异步数据获取
 
@@ -987,6 +972,9 @@ export function useStatData() {
             // 更新游戏状态数据和角色信息
             await loadGameStateData();
 
+            // 刷新经验条数据
+            await refreshExpBarData();
+
             // 刷新敌人列表（懒加载：仅在已打开或已有数据时刷新）
             try {
               if (enemiesList.value.length > 0) {
@@ -1042,17 +1030,18 @@ export function useStatData() {
     };
 
     if (inventory.value && typeof inventory.value === 'object') {
-      ['weapons', 'armors', 'accessories', 'others'].forEach(category => {
-        const items = inventory.value[category];
-        if (Array.isArray(items)) {
-          result[category] = items
-            .filter(item => item && item.name && item.name.trim() !== '')
-            .map(item => ({
-              ...item,
-              fromMvu: true,
-            }));
-        }
-      });
+      const items: any[] = Array.isArray((inventory.value as any).items) ? (inventory.value as any).items : [];
+      const pushTo = (key: 'weapons' | 'armors' | 'accessories' | 'others', it: any) => {
+        result[key].push({ ...it, fromMvu: true });
+      };
+      for (const it of items) {
+        if (!it || !it.name || String(it.name).trim() === '') continue;
+        const t = it.type;
+        if (t === '武器') pushTo('weapons', it);
+        else if (t === '防具') pushTo('armors', it);
+        else if (t === '饰品') pushTo('accessories', it);
+        else pushTo('others', it);
+      }
     }
 
     return result;
@@ -1158,6 +1147,215 @@ export function useStatData() {
     return name;
   };
 
+  // ==================== 升级相关方法 ====================
+
+  /**
+   * 获取玩家当前等级
+   */
+  const getPlayerLevel = async (): Promise<number> => {
+    try {
+      return (await statDataBinding?.getPlayerLevel(1)) || 1;
+    } catch (error) {
+      console.error('[useStatData] 获取玩家等级失败:', error);
+      return 1;
+    }
+  };
+
+  /**
+   * 检查是否可以升级到目标等级
+   */
+  const canLevelUp = async (targetLevel: number): Promise<boolean> => {
+    try {
+      return (await statDataBinding?.canLevelUp(targetLevel)) || false;
+    } catch (error) {
+      console.error('[useStatData] 检查是否可以升级失败:', error);
+      return false;
+    }
+  };
+
+  /**
+   * 计算升级到目标等级的属性值
+   */
+  const calculateLevelUpAttributes = async (targetLevel: number) => {
+    try {
+      return await statDataBinding?.calculateLevelUpAttributes(targetLevel);
+    } catch (error) {
+      console.error('[useStatData] 计算升级属性失败:', error);
+      return null;
+    }
+  };
+
+  /**
+   * 应用升级，更新 base_attributes 和 current_attributes
+   * 现在通过指令队列处理，会在下个回复中自动应用
+   */
+  const applyLevelUp = async (newLevel: number, reason?: string): Promise<boolean> => {
+    try {
+      const reasonText = reason ?? '自动升级';
+
+      // 验证等级范围
+      if (!Number.isFinite(newLevel) || newLevel < 1 || newLevel > 20) {
+        console.warn('[useStatData] 无效的等级:', newLevel);
+        return false;
+      }
+
+      // 检查是否满足升级条件
+      const canUpgrade = await canLevelUp(newLevel);
+      if (!canUpgrade) {
+        console.warn('[useStatData] 无法升级到等级:', newLevel);
+        return false;
+      }
+
+      // 优先通过指令队列添加升级指令
+      const queued = addLevelUpCommand(newLevel, reasonText);
+      if (queued) {
+        console.log(`[useStatData] 升级指令已添加到队列: 等级 ${newLevel}`);
+        return true;
+      }
+
+      // 如果指令队列不可用或添加失败，回退到直接执行
+      console.warn('[useStatData] 升级指令添加到队列失败，尝试直接执行');
+      const success = await statDataBinding?.applyLevelUp(newLevel, reasonText);
+      if (success) {
+        await loadGameStateData();
+        await initializeData();
+      }
+      return success || false;
+    } catch (error) {
+      console.error('[useStatData] 应用升级失败:', error);
+      return false;
+    }
+  };
+
+  // ==================== 经验值相关方法 ====================
+
+  /**
+   * 获取玩家累积总经验值
+   */
+  const getTotalExp = async (): Promise<number> => {
+    try {
+      const exp = await statDataBinding?.getAttributeValue('exp', 0);
+      const numExp = Number(exp);
+      return Number.isFinite(numExp) && numExp >= 0 ? numExp : 0;
+    } catch (error) {
+      console.error('[useStatData] 获取经验值失败:', error);
+      return 0;
+    }
+  };
+
+  /**
+   * 计算经验条相关数据
+   * @returns 经验条数据对象，包含当前经验、还需经验、经验条进度等信息
+   */
+  const calculateExpBarData = async (): Promise<{
+    currentLevel: number;
+    totalExp: number;
+    currentLevelExp: number;
+    expRequiredForNextLevel: number;
+    expNeededToNextLevel: number;
+    expProgress: number; // 0-1之间的进度百分比
+    isMaxLevel: boolean;
+  }> => {
+    try {
+      // 1. 获取累积总经验值
+      const totalExp = await getTotalExp();
+
+      // 2. 计算当前等级（基于累积总经验）
+      const currentLevel = calculateLevelByTotalExp(totalExp);
+
+      // 3. 获取升级到当前等级所需的总经验值
+      const currentLevelTotalExp = getTotalExpByLevel(currentLevel);
+
+      // 4. 计算当前等级的经验进度（从0开始）
+      // 当前等级的经验进度 = 累积总经验 - 升级到当前等级所需的总经验
+      const currentLevelExp = totalExp - currentLevelTotalExp;
+
+      // 5. 检查是否已满级
+      const isMaxLevel = currentLevel >= 20;
+
+      // 6. 获取升级到下一等级所需的总经验值
+      const nextLevelTotalExp = getTotalExpByLevel(currentLevel + 1);
+
+      // 7. 如果已满级，返回满级数据
+      if (isMaxLevel || !nextLevelTotalExp) {
+        const maxLevelExp = getTotalExpByLevel(20);
+        const maxLevelTotalExp = maxLevelExp || 0;
+        return {
+          currentLevel: 20,
+          totalExp,
+          currentLevelExp: totalExp - maxLevelTotalExp,
+          expRequiredForNextLevel: 0,
+          expNeededToNextLevel: 0,
+          expProgress: 1,
+          isMaxLevel: true,
+        };
+      }
+
+      // 8. 获取从当前等级升级到下一等级所需的经验值
+      const expRequiredForNextLevel = getExpRequiredByLevel(currentLevel);
+
+      // 9. 计算到下一等级还需多少经验
+      // 到下一等级还需经验 = 升级到下一等级所需总经验 - 累积总经验
+      const expNeededToNextLevel = nextLevelTotalExp - totalExp;
+
+      // 10. 计算经验条进度（0-1之间）
+      // 当前经验进度 / 升级到下一等级所需的经验值
+      const expProgress = expRequiredForNextLevel > 0 ? currentLevelExp / expRequiredForNextLevel : 0;
+
+      return {
+        currentLevel,
+        totalExp,
+        currentLevelExp: Math.max(0, currentLevelExp), // 确保不为负数
+        expRequiredForNextLevel,
+        expNeededToNextLevel: Math.max(0, expNeededToNextLevel), // 确保不为负数
+        expProgress: Math.max(0, Math.min(1, expProgress)), // 确保在0-1之间
+        isMaxLevel: false,
+      };
+    } catch (error) {
+      console.error('[useStatData] 计算经验条数据失败:', error);
+      return {
+        currentLevel: 1,
+        totalExp: 0,
+        currentLevelExp: 0,
+        expRequiredForNextLevel: 50,
+        expNeededToNextLevel: 50,
+        expProgress: 0,
+        isMaxLevel: false,
+      };
+    }
+  };
+
+  // 经验条数据的响应式引用
+  const expBarData = ref<{
+    currentLevel: number;
+    totalExp: number;
+    currentLevelExp: number;
+    expRequiredForNextLevel: number;
+    expNeededToNextLevel: number;
+    expProgress: number;
+    isMaxLevel: boolean;
+  }>({
+    currentLevel: 1,
+    totalExp: 0,
+    currentLevelExp: 0,
+    expRequiredForNextLevel: 50,
+    expNeededToNextLevel: 50,
+    expProgress: 0,
+    isMaxLevel: false,
+  });
+
+  /**
+   * 刷新经验条数据
+   */
+  const refreshExpBarData = async (): Promise<void> => {
+    try {
+      const data = await calculateExpBarData();
+      expBarData.value = data;
+    } catch (error) {
+      console.error('[useStatData] 刷新经验条数据失败:', error);
+    }
+  };
+
   // 组件挂载时设置事件订阅和初始数据加载
   onMounted(async () => {
     try {
@@ -1172,6 +1370,9 @@ export function useStatData() {
 
       // 初始加载游戏状态数据
       await loadGameStateData();
+
+      // 初始加载经验条数据
+      await refreshExpBarData();
     } catch (err) {
       console.error('[useStatData] 初始化失败:', err);
     }
@@ -1201,7 +1402,7 @@ export function useStatData() {
     currentDate,
     currentTime,
     currentLocation,
-    currentRandomEvent,
+    currentEvent,
     relationships,
     isRandomEventActive,
 
@@ -1261,8 +1462,8 @@ export function useStatData() {
     // 敌人基础信息（基于服务封装）
     getEnemyBasicInfo,
     getAllEnemiesBasicInfo,
-    getEnemyBattleEnd,
-    setEnemyBattleEnd,
+    // getEnemyBattleEnd,
+    // setEnemyBattleEnd,
 
     // 属性显示方法
     getAttributeDisplay,
@@ -1319,6 +1520,18 @@ export function useStatData() {
     // ==================== 属性名映射工具 ====================
     getEnglishAttributeName,
     getChineseAttributeName,
+
+    // ==================== 升级相关方法 ====================
+    getPlayerLevel,
+    canLevelUp,
+    calculateLevelUpAttributes,
+    applyLevelUp,
+
+    // ==================== 经验值相关方法 ====================
+    getTotalExp,
+    calculateExpBarData,
+    expBarData,
+    refreshExpBarData,
   };
 }
 

@@ -7,6 +7,8 @@ export type WorldExpansion = {
   name: string;
   desc: string;
   toggles: UidToggle[];
+  // 可选：互斥对。baseUid 表示原始条目（扩展未选中时应为开启），expansionUid 表示扩展条目（扩展选中时开启）
+  mutex?: Array<{ baseUid: number; expansionUid: number }>;
 };
 
 /**
@@ -33,14 +35,19 @@ export function getWorldExpansions(world: GameWorld): WorldExpansion[] {
     case '现代：阴阳师':
       return [
         {
-          id: 'sexslave-events',
-          name: '男性性奴化',
+          id: 'sexslave',
+          name: '男性性奴化(M向)',
           desc: '女性拥有了对男性的调教权，可以自由对男性进行调教的社会，争取不要太快被变成小狗吧',
           toggles: [
             { uid: 25, enable: true },
             { uid: 26, enable: true },
             { uid: 27, enable: true },
+            { uid: 31, enable: true },
+            { uid: 42, enable: true },
+            { uid: 43, enable: true },
           ],
+          // 在此填入互斥对，如：{ baseUid: 100, expansionUid: 200 }
+          mutex: [{ baseUid: 13, expansionUid: 41 }],
         },
       ];
     case '西幻':
@@ -48,20 +55,4 @@ export function getWorldExpansions(world: GameWorld): WorldExpansion[] {
     default:
       return [];
   }
-}
-
-/**
- * @deprecated 请使用 useWorldbookToggle 组合式函数中的 applyExpansionToggles 方法
- * 此函数已被重构到 useWorldbookToggle 中，提供更好的性能和错误处理
- */
-export async function applyExpansionWorldbookToggles(
-  _world: GameWorld,
-  _selectedExpansions: string[],
-  _worldbookName: string,
-): Promise<void> {
-  console.warn('[worldExpansions.ts] applyExpansionWorldbookToggles 已废弃，请使用 useWorldbookToggle 组合式函数');
-
-  // 为了向后兼容，保留基本实现
-  console.warn('[worldExpansions.ts] 此函数已废弃，请直接使用 useWorldbookToggle 组合式函数');
-  throw new Error('此函数已废弃，请使用 useWorldbookToggle 组合式函数中的 applyExpansionToggles 方法');
 }

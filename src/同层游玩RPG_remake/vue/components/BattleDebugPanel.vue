@@ -3,6 +3,7 @@ import { computed, inject, ref } from 'vue';
 import type { BattleParticipantExtended } from '../../composables/useBattleState';
 import type { EventBus } from '../../core/EventBus';
 import { TYPES } from '../../core/ServiceIdentifiers';
+import { isBattleConsoleLogEnabled, setBattleConsoleLogEnabled } from '../../utils/battleConsoleLogger';
 import EnemyDataEditor from './EnemyDataEditor.vue';
 import JsonImportExport from './JsonImportExport.vue';
 import PlayerDataEditor from './PlayerDataEditor.vue';
@@ -23,6 +24,7 @@ const props = defineProps<Props>();
 // 状态
 const activeTab = ref<'enemy' | 'player' | 'import' | 'controls' | 'skills'>('enemy');
 const isCollapsed = ref(false);
+const consoleLogEnabled = ref(isBattleConsoleLogEnabled());
 
 // 计算属性
 const showDebugPanel = computed(() => {
@@ -54,6 +56,12 @@ const redoLastChange = () => {
   if (eventBus) {
     eventBus.emit('battle:debug-redo');
   }
+};
+
+const toggleConsoleLog = () => {
+  const newValue = !consoleLogEnabled.value;
+  consoleLogEnabled.value = newValue;
+  setBattleConsoleLogEnabled(newValue);
 };
 
 // 如果不在调试模式，不渲染组件
@@ -146,6 +154,20 @@ if (!showDebugPanel.value) {
                 </button>
                 <button class="control-btn preset-btn" @click="eventBus?.emit('battle:debug-preset', 'hard')">
                   🔴 困难敌人
+                </button>
+              </div>
+            </div>
+
+            <div class="control-group">
+              <h4>控制台日志</h4>
+              <div class="control-buttons">
+                <button
+                  @click="toggleConsoleLog"
+                  class="control-btn"
+                  :class="{ active: consoleLogEnabled }"
+                  :style="consoleLogEnabled ? { background: '#38a169', borderColor: '#68d391' } : {}"
+                >
+                  {{ consoleLogEnabled ? '✅ 控制台信息输出已开启' : '❌ 控制台信息输出已关闭' }}
                 </button>
               </div>
             </div>

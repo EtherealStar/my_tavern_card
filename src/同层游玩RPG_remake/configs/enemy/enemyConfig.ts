@@ -1,4 +1,5 @@
 import { isValidSkillId } from '../../data/skills';
+import type { SkillResourceConfig } from '../../models/BattleSchemas';
 
 // ==================== 类型定义 ====================
 
@@ -840,34 +841,17 @@ export const ENEMY_BATTLE_STATS_CONFIG: Record<number, Record<EnemyType, EnemyBa
  * 现在引用技能数据文件中的技能ID
  */
 export const ENEMY_SKILLS_MAPPING: Record<string, Record<string, string[]>> = {
-  人类: {
-    战士: ['power_strike', 'defend'],
-    法师: ['fireball', 'ice_shard'],
-    盗贼: ['precise_strike', 'stealth'],
-    弓箭手: ['precise_strike', 'multi_shot'],
-    牧师: ['heal', 'bless'],
+  猫妖: {
+    主播: ['power_strike'],
+    女仆: ['power_strike'],
   },
-  兽人: {
-    战士: ['power_strike', 'defend'],
-    萨满: ['fireball', 'heal'],
-    狂战士: ['power_strike', 'berserker_rage'],
-    猎手: ['precise_strike', 'track'],
+  犬妖: {
+    保镖: ['power_strike'],
+    运动系: ['power_strike'],
   },
-  精灵: {
-    弓箭手: ['precise_strike', 'nature_arrow'],
-    德鲁伊: ['heal', 'nature_bolt'],
-    法师: ['fireball', 'ice_shard'],
-    游侠: ['precise_strike', 'animal_companion'],
-  },
-  矮人: {
-    战士: ['power_strike', 'shield_bash'],
-    工匠: ['defend', 'repair'],
-    牧师: ['heal', 'bless'],
-  },
-  龙族: {
-    龙战士: ['dragon_breath', 'power_strike'],
-    龙法师: ['dragon_breath', 'fireball'],
-    龙骑士: ['dragon_breath', 'charge'],
+  附身灵: {
+    OL: ['power_strike'],
+    辣妹: ['power_strike'],
   },
 };
 
@@ -875,37 +859,26 @@ export const ENEMY_SKILLS_MAPPING: Record<string, Record<string, string[]>> = {
 
 /**
  * 基于种族和变体的立绘映射表
- * 支持不同种族和职业的立绘选择
+ *
+ * 路径格式说明：
+ * - 本地资源：使用简化格式，只需填写相对于 assets 文件夹的路径
+ *   例如：images/enemies/cat_streamer.png
+ *   系统会自动定位 assets 文件夹并构建完整路径
+ * - 外部 URL：直接使用完整 URL
+ *   例如：https://files.catbox.moe/899p4x.png
  */
 export const ENEMY_PORTRAIT_MAPPING: Record<string, Record<string, string>> = {
-  人类: {
-    战士: 'https://example.com/human_warrior.png',
-    法师: 'https://example.com/human_mage.png',
-    盗贼: 'https://example.com/human_rogue.png',
-    弓箭手: 'https://example.com/human_archer.png',
-    牧师: 'https://example.com/human_priest.png',
+  猫妖: {
+    主播: 'images/enemies/cat_streamer.png',
+    女仆: 'images/enemies/cat_maid.png',
   },
-  兽人: {
-    战士: 'https://example.com/orc_warrior.png',
-    萨满: 'https://example.com/orc_shaman.png',
-    狂战士: 'https://example.com/orc_berserker.png',
-    猎手: 'https://example.com/orc_hunter.png',
+  犬妖: {
+    保镖: 'images/enemies/dog_guard.png',
+    运动系: 'images/enemies/dog_sporty.png',
   },
-  精灵: {
-    弓箭手: 'https://example.com/elf_archer.png',
-    德鲁伊: 'https://example.com/elf_druid.png',
-    法师: 'https://example.com/elf_mage.png',
-    游侠: 'https://example.com/elf_ranger.png',
-  },
-  矮人: {
-    战士: 'https://example.com/dwarf_warrior.png',
-    工匠: 'https://example.com/dwarf_craftsman.png',
-    牧师: 'https://example.com/dwarf_priest.png',
-  },
-  龙族: {
-    龙战士: 'https://example.com/dragon_warrior.png',
-    龙法师: 'https://example.com/dragon_mage.png',
-    龙骑士: 'https://example.com/dragon_knight.png',
+  附身灵: {
+    OL: 'https://files.catbox.moe/899p4x.png',
+    辣妹: 'https://files.catbox.moe/qpq49n.png',
   },
 };
 
@@ -916,16 +889,7 @@ export const ENEMY_PORTRAIT_MAPPING: Record<string, Record<string, string>> = {
  * 支持关键字匹配和默认背景
  */
 export const LOCATION_BACKGROUND_MAPPING: Record<string, string> = {
-  街道: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1920&h=1080&fit=crop',
-  学校: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1920&h=1080&fit=crop',
-  森林: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1920&h=1080&fit=crop',
-  地牢: 'https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=1920&h=1080&fit=crop',
-  城市: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1920&h=1080&fit=crop',
-  神殿: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&h=1080&fit=crop',
-  洞穴: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&h=1080&fit=crop',
-  城堡: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&h=1080&fit=crop',
-  村庄: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1920&h=1080&fit=crop',
-  荒野: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1920&h=1080&fit=crop',
+  街道: '../../assets/images/backgrounds/street.jpg',
 };
 
 // ==================== 核心查询函数 ====================
@@ -1052,4 +1016,362 @@ export function getSupportedVariants(race: string): string[] {
 export function isValidRaceVariantCombination(race: string, variantId: string): boolean {
   const raceMapping = ENEMY_TYPE_MAPPING[race];
   return raceMapping ? variantId in raceMapping : false;
+}
+
+// ==================== 技能资源映射 ====================
+
+/**
+ * 技能资源映射表
+ * 支持为每个技能配置多个资源（视频/图片），并根据敌人类型和变体选择
+ *
+ * 配置格式：
+ * - 每个技能ID对应一个资源配置数组
+ * - 每个资源配置可以包含选择条件（race, variantId, enemyType, tags）
+ * - 系统会根据敌人信息自动选择匹配的资源
+ *
+ * 选择优先级：
+ * 1. 精确匹配（同时匹配 race 和 variantId）
+ * 2. 类型匹配（匹配 enemyType）
+ * 3. 种族匹配（仅匹配 race）
+ * 4. 默认资源（无条件的资源或第一个资源）
+ */
+export const ENEMY_SKILL_RESOURCES_MAPPING: Record<string, SkillResourceConfig[]> = {
+  // 示例：power_strike 技能的多资源配置
+  power_strike: [
+    // 猫妖主播的专属资源（随机从两个视频中选择）
+    {
+      src: 'https://files.catbox.moe/zk5lpz.mp4',
+      type: 'video' as const,
+      conditions: {
+        race: '猫妖',
+        variantId: '主播',
+      },
+      loop: false,
+      volume: 0,
+      playbackRate: 1.0,
+      revertOnEnd: true,
+    },
+    {
+      src: 'https://files.catbox.moe/88jeby.mp4',
+      type: 'video' as const,
+      conditions: {
+        race: '猫妖',
+        variantId: '主播',
+      },
+      loop: false,
+      volume: 0,
+      playbackRate: 1.0,
+      revertOnEnd: true,
+    },
+    // 犬妖运动系的专属资源（随机从六个图片中选择）
+    {
+      src: 'https://files.catbox.moe/40zt4t.png',
+      type: 'image' as const,
+      conditions: {
+        race: '犬妖',
+        variantId: '运动系',
+      },
+      loop: false,
+      volume: 0,
+      playbackRate: 1.0,
+      revertOnEnd: true,
+    },
+    {
+      src: 'https://files.catbox.moe/6z2y2p.png',
+      type: 'image' as const,
+      conditions: {
+        race: '犬妖',
+        variantId: '运动系',
+      },
+      loop: false,
+      volume: 0,
+      playbackRate: 1.0,
+      revertOnEnd: true,
+    },
+    {
+      src: 'https://files.catbox.moe/wni142.png',
+      type: 'image' as const,
+      conditions: {
+        race: '犬妖',
+        variantId: '运动系',
+      },
+      loop: false,
+      volume: 0,
+      playbackRate: 1.0,
+      revertOnEnd: true,
+    },
+    {
+      src: 'https://files.catbox.moe/h13dj2.png',
+      type: 'image' as const,
+      conditions: {
+        race: '犬妖',
+        variantId: '运动系',
+      },
+      loop: false,
+      volume: 0,
+      playbackRate: 1.0,
+      revertOnEnd: true,
+    },
+    {
+      src: 'https://files.catbox.moe/yzxkd6.png',
+      type: 'image' as const,
+      conditions: {
+        race: '犬妖',
+        variantId: '运动系',
+      },
+      loop: false,
+      volume: 0,
+      playbackRate: 1.0,
+      revertOnEnd: true,
+    },
+    {
+      src: 'https://files.catbox.moe/f7bwww.png',
+      type: 'image' as const,
+      conditions: {
+        race: '犬妖',
+        variantId: '运动系',
+      },
+      loop: false,
+      volume: 0,
+      playbackRate: 1.0,
+      revertOnEnd: true,
+    },
+    // 犬妖保镖的专属资源（随机从六个图片中选择）
+    {
+      src: 'https://files.catbox.moe/aiqcab.png',
+      type: 'image' as const,
+      conditions: {
+        race: '犬妖',
+        variantId: '保镖',
+      },
+      loop: false,
+      volume: 0,
+      playbackRate: 1.0,
+      revertOnEnd: true,
+    },
+    {
+      src: 'https://files.catbox.moe/ol9fkb.png',
+      type: 'image' as const,
+      conditions: {
+        race: '犬妖',
+        variantId: '保镖',
+      },
+      loop: false,
+      volume: 0,
+      playbackRate: 1.0,
+      revertOnEnd: true,
+    },
+    {
+      src: 'https://files.catbox.moe/qtupxr.png',
+      type: 'image' as const,
+      conditions: {
+        race: '犬妖',
+        variantId: '保镖',
+      },
+      loop: false,
+      volume: 0,
+      playbackRate: 1.0,
+      revertOnEnd: true,
+    },
+    {
+      src: 'https://files.catbox.moe/a0r0yj.png',
+      type: 'image' as const,
+      conditions: {
+        race: '犬妖',
+        variantId: '保镖',
+      },
+      loop: false,
+      volume: 0,
+      playbackRate: 1.0,
+      revertOnEnd: true,
+    },
+    {
+      src: 'https://files.catbox.moe/0jv5yy.png',
+      type: 'image' as const,
+      conditions: {
+        race: '犬妖',
+        variantId: '保镖',
+      },
+      loop: false,
+      volume: 0,
+      playbackRate: 1.0,
+      revertOnEnd: true,
+    },
+    {
+      src: 'https://files.catbox.moe/178e9h.png',
+      type: 'image' as const,
+      conditions: {
+        race: '犬妖',
+        variantId: '保镖',
+      },
+      loop: false,
+      volume: 0,
+      playbackRate: 1.0,
+      revertOnEnd: true,
+    },
+  ],
+  // 可以继续添加其他技能的资源映射
+};
+
+/**
+ * 根据敌人信息选择技能资源
+ * @param skillId 技能ID
+ * @param race 敌人种族
+ * @param variantId 敌人变体ID
+ * @param enemyType 敌人类型
+ * @returns 选中的资源配置，如果未找到则返回 undefined
+ */
+export function getSkillResourceByRaceAndVariant(
+  skillId: string,
+  race: string,
+  variantId: string,
+  enemyType: EnemyType,
+): SkillResourceConfig | undefined {
+  const resources = ENEMY_SKILL_RESOURCES_MAPPING[skillId];
+  if (!resources || resources.length === 0) {
+    return undefined;
+  }
+
+  // 评分系统：为每个资源计算匹配分数
+  const scoredResources = resources.map(resource => {
+    let score = 0;
+    const conditions = resource.conditions;
+
+    if (!conditions) {
+      // 无条件的资源作为默认资源，分数为0
+      return { resource, score: 0 };
+    }
+
+    // 精确匹配：同时匹配 race 和 variantId（最高优先级）
+    if (conditions.race === race && conditions.variantId === variantId) {
+      score = 100;
+    }
+    // 类型匹配：匹配 enemyType（次高优先级）
+    else if (conditions.enemyType === enemyType) {
+      score = 50;
+    }
+    // 种族匹配：仅匹配 race（较低优先级）
+    else if (conditions.race === race && !conditions.variantId) {
+      score = 25;
+    }
+    // 变体匹配：仅匹配 variantId（较低优先级）
+    else if (conditions.variantId === variantId && !conditions.race) {
+      score = 20;
+    }
+
+    return { resource, score };
+  });
+
+  // 按分数排序，选择分数最高的资源
+  scoredResources.sort((a, b) => b.score - a.score);
+
+  // 如果最高分数为0，说明没有匹配的资源，返回第一个默认资源
+  if (scoredResources[0].score === 0) {
+    // 查找第一个无条件的资源
+    const defaultResource = resources.find(r => !r.conditions);
+    return defaultResource || resources[0];
+  }
+
+  // 找到所有最高分的资源（可能有多个相同最高分）
+  const maxScore = scoredResources[0].score;
+  const topScoredResources = scoredResources.filter(item => item.score === maxScore);
+
+  // 如果有多个最高分资源，随机选择一个
+  if (topScoredResources.length > 1) {
+    const randomIndex = Math.floor(Math.random() * topScoredResources.length);
+    return topScoredResources[randomIndex].resource;
+  }
+
+  // 只有一个最高分资源，直接返回
+  return scoredResources[0].resource;
+}
+
+/**
+ * 获取技能的所有资源配置
+ * @param skillId 技能ID
+ * @returns 资源配置数组，如果未找到则返回空数组
+ */
+export function getSkillResources(skillId: string): SkillResourceConfig[] {
+  return ENEMY_SKILL_RESOURCES_MAPPING[skillId] || [];
+}
+
+/**
+ * 获取所有精确匹配的资源（用于预加载）
+ * 只返回精确匹配的资源（同时匹配 race 和 variantId），不返回其他匹配的资源
+ * @param skillId 技能ID
+ * @param race 敌人种族
+ * @param variantId 敌人变体ID
+ * @param enemyType 敌人类型（此参数保留用于兼容性，但不会被使用）
+ * @returns 精确匹配的资源数组
+ */
+export function getAllMatchingSkillResources(
+  skillId: string,
+  race: string,
+  variantId: string,
+  _enemyType: EnemyType,
+): SkillResourceConfig[] {
+  const resources = ENEMY_SKILL_RESOURCES_MAPPING[skillId];
+  if (!resources || resources.length === 0) {
+    return [];
+  }
+
+  // 只返回精确匹配的资源（同时匹配 race 和 variantId）
+  const exactMatches = resources.filter(resource => {
+    const conditions = resource.conditions;
+    if (!conditions) {
+      // 无条件的资源不作为精确匹配
+      return false;
+    }
+    // 精确匹配：同时匹配 race 和 variantId
+    return conditions.race === race && conditions.variantId === variantId;
+  });
+
+  return exactMatches;
+}
+
+/**
+ * 为技能列表生成资源映射
+ * 根据敌人信息为每个技能选择最匹配的资源
+ * @param skillIds 技能ID列表
+ * @param race 敌人种族
+ * @param variantId 敌人变体ID
+ * @param enemyType 敌人类型
+ * @returns 技能ID到资源配置的映射（兼容旧格式）
+ */
+export function generateSkillResourceMap(
+  skillIds: string[],
+  race: string,
+  variantId: string,
+  enemyType: EnemyType,
+): Record<string, SkillResourceConfig> {
+  const resourceMap: Record<string, SkillResourceConfig> = {};
+
+  for (const skillId of skillIds) {
+    const resource = getSkillResourceByRaceAndVariant(skillId, race, variantId, enemyType);
+    if (resource) {
+      resourceMap[skillId] = resource;
+    }
+  }
+
+  return resourceMap;
+}
+
+// ==================== 敌人弱点配置 ====================
+
+/**
+ * 根据种族和变体获取敌人弱点类型
+ * 注意：敌人弱点会动态随机配置，此函数仅作为备用或默认值获取
+ * @param _race 种族（预留参数，目前未使用）
+ * @param _variantId 变体ID（预留参数，目前未使用）
+ * @returns 弱点类型（'体术' | '符术'），如果未配置则返回 undefined
+ */
+export function getEnemyWeakness(_race: string, _variantId: string): '体术' | '符术' | undefined {
+  // 注意：此函数目前返回 undefined，因为弱点会动态随机配置
+  // 如果后续需要预设弱点，可以在此添加映射表
+  // 例如：
+  // const weaknessMapping: Record<string, Record<string, '体术' | '符术'>> = {
+  //   人类: { 战士: '体术', 法师: '符术' },
+  //   ...
+  // };
+  return undefined;
 }

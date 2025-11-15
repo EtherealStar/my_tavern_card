@@ -15,6 +15,7 @@ export const normalBattles: BattleConfigItem[] = [
     difficulty: 'normal',
     tags: ['yokai', 'city', 'supernatural'],
     config: {
+      isDebugMode: false,
       background: {
         image: 'https://files.catbox.moe/s2ayan.jpg',
         scaleMode: 'cover', // 填满画布，可能裁剪部分内容
@@ -50,9 +51,9 @@ export const normalBattles: BattleConfigItem[] = [
           name: '妖怪',
           side: 'enemy',
           level: 1,
-          skills: ['power_strike', 'precise_strike'],
+          skills: ['power_strike'],
           enemyPortrait: {
-            image: 'https://files.catbox.moe/899p4x.png',
+            image: 'images/enemies/cat_streamer.png',
             position: { x: 0.5, y: 0.6, scale: 0.65 },
             animation: {
               idle: 'yokai_idle',
@@ -60,23 +61,24 @@ export const normalBattles: BattleConfigItem[] = [
               damage: 'yokai_damage',
             },
             videos: {
-              power_strike: {
-                src: 'https://files.catbox.moe/lwa07e.mp4',
-                loop: false,
-                volume: 0.2,
-                playbackRate: 1.0,
-                revertOnEnd: true,
-              },
-              precise_strike: {
-                src: 'https://files.catbox.moe/88jeby.mp4',
-                loop: true,
-                volume: 0,
-                playbackRate: 1.0,
-                revertOnEnd: false,
-                offsetX: -80,
-                offsetY: -250,
-                vScale: 0.6,
-              },
+              power_strike: [
+                {
+                  src: 'https://files.catbox.moe/zk5lpz.mp4',
+                  type: 'video' as const,
+                  loop: false,
+                  volume: 0,
+                  playbackRate: 1.0,
+                  revertOnEnd: true,
+                },
+                {
+                  src: 'https://files.catbox.moe/88jeby.mp4',
+                  type: 'video' as const,
+                  loop: false,
+                  volume: 0,
+                  playbackRate: 1.0,
+                  revertOnEnd: true,
+                },
+              ],
             },
           },
           mvuAttributes: {
@@ -94,9 +96,4 @@ export const normalBattles: BattleConfigItem[] = [
   },
 ];
 
-// 困难战斗配置已删除，只保留妖怪战斗
-
-// Boss战斗配置已删除，只保留妖怪战斗
-
-// 导出所有基础战斗配置（只保留妖怪战斗）
 export const basicBattleConfigs: BattleConfigItem[] = [...normalBattles];

@@ -115,14 +115,25 @@ const getEmptyText = (): string => {
   return tabNames[activeTab.value] || '暂无物品';
 };
 
-const formatAttributesBonus = (bonus: Record<string, number>): string => {
-  const entries = Object.entries(bonus);
-  if (entries.length === 0) return '无';
-
-  return entries
-    .filter(([_, value]) => value !== 0)
-    .map(([attr, value]) => `${attr}+${value}`)
-    .join(', ');
+const formatAttributesBonus = (bonus: any): string => {
+  try {
+    if (!bonus) return '无';
+    if (typeof bonus === 'string') {
+      const s = bonus.trim();
+      return s ? s : '无';
+    }
+    if (typeof bonus === 'object') {
+      const entries = Object.entries(bonus as Record<string, number>);
+      if (entries.length === 0) return '无';
+      return entries
+        .filter(([_, value]) => Number(value) !== 0)
+        .map(([attr, value]) => `${attr}+${value}`)
+        .join(', ');
+    }
+    return '无';
+  } catch {
+    return '无';
+  }
 };
 
 const selectItem = (item: InventoryItem) => {

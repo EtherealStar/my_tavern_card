@@ -40,13 +40,6 @@
         >
           设置
         </button>
-        <button
-          id="btn-achievements"
-          class="start-btn w-full cursor-pointer rounded-[14px] border border-[var(--border-color)] bg-[var(--button-bg)] px-[14px] py-[10px] font-bold tracking-[1px] text-[var(--button-text)] backdrop-blur-[8px] transition-[transform,box-shadow,background,color] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] hover:-translate-y-0.5 hover:scale-[1.02] active:-translate-y-[1px] active:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
-          @click="openAchievements"
-        >
-          成就
-        </button>
       </div>
     </div>
     <!-- 读档弹窗 -->
@@ -56,13 +49,10 @@
 
 <script setup lang="ts">
 import { nextTick, onMounted, ref } from 'vue';
-import { useGameServices } from '../composables/useGameServices';
 import { useGameStateManager } from '../composables/useGameStateManager';
 import { useSaveLoad } from '../composables/useSaveLoad';
 import SaveDialog from './SaveDialog.vue';
 
-// 使用 Composable 获取服务
-const { showSuccess, showInfo, showError } = useGameServices();
 const saveLoad = useSaveLoad();
 const gameState = useGameStateManager();
 
@@ -84,17 +74,14 @@ onMounted(async () => {
 
 async function startCreation() {
   try {
-    showSuccess('开始创建', '进入角色创建流程');
-
     // 使用Composable进行状态切换
     const success = await gameState.transitionToCreation();
 
     if (!success) {
-      showError('启动创建流程失败');
+      console.warn('[StartView] 启动创建流程失败');
     }
   } catch (error) {
     console.error('[StartView] Failed to start creation:', error);
-    showError('启动创建流程失败');
   }
 }
 
@@ -111,7 +98,6 @@ function openLoadDialog() {
     }
   } catch (error) {
     console.error('Error opening load dialog:', error);
-    showError('打开读档对话框失败');
   }
 }
 
@@ -128,7 +114,7 @@ async function handleLoaded(data: any) {
       const transitionSuccess = await gameState.transitionToPlaying(data.name, data.slotId);
 
       if (!transitionSuccess) {
-        showError('状态切换失败');
+        console.warn('[StartView] 状态切换失败');
         return;
       }
 
@@ -138,18 +124,14 @@ async function handleLoaded(data: any) {
   } catch (error) {
     console.error('handleLoaded failed:', error);
     const errorMessage = error instanceof Error ? error.message : '读档失败';
-    showError('读档失败', errorMessage);
+    console.warn('[StartView] 读档失败:', errorMessage);
     // 确保对话框关闭
     showSaveDialog.value = false;
   }
 }
 
 function openSettings() {
-  showInfo('设置', '设置面板未实现');
-}
-
-function openAchievements() {
-  showInfo('成就', '成就面板未实现');
+  console.info('[StartView] 设置面板未实现');
 }
 
 async function toggleFullscreen() {

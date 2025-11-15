@@ -14,7 +14,8 @@
         />
       </div>
       <div class="vertical-bars">
-        <BattleVerticalHealthBar v-if="hhpBar" :max="hhpBar.max" :type="hhpBar.type" :color="hhpBar.color" />
+        <!-- 暂时删除HHP显示 -->
+        <!-- <BattleVerticalHealthBar v-if="hhpBar" :max="hhpBar.max" :type="hhpBar.type" :color="hhpBar.color" /> -->
       </div>
     </div>
   </div>
@@ -23,7 +24,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import BattleHealthBar from './BattleHealthBar.vue';
-import BattleVerticalHealthBar from './BattleVerticalHealthBar.vue';
+// 暂时删除HHP显示 - 暂时注释掉导入
+// import BattleVerticalHealthBar from './BattleVerticalHealthBar.vue';
 
 interface PlayerData {
   id: string;
@@ -87,18 +89,19 @@ const statusBars = computed(() => {
   return bars;
 });
 
-// H血量条数据
-const hhpBar = computed(() => {
-  if (!props.playerData?.stats?.hhp) return null;
-
-  return {
-    type: 'hhp',
-    label: 'H血量',
-    current: props.playerData.stats.hhp,
-    max: props.playerData.stats.hhp, // H血量通常等于最大值
-    color: undefined,
-  };
-});
+// 暂时删除HHP显示 - 暂时注释掉HHP计算属性
+// // H血量条数据
+// const hhpBar = computed(() => {
+//   if (!props.playerData?.stats?.hhp) return null;
+//
+//   return {
+//     type: 'hhp',
+//     label: 'H血量',
+//     current: props.playerData.stats.hhp,
+//     max: props.playerData.stats.hhp, // H血量通常等于最大值
+//     color: undefined,
+//   };
+// });
 </script>
 
 <style scoped>

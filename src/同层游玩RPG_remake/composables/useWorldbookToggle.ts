@@ -222,20 +222,32 @@ export function useWorldbookToggle() {
       const { getWorldExpansions } = await import('../data/worldExpansions');
       const allExpansions = getWorldExpansions(world);
 
-      // 3. 构建所有扩展的开关计划
-      const allToggles: UidToggle[] = [];
+      // 3. 构建所有扩展的开关计划（使用去重映射，确保最终状态唯一且可覆盖）
+      const toggleMap = new Map<number, boolean>();
 
       for (const expansion of allExpansions) {
         const isSelected = selectedExpansions.includes(expansion.id);
 
-        // 根据是否选中来决定开关状态
+        // 根据是否选中来决定开关状态（扩展自身声明的 toggles）
         for (const toggle of expansion.toggles) {
-          allToggles.push({
-            uid: toggle.uid,
-            enable: isSelected ? toggle.enable : false, // 未选中时强制关闭
-          });
+          toggleMap.set(toggle.uid, isSelected ? toggle.enable : false);
+        }
+
+        // 处理互斥对：选中 → base 关 / expansion 开；未选中 → base 开 / expansion 关
+        if (expansion.mutex && expansion.mutex.length > 0) {
+          for (const pair of expansion.mutex) {
+            if (isSelected) {
+              toggleMap.set(pair.baseUid, false);
+              toggleMap.set(pair.expansionUid, true);
+            } else {
+              toggleMap.set(pair.baseUid, true);
+              toggleMap.set(pair.expansionUid, false);
+            }
+          }
         }
       }
+
+      const allToggles = Array.from(toggleMap.entries()).map(([uid, enable]) => ({ uid, enable }));
 
       // 4. 应用开关
       const result = await toggleWorldbookEntries(worldbookName, allToggles);

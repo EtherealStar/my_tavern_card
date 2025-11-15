@@ -1,4 +1,5 @@
 import { BattleAction, BattleResult, BattleState, Skill } from '../models/BattleSchemas';
+import { battleConsoleLog } from '../utils/battleConsoleLogger';
 
 /**
  * 战斗引擎 - 纯逻辑计算层
@@ -27,7 +28,8 @@ export interface BattleEvent {
     | 'battle:skill-used'
     | 'battle:mp-consumed'
     | 'battle:hhp-changed'
-    | 'battle:insufficient-mp';
+    | 'battle:insufficient-mp'
+    | 'battle:weakness-revealed';
   data: {
     actorId?: string;
     targetId?: string;
@@ -35,6 +37,7 @@ export interface BattleEvent {
     skillId?: string;
     mpCost?: number;
     hhpChange?: number;
+    weakness?: '体术' | '符术';
     [key: string]: any;
   };
 }
@@ -57,7 +60,7 @@ export class BattleEngine {
    * @returns 新状态和生成的事件列表
    */
   public processAction(state: BattleState, action: BattleAction): { newState: BattleState; events: BattleEvent[] } {
-    console.log('[BattleEngine] processAction called:', {
+    battleConsoleLog('[BattleEngine] processAction called:', {
       action,
       stateParticipants: state?.participants?.length || 0,
       state: state
@@ -70,13 +73,13 @@ export class BattleEngine {
 
     // 战斗已结束，不处理行动
     if (state.ended) {
-      console.log('[BattleEngine] Battle already ended, returning current state');
+      battleConsoleLog('[BattleEngine] Battle already ended, returning current state');
       return { newState: state, events: [] };
     }
 
     // 深拷贝状态，确保不修改原状态
     const next = JSON.parse(JSON.stringify(state)) as BattleState;
-    console.log('[BattleEngine] Created deep copy of state:', {
+    battleConsoleLog('[BattleEngine] Created deep copy of state:', {
       nextParticipants: next?.participants?.length || 0,
       next: next
         ? {
@@ -99,7 +102,7 @@ export class BattleEngine {
       return { newState: next, events: [] };
     }
 
-    console.log('[BattleEngine] 处理行动:', {
+    battleConsoleLog('[BattleEngine] 处理行动:', {
       actionType: action.type,
       actorId: action.actorId,
       targetId: action.targetId,
@@ -154,6 +157,35 @@ export class BattleEngine {
             remainingMp: actor.mp,
           },
         });
+      }
+
+      // 探查技能特殊处理
+      if (action.skillId === 'investigate_weakness') {
+        // 探查技能不进行伤害计算，直接揭示弱点
+        if (target.weakness) {
+          events.push({
+            type: 'battle:weakness-revealed',
+            data: {
+              actorId: actor.id,
+              targetId: target.id,
+              skillId: action.skillId,
+              weakness: target.weakness,
+            },
+          });
+        } else {
+          // 如果敌人没有弱点，也发送事件（但没有weakness字段）
+          events.push({
+            type: 'battle:weakness-revealed',
+            data: {
+              actorId: actor.id,
+              targetId: target.id,
+              skillId: action.skillId,
+            },
+          });
+        }
+        // 切换回合
+        next.turn = next.turn === 'player' ? 'enemy' : 'player';
+        return { newState: next, events };
       }
     }
 
@@ -219,6 +251,19 @@ export class BattleEngine {
     }
 
     baseDamage = Math.max(1, Math.round(baseDamage));
+
+    // 弱点匹配检查：如果技能标签与敌人弱点匹配，应用1.5倍伤害
+    let weaknessMultiplier = 1.0;
+    if (target.weakness && skill?.tags) {
+      const hasMatchingWeakness = skill.tags.includes(target.weakness);
+      if (hasMatchingWeakness) {
+        weaknessMultiplier = 1.5;
+        battleConsoleLog(`[BattleEngine] 弱点匹配: 技能标签包含 ${target.weakness}，应用1.5倍伤害`);
+      }
+    }
+
+    // 应用弱点加成
+    baseDamage = Math.round(baseDamage * weaknessMultiplier);
 
     const critMul = skill?.critDamageOverride ?? attackerStats.critDamageMultiplier ?? 1.5;
     const finalDamage = isCritical ? Math.max(1, Math.round(baseDamage * critMul)) : baseDamage;
@@ -290,7 +335,7 @@ export class BattleEngine {
       return { newState: next, events };
     }
 
-    console.log('[BattleEngine] Returning processed state:', {
+    battleConsoleLog('[BattleEngine] Returning processed state:', {
       newStateParticipants: next?.participants?.length || 0,
       newState: next
         ? {

@@ -2,6 +2,11 @@ import { inject, injectable } from 'inversify';
 import { EventBus } from '../core/EventBus';
 import { TYPES } from '../core/ServiceIdentifiers';
 import { CUSTOM_SKILL_DESCRIPTIONS, MAGICAL_DESCRIPTIONS, PHYSICAL_DESCRIPTIONS } from '../data/battleDescriptions';
+import {
+  getEquipmentQualityBonus,
+  mergeEquipmentBonuses,
+  type BattleStatsBonus,
+} from '../data/equipmentQualityBonuses';
 import { getSkillDescriptionConfig } from '../data/skillDescriptionMapping';
 import { BattleLogItem, BattleLogStats, DescriptionStyle, DescriptionType } from '../models/BattleLogSchemas';
 import {
@@ -15,9 +20,10 @@ import {
 } from '../models/BattleSchemas';
 import { BattleConfigService } from './BattleConfigService';
 import { BattleEngine } from './BattleEngine';
-import { BattleResultHandler } from './BattleResultHandler';
+import { BattleResultHandler, type ParticipantInfo } from './BattleResultHandler';
 import type { SameLayerService } from './SameLayerService';
 import { SaveLoadManagerService } from './SaveLoadManagerService';
+import type { StatDataBindingService } from './StatDataBindingService';
 
 /**
  * BattleService - 战斗服务协调器
@@ -59,6 +65,9 @@ export class BattleService {
   // 参与者名称映射表
   private participantNameMap = new Map<string, string>();
 
+  // 当前战斗配置（用于获取参与者信息）
+  private currentBattleConfig: BattleConfig | null = null;
+
   // 描述模板
   private descriptions = {
     physical: PHYSICAL_DESCRIPTIONS,
@@ -73,9 +82,8 @@ export class BattleService {
     @inject(TYPES.SameLayerService) private _sameLayer: SameLayerService,
     @inject(TYPES.SaveLoadManagerService) private _saveLoad: SaveLoadManagerService,
     @inject(TYPES.BattleConfigService) private battleConfigService: BattleConfigService, // 使用合并后的服务
-  ) {
-    console.log('[BattleService] Service constructed');
-  }
+    @inject(TYPES.StatDataBindingService) private statDataBinding: StatDataBindingService, // 用于获取装备信息
+  ) {}
 
   /**
    * 初始化战斗
@@ -91,8 +99,6 @@ export class BattleService {
    * @returns 处理后的战斗配置（包含映射的属性）
    */
   public async initializeBattle(config: BattleConfig): Promise<BattleConfig> {
-    console.log('[BattleService] Initializing battle...');
-
     // Step 1: 验证配置
     const parsed = BattleConfigSchema.safeParse(config);
     if (!parsed.success) {
@@ -102,24 +108,27 @@ export class BattleService {
 
     // Step 2: 从战斗配置服务导入技能（替代原来的注册默认技能）
     this.battleConfigService.importSkillsFromBattleConfig(parsed.data.participants);
-    console.log('[BattleService] Skills imported from battle config');
 
     // Step 2.5: 建立参与者名称映射
     this.participantNameMap.clear();
     parsed.data.participants.forEach((participant: any) => {
       this.participantNameMap.set(participant.id, participant.name);
-      console.log(`[BattleService] Mapped participant: ${participant.id} -> ${participant.name}`);
     });
 
     // Step 3: 预加载提示（实际加载由 Phaser BattleScene.preload 处理）
     await this.preloadBattleResources(parsed.data);
 
     // Step 4: 映射 MVU 属性到战斗属性，并统一初始化HP
-    const withStats: BattleConfig = {
-      ...parsed.data,
-      participants: parsed.data.participants.map((p: any) => {
+    // 使用 Promise.all 处理异步装备加成
+    const participantsWithStats = await Promise.all(
+      parsed.data.participants.map(async (p: any) => {
         const mvu = p.mvuAttributes || {};
-        const battleStats = this.mapMvuToBattleStats(mvu, p.level || 1);
+        let battleStats = this.mapMvuToBattleStats(mvu, p.level || 1);
+
+        // 如果是玩家，应用装备品质加成
+        if (p.id === 'player' || p.side === 'player') {
+          battleStats = await this.applyEquipmentBonuses(battleStats);
+        }
 
         // 统一初始化：只在战斗开始时设置一次HP和MP
         const maxHp = p.maxHp ?? battleStats.calculatedHp;
@@ -144,9 +153,17 @@ export class BattleService {
           stats: p.stats || battleStats,
         };
       }),
+    );
+
+    const withStats: BattleConfig = {
+      ...parsed.data,
+      participants: participantsWithStats,
     };
 
-    // Step 5: 设置 BattleEngine 的技能表
+    // Step 5: 保存当前战斗配置（用于后续获取参与者信息）
+    this.currentBattleConfig = withStats;
+
+    // Step 6: 设置 BattleEngine 的技能表
     const allSkills = this.battleConfigService.getAllSkills();
     const skillMap = new Map<string, Skill>();
     allSkills.forEach(skill => {
@@ -154,18 +171,8 @@ export class BattleService {
     });
     this.engine.setSkillMap(skillMap);
 
-    // Step 6: 发送初始化完成事件
+    // Step 7: 发送初始化完成事件
     this.eventBus.emit('battle:initialized', withStats);
-
-    console.log('[BattleService] Battle initialized successfully');
-
-    // 避免未使用告警
-    if (this._saveLoad) {
-      console.log('[BattleService] SaveLoad service available');
-    }
-    if (this._sameLayer) {
-      console.log('[BattleService] SameLayer service available');
-    }
 
     return withStats;
   }
@@ -176,7 +183,6 @@ export class BattleService {
   private async preloadBattleResources(_config: BattleConfig): Promise<void> {
     // 资源预加载现在由 Phaser BattleScene.preload 方法处理
     // BattleResourceService 只负责 URL 验证和路径解析
-    console.log('[BattleService] Resource preloading delegated to Phaser BattleScene.preload');
   }
 
   /**
@@ -191,8 +197,6 @@ export class BattleService {
    * @param battleConfig 战斗配置
    */
   public async startBattle(battleState: BattleState, battleConfig: BattleConfig): Promise<void> {
-    console.log('[BattleService] Starting battle...');
-
     if (!battleState) {
       console.error('[BattleService] Cannot start battle - no state provided');
       throw new Error('Battle state not provided');
@@ -207,15 +211,9 @@ export class BattleService {
       battleConfig: battleConfig, // 完整配置作为备用
     };
 
-    console.log('[BattleService] Payload prepared:', {
-      hasBackground: !!payload.background,
-      participantsCount: payload.participants?.length || 0,
-    });
-
     // 发送 battle:start 事件
     // PhaserManager 会监听此事件并启动 BattleScene
     this.eventBus.emit('battle:start', payload);
-    console.log('[BattleService] battle:start event emitted');
   }
 
   /**
@@ -234,22 +232,6 @@ export class BattleService {
    * @returns 处理后的新战斗状态
    */
   public async processPlayerAction(action: BattleAction, currentState: BattleState): Promise<BattleState> {
-    console.log('[BattleService] processPlayerAction called:', {
-      action,
-      currentStateParticipants: currentState?.participants?.length || 0,
-      currentState: currentState
-        ? {
-            ended: currentState.ended,
-            participants: currentState.participants?.map((p: any) => ({
-              id: p.id,
-              name: p.name,
-              side: p.side,
-              hp: p.hp,
-            })),
-          }
-        : null,
-    });
-
     // 验证行动格式
     const parsed = BattleActionSchema.safeParse(action);
     if (!parsed.success) {
@@ -260,21 +242,8 @@ export class BattleService {
     // 调用 BattleEngine 处理玩家行动
     const { newState, events } = this.engine.processAction(currentState, parsed.data);
 
-    console.log('[BattleService] BattleEngine processed action:', {
-      newStateParticipants: newState?.participants?.length || 0,
-      newState: newState
-        ? {
-            ended: newState.ended,
-            participants: newState.participants?.map((p: any) => ({ id: p.id, name: p.name, side: p.side, hp: p.hp })),
-          }
-        : null,
-      eventsCount: events.length,
-    });
-
     // 先发送战斗事件，让UI组件处理伤害显示
     events.forEach(event => {
-      console.log('[BattleService] Emitting event:', event.type, 'with data:', event.data);
-
       // 生成描述并记录到战斗日志
       const description = this.generateDescription(event);
       this.recordBattleEvent(event, description);
@@ -287,9 +256,6 @@ export class BattleService {
     });
 
     // 然后发送状态更新事件，确保状态同步正确
-    console.log('[BattleService] Emitting battle:state-updated event with newState:', {
-      participantsCount: newState?.participants?.length || 0,
-    });
     this.eventBus.emit('battle:state-updated', newState);
 
     // 检查战斗是否结束
@@ -365,13 +331,14 @@ export class BattleService {
   private async onBattleEnd(result: BattleResult): Promise<void> {
     // 保存简要结果到IndexedDB settings
     const battleLog = this.getBattleLog();
-    await this.resultHandler.persistAndAnnounce(result, battleLog);
+    const participants = this.getParticipantsInfo();
+    await this.resultHandler.persistAndAnnounce(result, battleLog, participants);
 
     this.eventBus.emit('battle:result', result);
 
-    // 清理参与者名称映射表
+    // 清理参与者名称映射表和当前战斗配置
     this.participantNameMap.clear();
-    console.log('[BattleService] Participant name map cleared after battle end');
+    this.currentBattleConfig = null;
   }
 
   /**
@@ -438,6 +405,104 @@ export class BattleService {
   }
 
   /**
+   * 应用装备品质加成到战斗属性
+   *
+   * 获取玩家的武器、防具、饰品，根据品质应用加成
+   * 加成方式：加法（直接加到基础战斗属性上）
+   *
+   * @param battleStats 基础战斗属性
+   * @returns 应用装备加成后的战斗属性
+   */
+  private async applyEquipmentBonuses(battleStats: any): Promise<any> {
+    try {
+      // 获取玩家装备
+      const [weapon, armor, accessory] = await Promise.all([
+        this.statDataBinding.getEquippedWeapon().catch(() => null),
+        this.statDataBinding.getEquippedArmor().catch(() => null),
+        this.statDataBinding.getEquippedAccessory().catch(() => null),
+      ]);
+
+      // 收集所有装备的加成
+      const bonuses: BattleStatsBonus[] = [];
+
+      // 武器加成
+      if (weapon && weapon.quality) {
+        const weaponBonus = getEquipmentQualityBonus('weapon', weapon.quality);
+        if (Object.keys(weaponBonus).length > 0) {
+          bonuses.push(weaponBonus);
+        }
+      }
+
+      // 防具加成
+      if (armor && armor.quality) {
+        const armorBonus = getEquipmentQualityBonus('armor', armor.quality);
+        if (Object.keys(armorBonus).length > 0) {
+          bonuses.push(armorBonus);
+        }
+      }
+
+      // 饰品加成
+      if (accessory && accessory.quality) {
+        const accessoryBonus = getEquipmentQualityBonus('accessory', accessory.quality);
+        if (Object.keys(accessoryBonus).length > 0) {
+          bonuses.push(accessoryBonus);
+        }
+      }
+
+      // 如果没有加成，直接返回原始属性
+      if (bonuses.length === 0) {
+        return battleStats;
+      }
+
+      // 合并所有加成
+      const mergedBonus = mergeEquipmentBonuses(bonuses);
+
+      // 应用加成到战斗属性（加法）
+      const enhancedStats = { ...battleStats };
+
+      if (mergedBonus.atk !== undefined) {
+        enhancedStats.atk = Math.max(0, (enhancedStats.atk || 0) + mergedBonus.atk);
+      }
+      if (mergedBonus.hatk !== undefined) {
+        enhancedStats.hatk = Math.max(0, (enhancedStats.hatk || 0) + mergedBonus.hatk);
+      }
+      if (mergedBonus.def !== undefined) {
+        enhancedStats.def = Math.max(0, (enhancedStats.def || 0) + mergedBonus.def);
+      }
+      if (mergedBonus.hdef !== undefined) {
+        // hdef 范围限制在 0-0.99
+        enhancedStats.hdef = Math.max(0, Math.min(0.99, (enhancedStats.hdef || 0) + mergedBonus.hdef));
+      }
+      if (mergedBonus.hit !== undefined) {
+        enhancedStats.hit = Math.max(0, (enhancedStats.hit || 0) + mergedBonus.hit);
+      }
+      if (mergedBonus.evade !== undefined) {
+        // evade 范围限制在 0-1
+        enhancedStats.evade = Math.max(0, Math.min(1, (enhancedStats.evade || 0) + mergedBonus.evade));
+      }
+      if (mergedBonus.critRate !== undefined) {
+        // critRate 范围限制在 0-1
+        enhancedStats.critRate = Math.max(0, Math.min(1, (enhancedStats.critRate || 0) + mergedBonus.critRate));
+      }
+      if (mergedBonus.critDamageMultiplier !== undefined) {
+        enhancedStats.critDamageMultiplier = Math.max(
+          1,
+          (enhancedStats.critDamageMultiplier || 1.5) + mergedBonus.critDamageMultiplier,
+        );
+      }
+      if (mergedBonus.hhp !== undefined) {
+        enhancedStats.hhp = Math.max(0, (enhancedStats.hhp || 0) + mergedBonus.hhp);
+      }
+
+      return enhancedStats;
+    } catch (error) {
+      // 如果获取装备失败，记录错误但不影响战斗初始化
+      console.error('[BattleService] 应用装备加成失败:', error);
+      return battleStats;
+    }
+  }
+
+  /**
    * HP验证机制
    * 确保HP值的合理性
    */
@@ -453,13 +518,6 @@ export class BattleService {
     }
 
     return true;
-  }
-
-  /**
-   * 获取技能（新增方法）
-   */
-  private getSkill(skillId: string): Skill | undefined {
-    return this.battleConfigService.getSkill(skillId);
   }
 
   // ==================== 战斗日志描述系统 ====================
@@ -509,6 +567,16 @@ export class BattleService {
     // 处理MP不足事件
     if (event.type === 'battle:insufficient-mp') {
       return `${actor} MP不足，无法使用技能`;
+    }
+
+    // 处理弱点揭示事件
+    if (event.type === 'battle:weakness-revealed') {
+      const weakness = data.weakness;
+      if (weakness) {
+        return `${actor}使用灵能汇聚于双眼，探查敌人，发现敌人的弱点是${weakness}`;
+      } else {
+        return `${actor}使用灵能汇聚于双眼，探查敌人，但没有发现明显的弱点`;
+      }
     }
 
     // 根据技能类型选择描述模板
@@ -634,6 +702,23 @@ export class BattleService {
   }
 
   /**
+   * 获取参与者信息（用于战斗故事生成）
+   * @returns 参与者信息数组，包含 id、name 和 side
+   */
+  public getParticipantsInfo(): ParticipantInfo[] {
+    if (!this.currentBattleConfig) {
+      console.warn('[BattleService] No current battle config available');
+      return [];
+    }
+
+    return this.currentBattleConfig.participants.map(p => ({
+      id: p.id,
+      name: p.name,
+      side: p.side,
+    }));
+  }
+
+  /**
    * 清空战斗日志
    */
   public clearBattleLog() {
@@ -645,7 +730,6 @@ export class BattleService {
    */
   public setDescriptionStyle(style: DescriptionStyle) {
     // 暂时不实现，保留接口
-    console.log('[BattleService] Description style set to:', style);
   }
 
   /**
@@ -738,8 +822,6 @@ export class BattleService {
     if (this.battleLog.length > this.maxBattleLogSize) {
       this.battleLog = this.battleLog.slice(-this.maxBattleLogSize);
     }
-
-    console.log('[BattleService] Cleanup completed:', this.getCacheStats());
   }
 
   /**

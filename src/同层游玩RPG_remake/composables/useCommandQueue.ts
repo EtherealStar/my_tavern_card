@@ -195,6 +195,23 @@ export function useCommandQueue() {
     });
   };
 
+  // 便捷方法 - 升级相关
+  const addLevelUpCommand = (newLevel: number, reason: string = '自动升级'): boolean => {
+    if (!Number.isFinite(newLevel) || newLevel < 1 || newLevel > 20) {
+      console.warn('[useCommandQueue] 无效的等级:', newLevel);
+      return false;
+    }
+
+    return addCommand({
+      type: CommandType.LEVEL_UP,
+      action: 'level_up.apply',
+      params: { newLevel, reason },
+      description: `升级到等级 ${newLevel}`,
+      priority: 100, // 设置较高优先级，确保优先执行
+      nonRemovable: true, // 标记为不可删除
+    });
+  };
+
   // 获取队列统计信息
   const getQueueStats = () => {
     if (!commandQueueService) {
@@ -260,6 +277,9 @@ export function useCommandQueue() {
     // 便捷方法 - 背包
     addInventoryAddCommand,
     addInventoryRemoveCommand,
+
+    // 便捷方法 - 升级
+    addLevelUpCommand,
 
     // 统计和调试
     getQueueStats,

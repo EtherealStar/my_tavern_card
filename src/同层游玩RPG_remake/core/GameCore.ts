@@ -4,30 +4,28 @@ import { updateUserKey } from 'shared/constants';
 // import { CommandQueueService } from '同层游玩RPG_remake/services/CommandQueueService';
 import { BattleConfigInitializer } from '同层游玩RPG_remake/services/BattleConfigInitializer';
 import { GameStateService } from '同层游玩RPG_remake/services/GameStateService';
-import { AchievementService } from '../services/AchievementService';
+import { GlobalStateManager } from '../services/GlobalStateManager';
 import { SameLayerService } from '../services/SameLayerService';
 import { SaveLoadManagerService } from '../services/SaveLoadManagerService';
 import { StatDataBindingService } from '../services/StatDataBindingService';
-import { UIService } from '../services/UIService';
 import { EventBus } from './EventBus';
 import { TYPES } from './ServiceIdentifiers';
-
 @injectable()
 export class GameCore {
   private mounted = false;
 
   constructor(
     @inject(TYPES.EventBus) private eventBus: EventBus,
-    @inject(TYPES.UIService) private _uiService: UIService,
     @inject(TYPES.StatDataBindingService) private statDataBindingService: StatDataBindingService,
     // TavernGenerationService 已合并到 SameLayerService
     @inject(TYPES.GameStateService) private _gameStateService: GameStateService,
     @inject(TYPES.SameLayerService) private sameLayerService: SameLayerService,
-    @inject(TYPES.AchievementService) private achievementService: AchievementService,
+    // @inject(TYPES.AchievementService) private achievementService: AchievementService, // 已废弃
     // @inject(TYPES.SaveLoadFacade) private _saveLoadFacade: SaveLoadFacade, // 已废弃
     @inject(TYPES.SaveLoadManagerService) private saveLoadManagerService: SaveLoadManagerService,
     // @inject(TYPES.CommandQueueService) private commandQueueService: CommandQueueService,
     @inject(TYPES.BattleConfigInitializer) private battleConfigInitializer: BattleConfigInitializer,
+    @inject(TYPES.GlobalStateManager) private globalStateManager: GlobalStateManager,
   ) {}
 
   public async init(): Promise<void> {
@@ -44,9 +42,14 @@ export class GameCore {
   public async initializeBasicServices(): Promise<void> {
     // 设置全局事件总线，供其他服务使用
     (window as any).__RPG_EVENT_BUS__ = this.eventBus;
+    try {
+      this.globalStateManager.setEventBus(this.eventBus);
+    } catch (error) {
+      console.warn('[GameCore] 设置全局状态事件总线失败:', error);
+    }
 
     // 初始化成就服务
-    this.achievementService.register();
+    // this.achievementService.register();
   }
 
   /**
@@ -126,16 +129,6 @@ export class GameCore {
     } catch (error) {
       console.error('[GameCore] 战斗配置初始化失败:', error);
       // 不抛出错误，允许应用继续运行
-    }
-
-    // 读取一次/触达一次以消除未使用成员告警
-    try {
-      void this._gameStateService;
-      void this._uiService;
-      // void this._saveLoadFacade; // 已废弃
-      // TavernGenerationService 已合并到 SameLayerService
-    } catch {
-      /* ignore */
     }
 
     // 注意：事件监听器注册已移至Vue应用挂载后，确保正确的初始化时序

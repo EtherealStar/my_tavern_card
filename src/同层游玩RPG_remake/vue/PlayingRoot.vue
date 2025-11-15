@@ -18,7 +18,7 @@
         <div v-if="isRandomEventActive" class="random-event-panel">
           <div class="rpg-title">随机事件</div>
           <div class="event-info">
-            <div class="event-display">{{ currentRandomEvent }}</div>
+            <div class="event-display">{{ currentEvent }}</div>
           </div>
         </div>
 
@@ -72,6 +72,37 @@
                 >
                   {{ getCurrentAttributeValue(name) }}
                 </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 经验条 -->
+        <div class="exp-panel">
+          <div class="rpg-title">
+            经验值
+            <span v-if="isMvuDataLoaded" class="mvu-indicator" title="MVU 数据已加载"></span>
+          </div>
+          <div class="exp-content">
+            <div class="exp-info">
+              <div class="exp-level">
+                <span class="exp-label">等级</span>
+                <span class="exp-value">{{ expBarData.currentLevel }}</span>
+                <span v-if="expBarData.isMaxLevel" class="max-level-badge">满级</span>
+              </div>
+              <div class="exp-text">
+                <span class="exp-current">{{ expBarData.currentLevelExp }}</span>
+                <span class="exp-separator">/</span>
+                <span class="exp-required">{{ expBarData.expRequiredForNextLevel }}</span>
+              </div>
+            </div>
+            <div class="exp-bar-container">
+              <div class="exp-bar-background">
+                <div
+                  class="exp-bar-fill"
+                  :class="{ 'max-level': expBarData.isMaxLevel }"
+                  :style="{ width: `${expBarData.expProgress * 100}%` }"
+                ></div>
               </div>
             </div>
           </div>
@@ -184,7 +215,7 @@
           <div class="event-banner">
             <span class="event-label">当前事件</span>
             <div v-if="showEventDetails" class="event-expanded">
-              <div class="event-name">{{ currentRandomEvent || '无' }}</div>
+              <div class="event-name">{{ currentEvent || '无' }}</div>
             </div>
           </div>
         </div>
@@ -215,17 +246,17 @@
 
         <div class="composer group relative overflow-hidden transition-all duration-400">
           <div
-            class="pointer-events-none absolute inset-0 animate-[spellCharge_4s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-pink-100 to-transparent opacity-0 group-focus-within:opacity-100"
+            class="pointer-events-none absolute inset-0 animate-[spellCharge_4s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-[var(--color-muted-beige)] to-transparent opacity-0 group-focus-within:opacity-100"
           ></div>
 
           <div class="relative z-10 flex items-center gap-3 p-4">
             <!-- 指令队列按钮 -->
             <button
-              class="command-queue-btn relative flex flex-shrink-0 items-center justify-center rounded-xl border-2 border-pink-200 bg-white/90 backdrop-blur-sm transition-all duration-300 hover:border-pink-400 hover:bg-white/95 hover:shadow-[0_0_20px_rgba(255,144,151,0.3)] focus:border-pink-400 focus:bg-white/95 focus:shadow-[0_0_20px_rgba(255,144,151,0.3)] focus:outline-none"
+              class="command-queue-btn theme-button"
               @click="showCommandQueueDialog = true"
               :title="`指令队列 (${queueLength})`"
             >
-              <svg class="h-6 w-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="theme-icon h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -244,7 +275,7 @@
 
             <textarea
               v-model="inputText"
-              class="input flex-1 resize-none rounded-2xl border-2 border-pink-200 bg-white/90 px-4 py-2 text-purple-800 backdrop-blur-sm transition-all duration-300 placeholder:text-purple-400 focus:border-pink-400 focus:bg-white/95 focus:shadow-[0_0_20px_rgba(255,144,151,0.3)] focus:outline-none"
+              class="input theme-input flex-1 resize-none rounded-2xl border-2 px-4 py-2 backdrop-blur-sm transition-all duration-300 focus:outline-none"
               placeholder="输入你的行动..."
               rows="2"
               @keydown.enter.exact.prevent="onSend"
@@ -319,7 +350,7 @@
             <button class="menu-btn" @click="openRelations">
               <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
                 <path
-                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                  d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"
                 />
               </svg>
               关系
@@ -327,7 +358,9 @@
             <button class="menu-btn" @click="openEnemies">
               <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
                 <path
-                  d="M4 3a1 1 0 00-1 1v2a1 1 0 001 1h1l2 3v4l-2 2v1h10v-1l-2-2V10l2-3h1a1 1 0 001-1V4a1 1 0 00-1-1H4z"
+                  fill-rule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 100-2 1 1 0 000 2zm7-1a1 1 0 11-2 0 1 1 0 012 0zm-.464 5.535a1 1 0 10-1.415-1.414 3 3 0 01-4.242 0 1 1 0 00-1.415 1.414 5 5 0 007.072 0z"
+                  clip-rule="evenodd"
                 />
               </svg>
               敌人
@@ -375,6 +408,14 @@
               </svg>
               存档
             </button>
+            <button class="menu-btn" @click="showReadingSettings = true">
+              <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"
+                />
+              </svg>
+              阅读
+            </button>
             <button class="menu-btn" @click="openSettings">
               <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
                 <path
@@ -398,145 +439,139 @@
 
     <button
       v-if="isNarrow && !leftOpen"
-      class="drawer-toggle left fixed top-1/2 left-4 z-50 -translate-y-1/2 transform rounded-full bg-pink-400 p-2 text-white shadow-lg transition-all duration-300 hover:scale-110 hover:bg-pink-500"
+      class="drawer-toggle left theme-drawer-button fixed top-1/2 left-4 z-50 -translate-y-1/2 transform rounded-full p-2 text-white shadow-lg transition-all duration-300 hover:scale-110"
       @click="leftOpen = !leftOpen"
     >
       ◀
     </button>
     <button
       v-if="isNarrow && !rightOpen"
-      class="drawer-toggle right fixed top-1/2 right-4 z-50 -translate-y-1/2 transform rounded-full bg-pink-400 p-2 text-white shadow-lg transition-all duration-300 hover:scale-110 hover:bg-pink-500"
+      class="drawer-toggle right theme-drawer-button fixed top-1/2 right-4 z-50 -translate-y-1/2 transform rounded-full p-2 text-white shadow-lg transition-all duration-300 hover:scale-110"
       @click="rightOpen = !rightOpen"
     >
       ▶
     </button>
 
-    <div
-      v-if="showSettings"
-      class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-    >
+    <Teleport :to="modalTarget">
       <div
-        class="modal-card settings-modal transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] rounded-3xl bg-gradient-to-br from-white via-pink-50 to-white p-6 shadow-[var(--rune-glow)] transition-all duration-500 hover:scale-105"
+        v-if="showSettings"
+        class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       >
-        <!-- 标题栏和关闭按钮 -->
-        <div class="modal-header relative mb-4 flex items-center justify-between">
-          <div class="modal-title text-xl font-bold text-purple-800">✦ 系统设置 ✦</div>
-          <button
-            class="close-btn flex h-8 w-8 items-center justify-center rounded-full bg-pink-100 text-pink-600 transition-all duration-200 hover:scale-110 hover:bg-pink-200 hover:text-pink-700"
-            @click="showSettings = false"
-            title="关闭设置"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div class="modal-body mb-4 max-h-[70vh] space-y-4 overflow-y-auto">
-          <!-- 流式传输设置 -->
-          <div class="setting-group">
-            <label
-              class="flex cursor-pointer items-center gap-2 rounded-lg bg-pink-50 p-3 transition-colors hover:bg-pink-100"
+        <div
+          class="modal-card settings-modal transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] rounded-3xl bg-gradient-to-br from-white via-[var(--color-muted-beige)] to-white p-6 shadow-[var(--rune-glow)] transition-all duration-500 hover:scale-105"
+        >
+          <!-- 标题栏和关闭按钮 -->
+          <div class="modal-header relative mb-4 flex items-center justify-between">
+            <div class="modal-title text-xl font-bold" style="color: var(--text-primary)">✦ 系统设置 ✦</div>
+            <button
+              class="close-btn theme-close-btn flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 hover:scale-110"
+              @click="showSettings = false"
+              title="关闭设置"
             >
-              <input
-                v-model="shouldStream"
-                type="checkbox"
-                class="h-4 w-4 rounded border-pink-300 text-pink-500 focus:ring-pink-200"
-              />
-              <span class="text-sm font-medium text-purple-700">流式传输</span>
-            </label>
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-
-          <!-- 流式生成时自动滚动设置 -->
-          <div class="setting-group">
-            <label
-              class="flex cursor-pointer items-center gap-2 rounded-lg bg-pink-50 p-3 transition-colors hover:bg-pink-100"
-            >
-              <input
-                v-model="autoScrollDuringStreaming"
-                type="checkbox"
-                class="h-4 w-4 rounded border-pink-300 text-pink-500 focus:ring-pink-200"
-              />
-              <span class="text-sm font-medium text-purple-700">流式生成时自动滚动</span>
-            </label>
-            <p class="mt-1 px-3 text-xs text-purple-600">
-              开启后，AI 生成文本时会自动滚动到底部；关闭后，仅在生成完成时滚动
-            </p>
-          </div>
-
-          <!-- 智能历史管理设置 -->
-          <div class="setting-group">
-            <div class="setting-header mb-2">
-              <h3 class="text-base font-semibold text-purple-800">智能历史管理</h3>
-              <p class="text-xs text-purple-600">控制存档消息的处理方式和数量限制</p>
-            </div>
-
-            <div class="grid grid-cols-1 gap-3">
-              <!-- 助手消息限制 -->
-              <div class="setting-item">
-                <label class="mb-1 block text-xs font-medium text-purple-700">助手消息限制</label>
-                <input
-                  v-model.number="smartHistorySettings.assistantMessageLimit"
-                  type="number"
-                  min="1"
-                  max="1000"
-                  class="w-full rounded-md border border-pink-200 px-2 py-1.5 text-sm focus:border-pink-400 focus:ring-1 focus:ring-pink-300"
-                />
-                <p class="mt-0.5 text-xs text-purple-500">最多保留的助手消息数量 (1-1000)</p>
-              </div>
-
-              <!-- 用户消息限制 -->
-              <div class="setting-item">
-                <label class="mb-1 block text-xs font-medium text-purple-700">用户消息限制</label>
-                <input
-                  v-model.number="smartHistorySettings.userMessageLimit"
-                  type="number"
-                  min="1"
-                  max="1000"
-                  class="w-full rounded-md border border-pink-200 px-2 py-1.5 text-sm focus:border-pink-400 focus:ring-1 focus:ring-pink-300"
-                />
-                <p class="mt-0.5 text-xs text-purple-500">最多保留的用户消息数量 (1-1000)</p>
-              </div>
-
-              <!-- 短摘要阈值 -->
-              <div class="setting-item">
-                <label class="mb-1 block text-xs font-medium text-purple-700">短摘要阈值</label>
-                <input
-                  v-model.number="smartHistorySettings.shortSummaryThreshold"
-                  type="number"
-                  min="1"
-                  max="100"
-                  class="w-full rounded-md border border-pink-200 px-2 py-1.5 text-sm focus:border-pink-400 focus:ring-1 focus:ring-pink-300"
-                />
-                <p class="mt-0.5 text-xs text-purple-500">超过此数量时使用短摘要 (1-100)</p>
-              </div>
-
-              <!-- 长摘要阈值 -->
-              <div class="setting-item">
-                <label class="mb-1 block text-xs font-medium text-purple-700">长摘要阈值</label>
-                <input
-                  v-model.number="smartHistorySettings.longSummaryThreshold"
-                  type="number"
-                  min="1"
-                  max="100"
-                  class="w-full rounded-md border border-pink-200 px-2 py-1.5 text-sm focus:border-pink-400 focus:ring-1 focus:ring-pink-300"
-                />
-                <p class="mt-0.5 text-xs text-purple-500">超过此数量时使用长摘要 (1-100)</p>
-              </div>
-            </div>
-
-            <!-- 确定按钮 -->
-            <div class="mt-3 flex justify-end">
-              <button
-                class="rounded-lg bg-pink-500 px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:scale-105 hover:bg-pink-600 focus:ring-2 focus:ring-pink-300 focus:outline-none"
-                @click="showSettings = false"
+          <div class="modal-body mb-4 max-h-[70vh] space-y-4 overflow-y-auto">
+            <!-- 流式传输设置 -->
+            <div class="setting-group">
+              <label
+                class="theme-setting-label flex cursor-pointer items-center gap-2 rounded-lg p-3 transition-colors"
               >
-                确定
-              </button>
+                <input v-model="shouldStream" type="checkbox" class="theme-checkbox h-4 w-4 rounded" />
+                <span class="text-sm font-medium" style="color: var(--text-primary)">流式传输</span>
+              </label>
+            </div>
+
+            <!-- 流式生成时自动滚动设置 -->
+            <div class="setting-group">
+              <label
+                class="theme-setting-label flex cursor-pointer items-center gap-2 rounded-lg p-3 transition-colors"
+              >
+                <input v-model="autoScrollDuringStreaming" type="checkbox" class="theme-checkbox h-4 w-4 rounded" />
+                <span class="text-sm font-medium" style="color: var(--text-primary)">流式生成时自动滚动</span>
+              </label>
+              <p class="mt-1 px-3 text-xs" style="color: var(--text-secondary)">
+                开启后，AI 生成文本时会自动滚动到底部；关闭后，仅在生成完成时滚动
+              </p>
+            </div>
+
+            <!-- 智能历史管理设置 -->
+            <div class="setting-group">
+              <div class="setting-header mb-2">
+                <h3 class="text-base font-semibold" style="color: var(--text-primary)">智能历史管理</h3>
+                <p class="text-xs" style="color: var(--text-secondary)">控制存档消息的处理方式和数量限制</p>
+              </div>
+
+              <div class="grid grid-cols-1 gap-3">
+                <!-- 助手消息限制 -->
+                <div class="setting-item">
+                  <label class="mb-1 block text-xs font-medium" style="color: var(--text-primary)">助手消息限制</label>
+                  <input
+                    v-model.number="smartHistorySettings.assistantMessageLimit"
+                    type="number"
+                    min="1"
+                    max="1000"
+                    class="theme-input-small w-full rounded-md border px-2 py-1.5 text-sm"
+                  />
+                  <p class="mt-0.5 text-xs" style="color: var(--text-secondary)">最多保留的助手消息数量 (1-1000)</p>
+                </div>
+
+                <!-- 用户消息限制 -->
+                <div class="setting-item">
+                  <label class="mb-1 block text-xs font-medium" style="color: var(--text-primary)">用户消息限制</label>
+                  <input
+                    v-model.number="smartHistorySettings.userMessageLimit"
+                    type="number"
+                    min="1"
+                    max="1000"
+                    class="theme-input-small w-full rounded-md border px-2 py-1.5 text-sm"
+                  />
+                  <p class="mt-0.5 text-xs" style="color: var(--text-secondary)">最多保留的用户消息数量 (1-1000)</p>
+                </div>
+
+                <!-- 短摘要阈值 -->
+                <div class="setting-item">
+                  <label class="mb-1 block text-xs font-medium" style="color: var(--text-primary)">短摘要阈值</label>
+                  <input
+                    v-model.number="smartHistorySettings.shortSummaryThreshold"
+                    type="number"
+                    min="1"
+                    max="100"
+                    class="theme-input-small w-full rounded-md border px-2 py-1.5 text-sm"
+                  />
+                  <p class="mt-0.5 text-xs" style="color: var(--text-secondary)">超过此数量时使用短摘要 (1-100)</p>
+                </div>
+
+                <!-- 长摘要阈值 -->
+                <div class="setting-item">
+                  <label class="mb-1 block text-xs font-medium" style="color: var(--text-primary)">长摘要阈值</label>
+                  <input
+                    v-model.number="smartHistorySettings.longSummaryThreshold"
+                    type="number"
+                    min="1"
+                    max="100"
+                    class="theme-input-small w-full rounded-md border px-2 py-1.5 text-sm"
+                  />
+                  <p class="mt-0.5 text-xs" style="color: var(--text-secondary)">超过此数量时使用长摘要 (1-100)</p>
+                </div>
+              </div>
+
+              <!-- 确定按钮 -->
+              <div class="mt-3 flex justify-end">
+                <button
+                  class="theme-primary-button rounded-lg px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:scale-105 focus:ring-2 focus:outline-none"
+                  @click="showSettings = false"
+                >
+                  确定
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </Teleport>
 
     <!-- 右键菜单 -->
     <div
@@ -567,6 +602,9 @@
     <!-- 存档弹窗 -->
     <SaveDialog v-if="showSaveDialog" mode="playing" @close="() => (showSaveDialog = false)" @loaded="onDialogLoaded" />
 
+    <!-- 阅读设置弹窗 -->
+    <ReadingSettingsDialog v-if="showReadingSettings" @close="() => (showReadingSettings = false)" />
+
     <!-- 指令队列弹窗 -->
     <CommandQueueDialog
       v-if="showCommandQueueDialog"
@@ -594,477 +632,558 @@
     />
 
     <!-- 关系人物弹窗 -->
-    <div
-      v-if="showRelations"
-      class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-    >
+    <Teleport :to="modalTarget">
       <div
-        class="modal-card relationships-modal max-h-[90vh] w-full max-w-6xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] overflow-y-auto rounded-3xl bg-gradient-to-br from-white via-pink-50 to-white p-8 shadow-[var(--rune-glow)]"
+        v-if="showRelations"
+        class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       >
-        <!-- 标题栏和关闭按钮 -->
-        <div class="modal-header relative mb-6 flex items-center justify-between">
-          <div class="modal-title text-2xl font-bold text-purple-800">✦ 关系人物 ✦</div>
-          <button
-            class="close-btn flex h-8 w-8 items-center justify-center rounded-full bg-pink-100 text-pink-600 transition-all duration-200 hover:scale-110 hover:bg-pink-200 hover:text-pink-700"
-            @click="closeRelations"
-            title="关闭关系弹窗"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <!-- 关系人物列表 -->
-        <div class="modal-body">
-          <!-- 加载状态 -->
-          <div v-if="relationshipCharactersLoading" class="flex items-center justify-center py-8">
-            <div class="flex items-center gap-3 text-purple-600">
-              <div class="h-6 w-6 animate-spin rounded-full border-2 border-purple-300 border-t-purple-600"></div>
-              <span>正在加载关系人物...</span>
-            </div>
-          </div>
-
-          <!-- 错误状态 -->
-          <div v-else-if="relationshipCharactersError" class="flex items-center justify-center py-8">
-            <div class="text-center text-red-600">
-              <div class="mb-2 text-lg">⚠️</div>
-              <div>{{ relationshipCharactersError }}</div>
-              <button
-                class="mt-3 rounded-lg bg-pink-500 px-4 py-2 text-sm text-white hover:bg-pink-600"
-                @click="getRelationshipCharacters"
-              >
-                重试
-              </button>
-            </div>
-          </div>
-
-          <!-- 空状态 -->
-          <div v-else-if="relationshipCharacters.length === 0" class="flex items-center justify-center py-8">
-            <div class="text-center text-gray-500">
-              <div class="mb-2 text-4xl">👥</div>
-              <div class="text-lg">暂无关系人物</div>
-              <div class="text-sm">在游戏中建立关系后，这里会显示相关人物</div>
-            </div>
-          </div>
-
-          <!-- 关系人物网格 -->
-          <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <div
-              v-for="character in relationshipCharacters"
-              :key="character.id"
-              class="character-card group cursor-pointer rounded-xl border border-pink-200 bg-white/80 p-4 transition-all duration-300 hover:border-pink-400 hover:bg-white hover:shadow-lg"
-              @click="openCharacterDetail(character)"
+        <div
+          class="modal-card relationships-modal max-h-[90vh] w-full max-w-6xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] overflow-y-auto border-2 p-8 shadow-[var(--rune-glow)] transition-all duration-500 hover:scale-105"
+          style="border-radius: 0; background: var(--bg-surface); border-color: var(--border-color)"
+        >
+          <!-- 标题栏和关闭按钮 -->
+          <div class="modal-header relative mb-6 flex items-center justify-between">
+            <div class="modal-title text-2xl font-bold" style="color: var(--text-primary)">✦ 关系人物 ✦</div>
+            <button
+              class="close-btn flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200"
+              style="background: var(--button-bg); color: var(--button-text); border: 2px solid var(--border-color)"
+              @click="closeRelations"
+              title="关闭关系弹窗"
             >
-              <!-- 人物头像区域 -->
-              <div class="mb-3 flex items-center gap-3">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- 关系人物列表 -->
+          <div class="modal-body">
+            <!-- 加载状态 -->
+            <div v-if="relationshipCharactersLoading" class="flex items-center justify-center py-8">
+              <div class="flex items-center gap-3" style="color: var(--text-secondary)">
                 <div
-                  class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-pink-200 to-purple-200 text-lg"
+                  class="h-6 w-6 animate-spin rounded-full border-2"
+                  style="border-color: var(--color-border-light); border-top-color: var(--color-primary)"
+                ></div>
+                <span>正在加载关系人物...</span>
+              </div>
+            </div>
+
+            <!-- 错误状态 -->
+            <div v-else-if="relationshipCharactersError" class="flex items-center justify-center py-8">
+              <div class="text-center" style="color: var(--color-primary)">
+                <div class="mb-2 text-lg">⚠️</div>
+                <div>{{ relationshipCharactersError }}</div>
+                <button
+                  class="mt-3 px-4 py-2 text-sm text-white transition-all"
+                  style="background: var(--color-primary); border-radius: 6px; border: 1px solid var(--color-primary)"
+                  @click="getRelationshipCharacters"
                 >
-                  {{ character.name.charAt(0) || '?' }}
-                </div>
-                <div class="flex-1">
-                  <div class="font-semibold text-gray-800">{{ character.name }}</div>
-                  <div class="text-sm text-gray-500">{{ character.gender }} · {{ character.race }}</div>
+                  重试
+                </button>
+              </div>
+            </div>
+
+            <!-- 空状态 -->
+            <div v-else-if="relationshipCharacters.length === 0" class="flex items-center justify-center py-8">
+              <div class="text-center" style="color: var(--text-secondary)">
+                <div class="mb-2 text-4xl">👥</div>
+                <div class="text-lg">暂无关系人物</div>
+                <div class="text-sm">在游戏中建立关系后，这里会显示相关人物</div>
+              </div>
+            </div>
+
+            <!-- 关系人物列表 - 横向卡片布局 -->
+            <div v-else class="flex flex-col gap-3">
+              <div
+                v-for="character in relationshipCharacters"
+                :key="character.id"
+                class="relationship-card group cursor-pointer border p-4 transition-all duration-300"
+                style="border-radius: 6px"
+                @click="openCharacterDetail(character)"
+              >
+                <div class="flex items-center gap-4">
+                  <!-- 左侧：头像区域 -->
+                  <div class="avatar-container flex-shrink-0">
+                    <div
+                      v-if="character.avatarUrl"
+                      class="character-avatar"
+                      :style="{ backgroundImage: `url(${character.avatarUrl})` }"
+                    ></div>
+                    <div v-else class="character-avatar-placeholder">
+                      <span class="avatar-letter">{{ character.name?.charAt(0) || '?' }}</span>
+                    </div>
+                  </div>
+
+                  <!-- 右侧：信息区域 -->
+                  <div class="flex flex-1 flex-col gap-2">
+                    <!-- 人物名称和基本信息 -->
+                    <div class="character-header">
+                      <div class="character-name">{{ character.name || '未知角色' }}</div>
+                      <div class="character-meta">
+                        <span class="meta-tag">{{ character.gender || '未知' }}</span>
+                        <span class="meta-separator">·</span>
+                        <span class="meta-tag">{{ character.race || '未知' }}</span>
+                      </div>
+                    </div>
+
+                    <!-- 好感度区域 -->
+                    <div class="affinity-section">
+                      <div class="affinity-header">
+                        <span class="affinity-label">好感度</span>
+                        <span class="affinity-value" :class="getAffinityClass(character.affinity)">
+                          {{ character.affinity || 0 }}
+                        </span>
+                      </div>
+                      <div class="affinity-bar-bg">
+                        <div
+                          class="affinity-bar-fill"
+                          :class="getAffinityClass(character.affinity)"
+                          :style="{ width: `${getAffinityProgress(character.affinity)}%` }"
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 右侧箭头指示 -->
+                  <div class="flex-shrink-0 transition-all group-hover:translate-x-1" style="color: var(--text-muted)">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
                 </div>
               </div>
-
-              <!-- 好感度 -->
-              <div class="mb-3">
-                <div class="mb-1 flex items-center justify-between text-sm">
-                  <span class="text-gray-600">好感度</span>
-                  <span class="font-medium text-pink-600">{{ character.affinity || 0 }}</span>
-                </div>
-                <div class="h-2 rounded-full bg-gray-200">
-                  <div
-                    class="h-2 rounded-full bg-gradient-to-r from-pink-400 to-purple-500 transition-all duration-500"
-                    :style="{ width: `${Math.min(((character.affinity || 0) / 100) * 100, 100)}%` }"
-                  ></div>
-                </div>
-              </div>
-
-              <!-- 点击提示 -->
-              <div class="mt-3 text-center text-xs text-gray-400 group-hover:text-pink-500">点击查看详情</div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </Teleport>
 
     <!-- 敌人列表弹窗 -->
-    <div
-      v-if="showEnemies"
-      class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-    >
+    <Teleport :to="modalTarget">
       <div
-        class="modal-card relationships-modal max-h-[90vh] w-full max-w-6xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] overflow-y-auto rounded-3xl bg-gradient-to-br from-white via-pink-50 to-white p-8 shadow-[var(--rune-glow)]"
+        v-if="showEnemies"
+        class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       >
-        <div class="modal-header relative mb-6 flex items-center justify-between">
-          <div class="modal-title text-2xl font-bold text-purple-800">✦ 敌人列表 ✦</div>
-          <button
-            class="close-btn flex h-8 w-8 items-center justify-center rounded-full bg-pink-100 text-pink-600 transition-all duration-200 hover:scale-110 hover:bg-pink-200 hover:text-pink-700"
-            @click="closeEnemies"
-            title="关闭敌人弹窗"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div class="modal-body">
-          <div v-if="enemiesLoading" class="flex items-center justify-center py-8">
-            <div class="flex items-center gap-3 text-purple-600">
-              <div class="h-6 w-6 animate-spin rounded-full border-2 border-purple-300 border-t-purple-600"></div>
-              <span>正在加载敌人...</span>
-            </div>
-          </div>
-
-          <div v-else-if="enemiesError" class="flex items-center justify-center py-8">
-            <div class="text-center text-red-600">
-              <div class="mb-2 text-lg">⚠️</div>
-              <div>{{ enemiesError }}</div>
-              <button
-                class="mt-3 rounded-lg bg-pink-500 px-4 py-2 text-sm text-white hover:bg-pink-600"
-                @click="getEnemies()"
-              >
-                重试
-              </button>
-            </div>
-          </div>
-
-          <div v-else-if="enemiesList.length === 0" class="flex items-center justify-center py-8">
-            <div class="text-center text-gray-500">
-              <div class="mb-2 text-4xl">👾</div>
-              <div class="text-lg">暂无在场敌人</div>
-              <div class="text-sm">触发战斗或事件后，这里会显示敌人</div>
-            </div>
-          </div>
-
-          <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <div
-              v-for="enemy in enemiesList"
-              :key="enemy.id"
-              class="character-card group cursor-pointer rounded-xl border border-pink-200 bg-white/80 p-4 transition-all duration-300 hover:border-pink-400 hover:bg-white hover:shadow-lg"
-              @click="openEnemyDetail(enemy)"
+        <div
+          class="modal-card relationships-modal max-h-[90vh] w-full max-w-6xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] overflow-y-auto border-2 border-[var(--border-color)] bg-gradient-to-br from-white via-[var(--color-muted-beige)] to-white p-8 shadow-[var(--rune-glow)] transition-all duration-500 hover:scale-105"
+          style="border-radius: 0"
+        >
+          <div class="modal-header relative mb-6 flex items-center justify-between">
+            <div class="modal-title text-2xl font-bold" style="color: var(--text-primary)">✦ 敌人列表 ✦</div>
+            <button
+              class="close-btn flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200"
+              style="background: var(--button-bg); color: var(--button-text); border: 2px solid var(--border-color)"
+              @click="closeEnemies"
+              title="关闭敌人弹窗"
             >
-              <div class="mb-3 flex items-center gap-3">
-                <div
-                  class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-pink-200 to-purple-200 text-lg"
-                >
-                  {{ (enemy.variantId || '?').toString().charAt(0) || '?' }}
-                </div>
-                <div class="flex-1">
-                  <div class="font-semibold text-gray-800">{{ enemy.variantId || '未知敌人' }}</div>
-                  <div class="text-sm text-gray-500">{{ enemy.gender }} · {{ enemy.race }}</div>
-                </div>
-              </div>
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
 
-              <div class="mt-3 text-center text-xs text-gray-400 group-hover:text-pink-500">点击查看详情</div>
+          <div class="modal-body">
+            <div v-if="enemiesLoading" class="flex items-center justify-center py-8">
+              <div class="flex items-center gap-3" style="color: var(--text-secondary)">
+                <div
+                  class="h-6 w-6 animate-spin rounded-full border-2"
+                  style="border-color: var(--color-border-light); border-top-color: var(--color-primary)"
+                ></div>
+                <span>正在加载敌人...</span>
+              </div>
+            </div>
+
+            <div v-else-if="enemiesError" class="flex items-center justify-center py-8">
+              <div class="text-center" style="color: var(--color-primary)">
+                <div class="mb-2 text-lg">⚠️</div>
+                <div>{{ enemiesError }}</div>
+                <button
+                  class="mt-3 px-4 py-2 text-sm text-white transition-all"
+                  style="background: var(--color-primary); border-radius: 6px; border: 1px solid var(--color-primary)"
+                  @click="getEnemies()"
+                >
+                  重试
+                </button>
+              </div>
+            </div>
+
+            <div v-else-if="enemiesList.length === 0" class="flex items-center justify-center py-8">
+              <div class="text-center" style="color: var(--text-secondary)">
+                <div class="mb-2 text-4xl">👾</div>
+                <div class="text-lg">暂无在场敌人</div>
+                <div class="text-sm">触发战斗或事件后，这里会显示敌人</div>
+              </div>
+            </div>
+
+            <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div
+                v-for="enemy in enemiesList"
+                :key="enemy.id"
+                class="character-card group cursor-pointer border p-4 transition-all duration-300"
+                style="border-radius: 6px; border-color: var(--color-border-light); background: var(--panel-bg)"
+                @click="openEnemyDetail(enemy)"
+              >
+                <div class="mb-3 flex items-center gap-3">
+                  <div
+                    class="flex h-12 w-12 items-center justify-center rounded-full text-lg"
+                    style="
+                      background: var(--color-muted-beige);
+                      border: 1px solid var(--border-color);
+                      color: var(--text-primary);
+                    "
+                  >
+                    {{ (enemy.variantId || '?').toString().charAt(0) || '?' }}
+                  </div>
+                  <div class="flex-1">
+                    <div class="font-semibold" style="color: var(--text-primary)">
+                      {{ enemy.variantId || '未知敌人' }}
+                    </div>
+                    <div class="text-sm" style="color: var(--text-secondary)">{{ enemy.race }}</div>
+                  </div>
+                </div>
+
+                <div class="mt-3 text-center text-xs" style="color: var(--text-muted)">点击查看详情</div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </Teleport>
 
     <!-- 敌人详情弹窗 -->
-    <div
-      v-if="showEnemyDetail"
-      class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-    >
+    <Teleport :to="modalTarget">
       <div
-        class="modal-card character-detail-modal max-h-[90vh] w-full max-w-4xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] overflow-y-auto rounded-3xl bg-gradient-to-br from-white via-pink-50 to-white p-8 shadow-[var(--rune-glow)]"
+        v-if="showEnemyDetail"
+        class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       >
-        <div class="modal-header relative mb-6 flex items-center justify-between">
-          <div class="modal-title text-2xl font-bold text-purple-800">✦ 敌人详情 ✦</div>
-          <button
-            class="close-btn flex h-8 w-8 items-center justify-center rounded-full bg-pink-100 text-pink-600 transition-all duration-200 hover:scale-110 hover:bg-pink-200 hover:text-pink-700"
-            @click="closeEnemyDetail"
-            title="关闭详情弹窗"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div class="modal-body">
-          <div v-if="enemyDetailLoading" class="flex items-center justify-center py-8">
-            <div class="flex items-center gap-3 text-purple-600">
-              <div class="h-6 w-6 animate-spin rounded-full border-2 border-purple-300 border-t-purple-600"></div>
-              <span>正在加载敌人详情...</span>
-            </div>
+        <div
+          class="modal-card character-detail-modal max-h-[90vh] w-full max-w-4xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] overflow-y-auto border-2 border-[var(--border-color)] bg-gradient-to-br from-white via-[var(--color-muted-beige)] to-white p-8 shadow-[var(--rune-glow)] transition-all duration-500 hover:scale-105"
+          style="border-radius: 0"
+        >
+          <div class="modal-header relative mb-6 flex items-center justify-between">
+            <div class="modal-title text-2xl font-bold" style="color: var(--text-primary)">✦ 敌人详情 ✦</div>
+            <button
+              class="close-btn flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200"
+              style="background: var(--button-bg); color: var(--button-text); border: 2px solid var(--border-color)"
+              @click="closeEnemyDetail"
+              title="关闭详情弹窗"
+            >
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
-          <div v-else-if="selectedEnemy" class="character-detail-body">
-            <div class="mb-6 rounded-xl border border-pink-200 bg-white/80 p-6">
-              <div class="mb-4 flex items-center gap-4">
+          <div class="modal-body">
+            <div v-if="enemyDetailLoading" class="flex items-center justify-center py-8">
+              <div class="flex items-center gap-3" style="color: var(--text-secondary)">
                 <div
-                  class="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-pink-200 to-purple-200 text-2xl font-bold"
-                >
-                  {{ (selectedEnemy.variantId || '?').toString().charAt(0) || '?' }}
-                </div>
-                <div class="flex-1">
-                  <h3 class="text-xl font-bold text-gray-800">{{ selectedEnemy.variantId || '未知敌人' }}</h3>
-                  <p class="text-sm text-gray-500">
-                    {{ selectedEnemy.gender || '未知' }} · {{ selectedEnemy.race || '未知' }}
-                  </p>
+                  class="h-6 w-6 animate-spin rounded-full border-2"
+                  style="border-color: var(--color-border-light); border-top-color: var(--color-primary)"
+                ></div>
+                <span>正在加载敌人详情...</span>
+              </div>
+            </div>
+
+            <div v-else-if="selectedEnemy" class="character-detail-body">
+              <div
+                class="mb-6 border p-6"
+                style="border-radius: 6px; border-color: var(--color-border-light); background: var(--panel-bg)"
+              >
+                <div class="mb-4 flex items-center gap-4">
+                  <div
+                    class="flex h-16 w-16 items-center justify-center rounded-full text-2xl font-bold"
+                    style="
+                      background: var(--color-muted-beige);
+                      border: 1px solid var(--border-color);
+                      color: var(--text-primary);
+                    "
+                  >
+                    {{ (selectedEnemy.variantId || '?').toString().charAt(0) || '?' }}
+                  </div>
+                  <div class="flex-1">
+                    <h3 class="text-xl font-bold" style="color: var(--text-primary)">
+                      {{ selectedEnemy.variantId || '未知敌人' }}
+                    </h3>
+                    <p class="text-sm" style="color: var(--text-secondary)">
+                      {{ selectedEnemy.race || '未知' }}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
+
+            <div v-else class="flex items-center justify-center py-8">
+              <div class="text-center" style="color: var(--color-primary)">
+                <div class="mb-2 text-lg">⚠️</div>
+                <div>无法加载敌人详情</div>
+                <button
+                  class="mt-3 px-4 py-2 text-sm text-white transition-all"
+                  style="background: var(--color-primary); border-radius: 6px; border: 1px solid var(--color-primary)"
+                  @click="closeEnemyDetail"
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 编辑对话框 -->
+    <Teleport :to="modalTarget">
+      <div
+        v-if="showEditDialog"
+        class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      >
+        <div
+          class="modal-card edit-dialog max-h-[90vh] w-full max-w-4xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] rounded-3xl bg-gradient-to-br from-white via-[var(--color-muted-beige)] to-white p-8 shadow-[var(--rune-glow)]"
+        >
+          <!-- 标题栏和关闭按钮 -->
+          <div class="modal-header relative mb-6 flex items-center justify-between">
+            <div class="modal-title text-2xl font-bold" style="color: var(--text-primary)">✦ 编辑消息 ✦</div>
+            <button
+              class="close-btn theme-close-btn flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 hover:scale-110"
+              @click="cancelEdit"
+              title="关闭编辑"
+            >
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
-          <div v-else class="flex items-center justify-center py-8">
-            <div class="text-center text-red-600">
-              <div class="mb-2 text-lg">⚠️</div>
-              <div>无法加载敌人详情</div>
+          <!-- 编辑内容 -->
+          <div class="modal-body">
+            <div class="mb-4">
+              <label class="mb-2 block text-sm font-medium" style="color: var(--text-primary)">消息内容</label>
+              <textarea
+                v-model="editContent"
+                class="theme-input-small w-full rounded-lg border px-3 py-2 text-sm"
+                rows="10"
+                placeholder="请输入消息内容..."
+              ></textarea>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="flex justify-end gap-3">
               <button
-                class="mt-3 rounded-lg bg-pink-500 px-4 py-2 text-sm text-white hover:bg-pink-600"
-                @click="closeEnemyDetail"
+                class="rounded-lg bg-gray-500 px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:scale-105 hover:bg-gray-600 focus:ring-2 focus:ring-gray-300 focus:outline-none"
+                @click="cancelEdit"
               >
-                关闭
+                取消
+              </button>
+              <button
+                class="theme-primary-button rounded-lg px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:scale-105 focus:ring-2 focus:outline-none"
+                @click="saveEdit"
+              >
+                保存
               </button>
             </div>
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- 编辑对话框 -->
-    <div
-      v-if="showEditDialog"
-      class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-    >
-      <div
-        class="modal-card edit-dialog max-h-[90vh] w-full max-w-4xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] rounded-3xl bg-gradient-to-br from-white via-pink-50 to-white p-8 shadow-[var(--rune-glow)]"
-      >
-        <!-- 标题栏和关闭按钮 -->
-        <div class="modal-header relative mb-6 flex items-center justify-between">
-          <div class="modal-title text-2xl font-bold text-purple-800">✦ 编辑消息 ✦</div>
-          <button
-            class="close-btn flex h-8 w-8 items-center justify-center rounded-full bg-pink-100 text-pink-600 transition-all duration-200 hover:scale-110 hover:bg-pink-200 hover:text-pink-700"
-            @click="cancelEdit"
-            title="关闭编辑"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <!-- 编辑内容 -->
-        <div class="modal-body">
-          <div class="mb-4">
-            <label class="mb-2 block text-sm font-medium text-purple-700">消息内容</label>
-            <textarea
-              v-model="editContent"
-              class="w-full rounded-lg border border-pink-200 px-3 py-2 text-sm focus:border-pink-400 focus:ring-1 focus:ring-pink-300"
-              rows="10"
-              placeholder="请输入消息内容..."
-            ></textarea>
-          </div>
-
-          <!-- 操作按钮 -->
-          <div class="flex justify-end gap-3">
-            <button
-              class="rounded-lg bg-gray-500 px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:scale-105 hover:bg-gray-600 focus:ring-2 focus:ring-gray-300 focus:outline-none"
-              @click="cancelEdit"
-            >
-              取消
-            </button>
-            <button
-              class="rounded-lg bg-pink-500 px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:scale-105 hover:bg-pink-600 focus:ring-2 focus:ring-pink-300 focus:outline-none"
-              @click="saveEdit"
-            >
-              保存
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    </Teleport>
 
     <!-- 人物详情弹窗 -->
-    <div
-      v-if="showCharacterDetail"
-      class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-    >
+    <Teleport :to="modalTarget">
       <div
-        class="modal-card character-detail-modal max-h-[90vh] w-full max-w-4xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] overflow-y-auto rounded-3xl bg-gradient-to-br from-white via-pink-50 to-white p-8 shadow-[var(--rune-glow)]"
+        v-if="showCharacterDetail"
+        class="modal-mask fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       >
-        <!-- 标题栏和关闭按钮 -->
-        <div class="modal-header relative mb-6 flex items-center justify-between">
-          <div class="modal-title text-2xl font-bold text-purple-800">✦ 人物详情 ✦</div>
-          <button
-            class="close-btn flex h-8 w-8 items-center justify-center rounded-full bg-pink-100 text-pink-600 transition-all duration-200 hover:scale-110 hover:bg-pink-200 hover:text-pink-700"
-            @click="closeCharacterDetail"
-            title="关闭详情弹窗"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <!-- 人物详情内容 -->
-        <div class="modal-body">
-          <!-- 加载状态 -->
-          <div v-if="characterDetailLoading" class="flex items-center justify-center py-8">
-            <div class="flex items-center gap-3 text-purple-600">
-              <div class="h-6 w-6 animate-spin rounded-full border-2 border-purple-300 border-t-purple-600"></div>
-              <span>正在加载人物详情...</span>
-            </div>
+        <div
+          class="modal-card character-detail-modal max-h-[90vh] w-full max-w-4xl transform animate-[subtleGlow_4s_ease-in-out_infinite_alternate] overflow-y-auto rounded-3xl bg-gradient-to-br from-white via-[var(--color-muted-beige)] to-white p-8 shadow-[var(--rune-glow)]"
+        >
+          <!-- 标题栏和关闭按钮 -->
+          <div class="modal-header relative mb-6 flex items-center justify-between">
+            <div class="modal-title text-2xl font-bold" style="color: var(--text-primary)">✦ 人物详情 ✦</div>
+            <button
+              class="close-btn theme-close-btn flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 hover:scale-110"
+              @click="closeCharacterDetail"
+              title="关闭详情弹窗"
+            >
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
           <!-- 人物详情内容 -->
-          <div v-else-if="selectedCharacter" class="character-detail-body">
-            <!-- 人物基本信息 -->
-            <div class="mb-6 rounded-xl border border-pink-200 bg-white/80 p-6">
-              <div class="mb-4 flex items-center gap-4">
-                <div
-                  class="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-pink-200 to-purple-200 text-2xl font-bold"
-                >
-                  {{ selectedCharacter.name?.charAt(0) || '?' }}
-                </div>
-                <div class="flex-1">
-                  <h3 class="text-xl font-bold text-gray-800">{{ selectedCharacter.name || '未知角色' }}</h3>
-                  <p class="text-sm text-gray-500">
-                    {{ selectedCharacter.gender || '未知' }} · {{ selectedCharacter.race || '未知' }} ·
-                    {{ selectedCharacter.age || '未知' }}岁
-                  </p>
-                </div>
+          <div class="modal-body">
+            <!-- 加载状态 -->
+            <div v-if="characterDetailLoading" class="flex items-center justify-center py-8">
+              <div class="flex items-center gap-3" style="color: var(--text-secondary)">
+                <div class="theme-spinner h-6 w-6 animate-spin rounded-full border-2"></div>
+                <span>正在加载人物详情...</span>
               </div>
+            </div>
 
-              <!-- 好感度 -->
-              <div class="mb-4">
-                <div class="mb-2 flex items-center justify-between text-sm">
-                  <span class="text-gray-600">好感度</span>
-                  <span class="font-medium text-pink-600">{{ selectedCharacter.affinity || 0 }}</span>
-                </div>
-                <div class="h-3 rounded-full bg-gray-200">
+            <!-- 人物详情内容 - 左右布局 -->
+            <div v-else-if="selectedCharacter" class="character-detail-layout">
+              <!-- 左侧：大头像区域 -->
+              <div class="detail-left-panel">
+                <div class="detail-avatar-container">
                   <div
-                    class="h-3 rounded-full bg-gradient-to-r from-pink-400 to-purple-500 transition-all duration-500"
-                    :style="{ width: `${Math.min(((selectedCharacter.affinity || 0) / 100) * 100, 100)}%` }"
+                    v-if="selectedCharacter.avatarUrl"
+                    class="detail-avatar"
+                    :style="{ backgroundImage: `url(${selectedCharacter.avatarUrl})` }"
                   ></div>
+                  <div v-else class="detail-avatar-placeholder">
+                    <span class="detail-avatar-letter">{{ selectedCharacter.name?.charAt(0) || '?' }}</span>
+                  </div>
+                  <!-- 头像上传按钮 -->
+                  <button class="avatar-upload-btn" @click="handleAvatarUpload(selectedCharacter)" title="上传头像">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                    <span>上传头像</span>
+                  </button>
                 </div>
               </div>
-            </div>
 
-            <!-- 装备信息 -->
-            <div v-if="selectedCharacter.equipment" class="mb-6 rounded-xl border border-pink-200 bg-white/80 p-6">
-              <h4 class="mb-4 text-lg font-semibold text-gray-800">装备信息</h4>
-              <div class="equipment-grid grid grid-cols-1 gap-4 md:grid-cols-3">
-                <div v-if="selectedCharacter.equipment.weapon" class="equipment-item">
-                  <div class="flex items-center gap-3">
-                    <div class="equip-icon" v-html="icon('weapon')"></div>
-                    <div>
-                      <div class="text-sm text-gray-600">武器</div>
-                      <div class="font-medium text-gray-800">
-                        {{ selectedCharacter.equipment.weapon.name || '未知武器' }}
+              <!-- 右侧：详细信息面板 -->
+              <div class="detail-right-panel">
+                <!-- 人物名称和标签 -->
+                <div class="detail-header">
+                  <h3 class="detail-character-name">{{ selectedCharacter.name || '未知角色' }}</h3>
+                  <div class="detail-tags">
+                    <span class="detail-tag">{{ selectedCharacter.gender || '未知' }}</span>
+                    <span class="detail-tag">{{ selectedCharacter.race || '未知' }}</span>
+                    <span v-if="selectedCharacter.age" class="detail-tag">{{ selectedCharacter.age }}岁</span>
+                  </div>
+                </div>
+
+                <!-- 好感度显著展示 -->
+                <div class="detail-affinity-section">
+                  <div class="detail-affinity-header">
+                    <span class="detail-affinity-label">好感度</span>
+                    <span class="detail-affinity-value" :class="getAffinityClass(selectedCharacter.affinity)">
+                      {{ selectedCharacter.affinity || 0 }}
+                    </span>
+                  </div>
+                  <div class="detail-affinity-bar-bg">
+                    <div
+                      class="detail-affinity-bar-fill"
+                      :class="getAffinityClass(selectedCharacter.affinity)"
+                      :style="{ width: `${getAffinityProgress(selectedCharacter.affinity)}%` }"
+                    ></div>
+                  </div>
+                  <div class="detail-affinity-description">
+                    {{ getAffinityDescription(selectedCharacter.affinity) }}
+                  </div>
+                </div>
+
+                <!-- 人物详细信息分区 -->
+                <div class="detail-info-sections">
+                  <!-- 背景故事 -->
+                  <div v-if="selectedCharacter.background" class="detail-info-block">
+                    <div class="detail-info-title">背景故事</div>
+                    <div class="detail-info-content">{{ selectedCharacter.background }}</div>
+                  </div>
+
+                  <!-- 性格特征 -->
+                  <div v-if="selectedCharacter.personality" class="detail-info-block">
+                    <div class="detail-info-title">性格特征</div>
+                    <div class="detail-info-content">{{ selectedCharacter.personality }}</div>
+                  </div>
+
+                  <!-- 服装描述 -->
+                  <div v-if="selectedCharacter.outfit" class="detail-info-block">
+                    <div class="detail-info-title">服装描述</div>
+                    <div class="detail-info-content">{{ selectedCharacter.outfit }}</div>
+                  </div>
+
+                  <!-- 装备信息 -->
+                  <div v-if="selectedCharacter.equipment" class="detail-info-block">
+                    <div class="detail-info-title">装备信息</div>
+                    <div class="detail-equipment-grid">
+                      <div v-if="selectedCharacter.equipment.weapon" class="detail-equipment-item">
+                        <div class="equipment-icon" v-html="icon('weapon')"></div>
+                        <div class="equipment-text">
+                          <div class="equipment-label">武器</div>
+                          <div class="equipment-name">{{ selectedCharacter.equipment.weapon.name || '未知' }}</div>
+                        </div>
+                      </div>
+                      <div v-if="selectedCharacter.equipment.armor" class="detail-equipment-item">
+                        <div class="equipment-icon" v-html="icon('armor')"></div>
+                        <div class="equipment-text">
+                          <div class="equipment-label">防具</div>
+                          <div class="equipment-name">{{ selectedCharacter.equipment.armor.name || '未知' }}</div>
+                        </div>
+                      </div>
+                      <div v-if="selectedCharacter.equipment.accessory" class="detail-equipment-item">
+                        <div class="equipment-icon" v-html="icon('accessory')"></div>
+                        <div class="equipment-text">
+                          <div class="equipment-label">饰品</div>
+                          <div class="equipment-name">{{ selectedCharacter.equipment.accessory.name || '未知' }}</div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-                <div v-if="selectedCharacter.equipment.armor" class="equipment-item">
-                  <div class="flex items-center gap-3">
-                    <div class="equip-icon" v-html="icon('armor')"></div>
-                    <div>
-                      <div class="text-sm text-gray-600">防具</div>
-                      <div class="font-medium text-gray-800">
-                        {{ selectedCharacter.equipment.armor.name || '未知防具' }}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div v-if="selectedCharacter.equipment.accessory" class="equipment-item">
-                  <div class="flex items-center gap-3">
-                    <div class="equip-icon" v-html="icon('accessory')"></div>
-                    <div>
-                      <div class="text-sm text-gray-600">饰品</div>
-                      <div class="font-medium text-gray-800">
-                        {{ selectedCharacter.equipment.accessory.name || '未知饰品' }}
-                      </div>
-                    </div>
+
+                  <!-- 关系状态 -->
+                  <div class="detail-info-block">
+                    <div class="detail-info-title">关系状态</div>
+                    <div class="detail-info-content">{{ selectedCharacter.relationship || '陌生人' }}</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- 人物背景信息 -->
-            <div class="mb-6 rounded-xl border border-pink-200 bg-white/80 p-6">
-              <h4 class="mb-4 text-lg font-semibold text-gray-800">背景信息</h4>
-              <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div class="info-item">
-                  <div class="text-sm font-medium text-gray-600">出身背景</div>
-                  <div class="text-sm text-gray-800">{{ selectedCharacter.background || '未知' }}</div>
-                </div>
-                <div class="info-item">
-                  <div class="text-sm font-medium text-gray-600">性格特征</div>
-                  <div class="text-sm text-gray-800">{{ selectedCharacter.personality || '未知' }}</div>
-                </div>
-                <div class="info-item">
-                  <div class="text-sm font-medium text-gray-600">服装描述</div>
-                  <div class="text-sm text-gray-800">{{ selectedCharacter.outfit || '未知' }}</div>
-                </div>
-                <div class="info-item">
-                  <div class="text-sm font-medium text-gray-600">关系状态</div>
-                  <div class="text-sm text-gray-800">{{ selectedCharacter.relationship || '陌生人' }}</div>
-                </div>
+            <!-- 错误状态 -->
+            <div v-else class="flex items-center justify-center py-8">
+              <div class="text-center text-gray-500">
+                <div class="mb-2 text-2xl">⚠️</div>
+                <div>无法加载人物详情</div>
+                <button
+                  class="theme-primary-button mt-3 rounded-lg px-4 py-2 text-sm text-white"
+                  @click="selectedCharacter = null"
+                >
+                  关闭
+                </button>
               </div>
-            </div>
-
-            <!-- 当前状态 -->
-            <div class="mb-6 rounded-xl border border-pink-200 bg-white/80 p-6">
-              <h4 class="mb-4 text-lg font-semibold text-gray-800">当前状态</h4>
-              <div class="space-y-3">
-                <div class="info-item">
-                  <div class="text-sm font-medium text-gray-600">当前想法</div>
-                  <div class="text-sm text-gray-800">{{ selectedCharacter.thoughts || '未知' }}</div>
-                </div>
-                <div v-if="selectedCharacter.events && selectedCharacter.events.length > 0" class="info-item">
-                  <div class="text-sm font-medium text-gray-600">事件记录</div>
-                  <div class="text-sm text-gray-800">
-                    <ul class="list-inside list-disc space-y-1">
-                      <li v-for="(event, index) in selectedCharacter.events" :key="index">
-                        {{ event }}
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 错误状态 -->
-          <div v-else class="flex items-center justify-center py-8">
-            <div class="text-center text-gray-500">
-              <div class="mb-2 text-2xl">⚠️</div>
-              <div>无法加载人物详情</div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { updateUserKey } from 'shared/constants';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { useSaveLoad } from '同层游玩RPG_remake/composables/useSaveLoad';
 import { useBattleConfig } from '../composables/useBattleConfig';
 import { useCommandQueue } from '../composables/useCommandQueue';
-import { useGameServices } from '../composables/useGameServices';
 import { useGameSettings } from '../composables/useGameSettings';
 import { useGameStateManager } from '../composables/useGameStateManager';
 import { usePlayingLogic } from '../composables/usePlayingLogic';
+import { useSaveLoad } from '../composables/useSaveLoad';
 import { useStatData } from '../composables/useStatData';
 import CommandQueueDialog from './CommandQueueDialog.vue';
 import EquipmentDetailDialog from './EquipmentDetailDialog.vue';
 import InventoryDialog from './InventoryDialog.vue';
+import ReadingSettingsDialog from './ReadingSettingsDialog.vue';
 import SaveDialog from './SaveDialog.vue';
-
-// 使用 useGameServices 提供的 UI 反馈方法
-const { showSuccess, showError, showWarning, showInfo } = useGameServices();
+const notifySuccess = (title: string, message?: string) => {
+  console.info('[PlayingRoot]', title, message ?? '');
+};
+const notifyError = (title: string, message?: string) => {
+  console.warn('[PlayingRoot]', title, message ?? '');
+};
+const notifyWarning = (title: string, message?: string) => {
+  console.info('[PlayingRoot]', title, message ?? '');
+};
+const notifyInfo = (title: string, message?: string) => {
+  console.info('[PlayingRoot]', title, message ?? '');
+};
 
 // 使用游戏设置管理
 const {
@@ -1112,7 +1231,7 @@ const {
   currentDate,
   currentTime,
   currentLocation,
-  currentRandomEvent,
+  currentEvent,
   relationships,
   isRandomEventActive,
   gender,
@@ -1153,6 +1272,9 @@ const {
   // 新增工具方法
   itemName,
   equipmentText,
+  // 经验值相关
+  expBarData,
+  refreshExpBarData,
 } = useStatData();
 
 const {
@@ -1213,10 +1335,11 @@ type Paragraph = {
 };
 
 // 从 useStatData 获取游戏状态数据 - 直接使用ref对象，纯ref架构
-// currentDate, currentTime, currentLocation, currentRandomEvent, gender, race, age 已从 useStatData 解构获取
+// currentDate, currentTime, currentLocation, currentEvent, gender, race, age 已从 useStatData 解构获取
 
 const inputText = ref<string>('');
 const showSettings = ref<boolean>(false);
+const showReadingSettings = ref<boolean>(false);
 const showSaveDialog = ref<boolean>(false);
 const showInventoryDialog = ref<boolean>(false);
 const showCommandQueueDialog = ref<boolean>(false);
@@ -1228,6 +1351,7 @@ const selectedCharacter = ref<any>(null);
 const selectedEnemy = ref<any>(null);
 const characterDetailLoading = ref<boolean>(false);
 const enemyDetailLoading = ref<boolean>(false);
+const modalTarget = ref<string | HTMLElement>('body');
 
 // 角色名称变量 - 只使用宏获取
 const characterName = ref<string>('');
@@ -1295,22 +1419,15 @@ const loadMvuData = async () => {
   }
 };
 
-// MVU 属性相关函数现在直接通过 useStatData 获取，移除重复定义
-
-// 库存相关方法现在通过 useStatData 获取，移除重复定义
-
-// getEnglishAttributeName 和 getAttributeValue 函数已移除，暂未使用
-
 // 添加缺失的UI方法
 const openRelations = async () => {
   try {
     showRelations.value = true;
-    if (relationshipCharacters.value.length === 0) {
-      await getRelationshipCharacters();
-    }
+    // 每次打开关系面板都刷新一次，保证新增角色能实时显示
+    await getRelationshipCharacters();
   } catch (error) {
     console.error('[PlayingRoot] 打开关系弹窗失败:', error);
-    showError('获取关系人物数据失败');
+    // 获取关系人物数据失败
   }
 };
 
@@ -1326,7 +1443,7 @@ const openEnemies = async () => {
     }
   } catch (error) {
     console.error('[PlayingRoot] 打开敌人弹窗失败:', error);
-    showError('获取敌人数据失败');
+    // showError('获取敌人数据失败');
   }
 };
 
@@ -1347,7 +1464,7 @@ const openCharacterDetail = async (character: any) => {
     }
   } catch (error) {
     console.error('[PlayingRoot] 打开人物详情失败:', error);
-    showError('获取人物详情失败');
+    // showError('获取人物详情失败');
   } finally {
     characterDetailLoading.value = false;
   }
@@ -1357,6 +1474,88 @@ const closeCharacterDetail = () => {
   showCharacterDetail.value = false;
   selectedCharacter.value = null;
   characterDetailLoading.value = false;
+};
+
+// 好感度相关方法
+const getAffinityProgress = (affinity: number): number => {
+  // 将好感度 [-200, 200] 映射到 [0, 100]
+  const value = affinity || 0;
+  return Math.max(0, Math.min(100, ((value + 200) / 400) * 100));
+};
+
+const getAffinityClass = (affinity: number): string => {
+  const value = affinity || 0;
+  if (value >= 150) return 'affinity-love';
+  if (value >= 100) return 'affinity-close';
+  if (value >= 50) return 'affinity-friend';
+  if (value >= 0) return 'affinity-neutral';
+  if (value >= -50) return 'affinity-dislike';
+  if (value >= -100) return 'affinity-hostile';
+  return 'affinity-hate';
+};
+
+const getAffinityDescription = (affinity: number): string => {
+  const value = affinity || 0;
+  if (value >= 150) return '深爱 - 愿意为你付出一切';
+  if (value >= 100) return '亲密 - 非常信任和依赖你';
+  if (value >= 50) return '友好 - 愿意与你交流和帮助';
+  if (value >= 0) return '普通 - 保持基本的礼貌';
+  if (value >= -50) return '不喜 - 对你有些反感';
+  if (value >= -100) return '敌对 - 非常讨厌你';
+  return '仇恨 - 恨不得你消失';
+};
+
+// 头像上传处理
+const handleAvatarUpload = async (character: any) => {
+  try {
+    // 创建隐藏的文件输入
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+
+    input.onchange = async (e: any) => {
+      const file = e.target?.files?.[0];
+      if (!file) return;
+
+      // 验证文件大小（限制为2MB）
+      if (file.size > 2 * 1024 * 1024) {
+        // showError('图片大小不能超过 2MB');
+        return;
+      }
+
+      // 读取文件为 base64
+      const reader = new FileReader();
+      reader.onload = async (event: any) => {
+        try {
+          const base64Url = event.target?.result;
+          if (!base64Url) return;
+
+          // 更新角色头像
+          character.avatarUrl = base64Url;
+
+          // 保存到 MVU 变量（如果需要持久化）
+          // TODO: 实现保存到 MVU 变量的逻辑
+          // await saveMvuRelationshipAvatar(character.id, base64Url);
+
+          // showSuccess('头像上传成功');
+        } catch (error) {
+          console.error('[PlayingRoot] 保存头像失败:', error);
+          // showError('头像保存失败');
+        }
+      };
+
+      reader.onerror = () => {
+        // showError('读取图片失败');
+      };
+
+      reader.readAsDataURL(file);
+    };
+
+    input.click();
+  } catch (error) {
+    console.error('[PlayingRoot] 头像上传失败:', error);
+    // showError('头像上传失败');
+  }
 };
 
 const openEnemyDetail = async (enemy: any) => {
@@ -1370,7 +1569,7 @@ const openEnemyDetail = async (enemy: any) => {
     }
   } catch (error) {
     console.error('[PlayingRoot] 打开敌人详情失败:', error);
-    showError('获取敌人详情失败');
+    // showError('获取敌人详情失败');
   } finally {
     enemyDetailLoading.value = false;
   }
@@ -1391,7 +1590,7 @@ const closeInventoryDialog = () => {
 };
 
 const onSelectItem = (item: any) => {
-  showInfo(`选择了物品: ${item.name || '未知物品'}`);
+  // showInfo(`选择了物品: ${item.name || '未知物品'}`);
 };
 
 const openEquipmentDetail = async (type: 'weapon' | 'armor' | 'accessory') => {
@@ -1416,7 +1615,7 @@ const openEquipmentDetail = async (type: 'weapon' | 'armor' | 'accessory') => {
     showEquipmentDetail.value = true;
   } catch (error) {
     console.error('[PlayingRoot] 打开装备详情失败:', error);
-    showError('获取装备详情失败');
+    // showError('获取装备详情失败');
   }
 };
 
@@ -1451,7 +1650,7 @@ const onDialogLoaded = async (data: any) => {
     showSaveDialog.value = false;
   } catch (error) {
     console.error('[PlayingRoot] 读档失败:', error);
-    showError('读档失败');
+    // showError('读档失败');
   }
 };
 
@@ -1460,9 +1659,9 @@ const copyCurrent = async () => {
   try {
     const t = String(contextMenu.value?.target?.html ?? '').replace(/<[^>]+>/g, '');
     await navigator.clipboard.writeText(t);
-    showSuccess('已复制');
+    // showSuccess('已复制');
   } catch {
-    showError('复制失败');
+    // showError('复制失败');
   } finally {
     contextMenu.value.visible = false;
   }
@@ -1477,7 +1676,7 @@ const editCurrent = async () => {
     showEditDialog.value = true;
   } catch (error) {
     console.error('[PlayingRoot] 打开编辑失败:', error);
-    showError('打开编辑失败');
+    // showError('打开编辑失败');
   } finally {
     contextMenu.value.visible = false;
   }
@@ -1489,13 +1688,13 @@ const regenerateCurrent = async () => {
     if (!target) return;
     try {
       await regenerateMessage(target.id);
-      showSuccess('重新生成成功');
+      // showSuccess('重新生成成功');
     } catch (error) {
-      showError('重新生成失败');
+      // showError('重新生成失败');
     }
   } catch (error) {
     console.error('[PlayingRoot] 重新生成失败:', error);
-    showError('重新生成失败');
+    // showError('重新生成失败');
   } finally {
     contextMenu.value.visible = false;
   }
@@ -1511,13 +1710,13 @@ const deleteCurrent = async () => {
     }
     try {
       await deleteMessage(target.id);
-      showSuccess('消息已删除');
+      // showSuccess('消息已删除');
     } catch (error) {
-      showError('删除消息失败');
+      // showError('删除消息失败');
     }
   } catch (error) {
     console.error('[PlayingRoot] 删除消息失败:', error);
-    showError('删除消息失败');
+    // showError('删除消息失败');
   } finally {
     contextMenu.value.visible = false;
   }
@@ -1526,19 +1725,19 @@ const deleteCurrent = async () => {
 const saveEdit = async () => {
   try {
     if (!editingMessage.value || !editContent.value.trim()) {
-      showError('编辑内容不能为空');
+      // showError('编辑内容不能为空');
       return;
     }
     try {
       await editMessage(editingMessage.value.id, editContent.value.trim());
-      showSuccess('编辑保存成功');
+      // showSuccess('编辑保存成功');
       showEditDialog.value = false;
     } catch (error) {
-      showError('编辑保存失败');
+      // showError('编辑保存失败');
     }
   } catch (error) {
     console.error('[PlayingRoot] 编辑保存失败:', error);
-    showError('编辑保存失败');
+    // showError('编辑保存失败');
   }
 };
 
@@ -1599,7 +1798,15 @@ const availableEnemies = computed(() => {
 const isBusy = computed(() => isSending.value || isStreaming.value);
 
 // 渲染列表：简化逻辑，分隔线现在直接在用户消息后显示
-type RenderItem = { type: 'paragraph'; key: string; html: string; role: Role; id: string; ephemeral?: boolean };
+type RenderItem = {
+  type: 'paragraph';
+  key: string;
+  html: string;
+  role: Role;
+  id: string;
+  ephemeral?: boolean;
+  pending?: boolean;
+};
 const renderItems = computed<RenderItem[]>(() => {
   const out: RenderItem[] = [];
   for (let i = 0; i < messages.value.length; i++) {
@@ -1611,6 +1818,7 @@ const renderItems = computed<RenderItem[]>(() => {
       role: m.role,
       id: m.id,
       ephemeral: 'ephemeral' in m ? m.ephemeral : undefined,
+      pending: 'pending' in m ? Boolean((m as any).pending) : undefined,
     });
   }
   return out;
@@ -1667,7 +1875,7 @@ async function onSend() {
     }
   } catch (error) {
     console.error('[PlayingRoot] 指令队列执行失败:', error);
-    showError('指令队列执行失败');
+    // showError('指令队列执行失败');
   }
 
   // 然后执行原有的消息发送逻辑
@@ -1675,11 +1883,11 @@ async function onSend() {
     // 使用统一的生成函数，自动处理MVU数据、消息保存和UI更新
     const success = await generateMessage(text, shouldStream.value);
     if (!success) {
-      showError('生成失败', '请重试');
+      // showError('生成失败', '请重试');
     }
   } catch (error) {
     console.error('[PlayingRoot] 生成消息失败:', error);
-    showError('生成失败', '请求发送异常');
+    // showError('生成失败', '请求发送异常');
   }
 }
 
@@ -1693,11 +1901,11 @@ async function onTestBattle() {
     });
 
     if (!success) {
-      showError('启动战斗失败');
+      // showError('启动战斗失败');
     }
   } catch (e) {
     console.error('[PlayingRoot] 启动测试战斗失败:', e);
-    showError('启动战斗失败');
+    // showError('启动战斗失败');
   }
 }
 
@@ -1710,31 +1918,36 @@ async function startDynamicBattle(enemyId: string) {
     });
 
     if (!success) {
-      showError('启动动态战斗失败');
+      // showError('启动动态战斗失败');
     }
   } catch (error) {
     console.error('[PlayingRoot] 启动动态战斗失败:', error);
-    showError('启动动态战斗失败');
+    // showError('启动动态战斗失败');
   }
 }
 
 function onScroll() {}
 
-function onContextMenu(item: Paragraph) {
-  // 检查是否可以重新生成（只有AI消息可以重新生成）
-  const canRegenerate = item.role === 'assistant';
+function onContextMenu(item: RenderItem) {
+  const actualMessage = messages.value.find(m => m.id === item.id) as any | undefined;
+  const role = (actualMessage?.role ?? item.role) as Role;
+  const isPending = actualMessage ? 'pending' in actualMessage && actualMessage.pending : Boolean(item.pending);
+
+  // 检查是否可以重新生成（只有AI消息且非待保存状态可以重新生成）
+  const canRegenerate = role === 'assistant' && !isPending;
 
   // 检查是否为最新消息（只有最新消息可以删除）
-  const isLatestMessage = messages.value.length > 0 && messages.value[messages.value.length - 1].id === item.id;
+  const latestMessageId = messages.value.length > 0 ? messages.value[messages.value.length - 1].id : undefined;
+  const isLatestMessage = latestMessageId === (actualMessage?.id ?? item.id);
 
   // 检查是否可以删除（只有最新消息可以删除，不管是用户输入、AI消息还是报错消息）
-  const canDelete = isLatestMessage;
+  const canDelete = isLatestMessage && !isPending;
 
   contextMenu.value = {
     visible: true,
     x: (window as any).event?.clientX ?? 0,
     y: (window as any).event?.clientY ?? 0,
-    target: item,
+    target: actualMessage ?? item,
     canRegenerate,
     canDelete,
     isLatestMessage,
@@ -1761,13 +1974,16 @@ async function toggleFullscreen() {
       if (document.fullscreenElement) {
         await document.exitFullscreen();
       }
+      modalTarget.value = 'body';
     } else {
       // 进入全屏
       try {
         await rpgRoot.requestFullscreen();
+        modalTarget.value = rpgRoot;
       } catch {
         // 浏览器全屏失败，使用CSS全屏
         rpgRoot.classList.add('fullscreen');
+        modalTarget.value = rpgRoot;
       }
     }
   } catch {
@@ -1784,14 +2000,17 @@ function setupFullscreenListener(): (() => void) | null {
     if (document.fullscreenElement) {
       // 进入全屏
       rpgRoot.classList.add('fullscreen');
+      modalTarget.value = document.fullscreenElement as HTMLElement;
     } else {
       // 退出全屏
       rpgRoot.classList.remove('fullscreen');
+      modalTarget.value = 'body';
     }
   };
 
   // 监听全屏状态变化
   document.addEventListener('fullscreenchange', handleFullscreenChange);
+  handleFullscreenChange();
 
   // 返回清理函数
   return () => {
@@ -1820,6 +2039,8 @@ watch(messages, async () => {
     collectUiMessages();
     // 每次消息更新时，重新加载游戏状态数据，确保时间地点等信息同步更新
     await loadGameStateData();
+    // 同时刷新经验条数据
+    await refreshExpBarData();
   } catch {}
 });
 
@@ -1946,6 +2167,8 @@ onUnmounted(() => {
   } catch (error) {
     console.warn('[PlayingRoot] 指令队列监听器清理失败:', error);
   }
+
+  modalTarget.value = 'body';
 });
 </script>
 
@@ -1953,6 +2176,234 @@ onUnmounted(() => {
 @import '../index.css';
 
 /* PlayingRoot组件特定样式 - 通用样式已移至index.css */
+
+/* 主题颜色样式 - 替换粉色/紫色 */
+.theme-button {
+  border: 2px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.theme-button:hover,
+.theme-button:focus {
+  border-color: var(--color-primary);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 20px rgba(199, 62, 58, 0.3);
+  outline: none;
+}
+
+.theme-icon {
+  color: var(--text-secondary);
+}
+
+.theme-input {
+  border-color: var(--border-color);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text-primary);
+}
+
+.theme-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+.theme-input:focus {
+  border-color: var(--color-primary);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 20px rgba(199, 62, 58, 0.3);
+  outline: none;
+}
+
+.theme-drawer-button {
+  background: var(--color-primary);
+}
+
+.theme-drawer-button:hover {
+  background: #b22f2c;
+}
+
+.theme-close-btn {
+  background: var(--color-muted-beige);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.theme-close-btn:hover {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.theme-setting-label {
+  background: var(--color-muted-beige);
+}
+
+.theme-setting-label:hover {
+  background: rgba(232, 227, 216, 0.8);
+}
+
+.theme-checkbox {
+  border-color: var(--border-color);
+  accent-color: var(--color-primary);
+}
+
+.theme-checkbox:checked {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.theme-input-small {
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  background: white;
+}
+
+.theme-input-small:focus {
+  border-color: var(--color-primary);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(199, 62, 58, 0.1);
+}
+
+.theme-primary-button {
+  background: var(--color-primary);
+}
+
+.theme-primary-button:hover {
+  background: #b22f2c;
+}
+
+.theme-primary-button:focus {
+  ring-color: var(--color-primary);
+}
+
+.theme-spinner {
+  border-color: var(--color-border-light);
+  border-top-color: var(--color-primary);
+}
+
+/* 经验条样式 */
+.exp-panel {
+  margin-top: 0;
+  padding: 10px;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+}
+
+.exp-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exp-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.exp-level {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.exp-label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.exp-value {
+  font-size: 16px;
+  color: #374151;
+  font-weight: 700;
+}
+
+.max-level-badge {
+  font-size: 11px;
+  color: #059669;
+  font-weight: 600;
+  padding: 2px 6px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 4px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.exp-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.exp-current {
+  font-weight: 600;
+  color: #059669;
+}
+
+.exp-separator {
+  color: #9ca3af;
+}
+
+.exp-required {
+  color: #6b7280;
+}
+
+.exp-needed {
+  font-size: 11px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.exp-bar-container {
+  width: 100%;
+}
+
+.exp-bar-background {
+  width: 100%;
+  height: 12px;
+  background: #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.exp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.exp-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
+  animation: shimmer 2s infinite;
+}
+
+.exp-bar-fill.max-level {
+  background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
 
 /* 装备栏样式 */
 .equip-row {
@@ -2132,10 +2583,10 @@ onUnmounted(() => {
   scrollbar-width: thin;
 }
 
-/* 用户头像样式 - 100px正方形 */
+/* 用户头像样式 - 80px正方形 */
 .user_avatar {
-  width: 100px !important;
-  height: 100px !important;
+  width: 80px !important;
+  height: 80px !important;
   border-radius: 8px;
   overflow: hidden;
   position: relative;
@@ -2144,8 +2595,8 @@ onUnmounted(() => {
 }
 
 .custom-avatar img {
-  width: 100px !important;
-  height: 100px !important;
+  width: 80px !important;
+  height: 80px !important;
   border-radius: 8px;
   overflow: hidden;
   position: relative;
@@ -2297,7 +2748,7 @@ onUnmounted(() => {
 
 /* 右侧边栏内容向下移动 */
 .right-sidebar .menu-category {
-  margin-top: 8px;
+  margin-top: 0;
 }
 
 /* 设置弹窗样式 */
@@ -2358,13 +2809,494 @@ onUnmounted(() => {
 
 /* 关系人物弹窗样式 */
 .relationships-modal {
-  max-width: 800px;
+  max-width: 900px;
   width: 90vw;
   max-height: 85vh;
+  background: var(--bg-surface) !important;
+  border-color: var(--border-color) !important;
 }
 
+/* 关系人物横向卡片样式 */
+.relationship-card {
+  position: relative;
+  overflow: hidden;
+  background: var(--panel-bg);
+  border-color: var(--color-border-light);
+}
+
+.relationship-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(199, 62, 58, 0.08), transparent);
+  transition: left 0.5s ease;
+}
+
+.relationship-card:hover::before {
+  left: 100%;
+}
+
+.relationship-card:hover {
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-1px);
+  background: var(--bg-surface);
+}
+
+/* 头像容器 */
+.avatar-container {
+  width: 80px;
+  height: 80px;
+}
+
+.character-avatar,
+.character-avatar-placeholder {
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid var(--color-border-light);
+  transition: all 0.3s ease;
+}
+
+.character-avatar {
+  background-size: cover;
+  background-position: center;
+  background-color: var(--color-muted-beige);
+}
+
+.character-avatar-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-muted-beige);
+  border-color: var(--color-border-light);
+}
+
+.avatar-letter {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+}
+
+.relationship-card:hover .character-avatar,
+.relationship-card:hover .character-avatar-placeholder {
+  border-color: var(--border-color);
+  transform: scale(1.05);
+  box-shadow: var(--shadow-traditional);
+  background: var(--color-muted-beige);
+}
+
+/* 角色信息样式 */
+.character-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.character-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.character-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.meta-tag {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.meta-separator {
+  color: var(--color-border-light);
+}
+
+/* 好感度区域样式 */
 .affinity-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.affinity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.affinity-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.affinity-value {
+  font-size: 16px;
+  font-weight: 700;
+  transition: all 0.3s ease;
+  color: var(--text-primary);
+}
+
+.affinity-bar-bg {
+  height: 8px;
+  background: var(--color-muted-beige);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--color-border-light);
+}
+
+.affinity-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: all 0.5s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.affinity-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.4) 50%, transparent 100%);
+  animation: shimmer 2s infinite;
+}
+
+/* 好感度等级颜色 - 使用主题颜色系统 */
+.affinity-love {
+  color: var(--color-primary);
+  background: linear-gradient(90deg, var(--color-primary), rgba(199, 62, 58, 0.8));
+}
+
+.affinity-close {
+  color: var(--color-fuji-purple);
+  background: linear-gradient(90deg, var(--color-fuji-purple), rgba(165, 154, 202, 0.8));
+}
+
+.affinity-friend {
+  color: var(--color-kin-gold);
+  background: linear-gradient(90deg, var(--color-kin-gold), rgba(212, 175, 55, 0.8));
+}
+
+.affinity-neutral {
+  color: var(--text-muted);
+  background: linear-gradient(90deg, var(--text-muted), rgba(102, 102, 102, 0.6));
+}
+
+.affinity-dislike {
+  color: #d97706;
+  background: linear-gradient(90deg, #d97706, rgba(217, 119, 6, 0.8));
+}
+
+.affinity-hostile {
+  color: #dc2626;
+  background: linear-gradient(90deg, #dc2626, rgba(220, 38, 38, 0.8));
+}
+
+.affinity-hate {
+  color: #991b1b;
+  background: linear-gradient(90deg, #991b1b, rgba(153, 27, 27, 0.8));
+}
+
+/* 敌人卡片样式 */
+.character-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.character-card:hover {
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-1px);
+}
+
+/* 人物详情布局 */
+.character-detail-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+/* 左侧面板 - 大头像 */
+.detail-left-panel {
+  flex-shrink: 0;
+  width: 200px;
+}
+
+.detail-avatar-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-avatar,
+.detail-avatar-placeholder {
+  width: 200px;
+  height: 200px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 3px solid #e5e7eb;
+  transition: all 0.3s ease;
+}
+
+.detail-avatar {
+  background-size: cover;
+  background-position: center;
+  background-color: #f3f4f6;
+}
+
+.detail-avatar-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #fce7f3 0%, #e9d5ff 100%);
+}
+
+.detail-avatar-letter {
+  font-size: 80px;
+  font-weight: 700;
+  color: #a855f7;
+  text-transform: uppercase;
+}
+
+.avatar-upload-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.avatar-upload-btn:hover {
+  background: linear-gradient(135deg, #e5e7eb, #d1d5db);
+  border-color: #9ca3af;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.avatar-upload-btn svg {
+  flex-shrink: 0;
+}
+
+/* 右侧面板 - 详细信息 */
+.detail-right-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.detail-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.detail-character-name {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+.detail-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.detail-tag {
+  padding: 4px 12px;
+  background: #f3f4f6;
   border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+/* 详情页好感度区域 */
+.detail-affinity-section {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-affinity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detail-affinity-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.detail-affinity-value {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.detail-affinity-bar-bg {
+  height: 12px;
+  background: #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.detail-affinity-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: all 0.5s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.detail-affinity-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.4) 50%, transparent 100%);
+  animation: shimmer 2s infinite;
+}
+
+.detail-affinity-description {
+  font-size: 13px;
+  color: #6b7280;
+  font-style: italic;
+  text-align: center;
+}
+
+/* 详细信息区块 */
+.detail-info-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-info-block {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.detail-info-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.detail-info-content {
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* 装备网格 */
+.detail-equipment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.detail-equipment-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.detail-equipment-item:hover {
+  background: white;
+  border-color: #d1d5db;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.equipment-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  flex-shrink: 0;
+}
+
+.equipment-icon svg {
+  width: 18px;
+  height: 18px;
+  color: #6b7280;
+}
+
+.equipment-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.equipment-label {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.equipment-name {
+  font-size: 13px;
+  color: #374151;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 响应式优化 */
@@ -2376,6 +3308,56 @@ onUnmounted(() => {
 
   .modal-body {
     max-height: 60vh !important;
+  }
+}
+
+@media (max-width: 768px) {
+  /* 人物详情改为纵向布局 */
+  .character-detail-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .detail-left-panel {
+    width: 160px;
+  }
+
+  .detail-avatar,
+  .detail-avatar-placeholder {
+    width: 160px;
+    height: 160px;
+  }
+
+  .detail-avatar-letter {
+    font-size: 64px;
+  }
+
+  .detail-right-panel {
+    width: 100%;
+  }
+
+  /* 关系卡片调整 */
+  .avatar-container {
+    width: 60px;
+    height: 60px;
+  }
+
+  .character-avatar,
+  .character-avatar-placeholder {
+    width: 60px;
+    height: 60px;
+  }
+
+  .avatar-letter {
+    font-size: 24px;
+  }
+
+  .character-name {
+    font-size: 16px;
+  }
+
+  .affinity-value {
+    font-size: 14px;
   }
 }
 
@@ -2396,8 +3378,59 @@ onUnmounted(() => {
     align-self: flex-end;
   }
 
-  .character-detail-body {
-    grid-template-columns: 1fr !important;
+  /* 小屏幕进一步缩小 */
+  .detail-left-panel {
+    width: 120px;
+  }
+
+  .detail-avatar,
+  .detail-avatar-placeholder {
+    width: 120px;
+    height: 120px;
+  }
+
+  .detail-avatar-letter {
+    font-size: 48px;
+  }
+
+  .detail-character-name {
+    font-size: 20px;
+  }
+
+  .detail-affinity-value {
+    font-size: 20px;
+  }
+
+  .detail-equipment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* 关系卡片更紧凑 */
+  .relationship-card {
+    padding: 12px;
+  }
+
+  .avatar-container {
+    width: 50px;
+    height: 50px;
+  }
+
+  .character-avatar,
+  .character-avatar-placeholder {
+    width: 50px;
+    height: 50px;
+  }
+
+  .avatar-letter {
+    font-size: 20px;
+  }
+
+  .character-name {
+    font-size: 14px;
+  }
+
+  .character-meta {
+    font-size: 11px;
   }
 }
 

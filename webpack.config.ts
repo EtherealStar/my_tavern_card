@@ -77,7 +77,7 @@ const config: Config = {
 
 let io: Server;
 function watch_it(compiler: webpack.Compiler) {
-  if (compiler.options.watch) {
+  if (compiler.options.watch || compiler.options.devServer) {
     if (!io) {
       const port = config.port ?? 6621;
       io = new Server(port, { cors: { origin: '*' } });
@@ -97,7 +97,7 @@ function watch_it(compiler: webpack.Compiler) {
   }
 }
 
-function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Configuration {
+function parse_configuration(entry: Entry, isFirst: boolean = false): (_env: any, argv: any) => webpack.Configuration {
   const script_filepath = path.parse(entry.script);
 
   return (_env, argv) => ({
@@ -118,7 +118,7 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
       asyncChunks: true,
       chunkLoading: 'import',
       clean: true,
-      publicPath: '',
+      publicPath: argv.mode === 'development' ? '/' : '',
       library: {
         type: 'module',
       },
@@ -284,7 +284,7 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
       new CopyWebpackPlugin({
         patterns: [
           {
-            from: path.join(__dirname, 'src', '同层游玩RPG_remake', 'assets'),
+            from: path.join(script_filepath.dir, 'assets'),
             to: path.join(__dirname, 'dist', path.relative(path.join(__dirname, 'src'), script_filepath.dir), 'assets'),
             noErrorOnMissing: true,
           },
@@ -311,7 +311,40 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
       ],
     },
     externals: [],
+    // 只在第一个配置中添加 devServer，避免端口冲突
+    ...(isFirst
+      ? {
+          devServer: {
+            static: {
+              directory: path.join(__dirname, 'dist'),
+              publicPath: '/',
+              watch: true,
+            },
+            port: 8080,
+            host: '0.0.0.0',
+            hot: true,
+            open: false,
+            allowedHosts: 'all',
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+              'Access-Control-Allow-Headers': 'X-Requested-With, content-type, Authorization',
+            },
+            historyApiFallback: {
+              rewrites: [],
+            },
+            compress: true,
+            client: {
+              logging: 'info',
+              overlay: {
+                errors: true,
+                warnings: false,
+              },
+            },
+          },
+        }
+      : {}),
   });
 }
 
-export default config.entries.map(parse_configuration);
+export default config.entries.map((entry, index) => parse_configuration(entry, index === 0));

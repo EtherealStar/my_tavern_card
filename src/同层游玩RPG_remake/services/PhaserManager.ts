@@ -30,10 +30,6 @@ export class PhaserManager {
       const canvasWidth = containerWidth * dpr;
       const canvasHeight = containerHeight * dpr;
 
-      console.log(`[PhaserManager] Container dimensions: ${containerWidth}x${containerHeight}`);
-      console.log(`[PhaserManager] Device pixel ratio: ${dpr}`);
-      console.log(`[PhaserManager] Canvas physical dimensions: ${canvasWidth}x${canvasHeight}`);
-
       const config: Phaser.Types.Core.GameConfig = {
         type: Phaser.AUTO,
         width: canvasWidth,
@@ -80,18 +76,14 @@ export class PhaserManager {
         }
 
         if (this.battleScene) {
-          console.log('[PhaserManager] Phaser game already bootstrapped');
           return;
         }
-
-        console.log('[PhaserManager] Phaser game is ready');
 
         // 优化画布样式以增强清晰度
         this.optimizeCanvasClarity();
 
         this.battleScene = new BattleScene(this.eventBus);
         this.game.scene.add('BattleScene', this.battleScene);
-        console.log('[PhaserManager] BattleScene registered');
 
         this.setupEventListeners();
         this.setupResizeHandlers();
@@ -99,7 +91,6 @@ export class PhaserManager {
         (window as any).__RPG_PHASER_MANAGER__ = this;
 
         this.eventBus.emit('phaser:game-ready', this.game);
-        console.log('[PhaserManager] Phaser game initialization complete');
       };
 
       if (this.game.isBooted) {
@@ -158,7 +149,6 @@ export class PhaserManager {
   public registerScene(scene: Phaser.Scene, key?: string): void {
     if (this.game) {
       this.game.scene.add(key || scene.scene.key, scene);
-      console.log(`[PhaserManager] Scene '${key || scene.scene.key}' registered`);
     } else {
       console.warn('[PhaserManager] Cannot register scene - game not initialized');
     }
@@ -169,24 +159,17 @@ export class PhaserManager {
       // 对于 BattleScene，检查是否有有效的战斗配置
       if (key === 'BattleScene') {
         const battleConfig = data || this.game.registry.get('battleConfig');
-        console.log('[PhaserManager] Starting BattleScene, current config:', battleConfig);
 
         if (!battleConfig || !battleConfig.participants || !Array.isArray(battleConfig.participants)) {
           console.warn('[PhaserManager] Cannot start BattleScene - no valid battle config found');
           return;
         }
-        console.log(
-          '[PhaserManager] Starting BattleScene with valid config, participants count:',
-          battleConfig.participants.length,
-        );
 
         // 传递配置到场景
         this.game.scene.start(key, battleConfig);
       } else {
         this.game.scene.start(key, data);
       }
-
-      console.log(`[PhaserManager] Scene '${key}' started with data:`, data ? 'yes' : 'no');
     } else {
       console.warn('[PhaserManager] Cannot start scene - game not initialized');
     }
@@ -195,7 +178,6 @@ export class PhaserManager {
   public stopScene(key: string): void {
     if (this.game) {
       this.game.scene.stop(key);
-      console.log(`[PhaserManager] Scene '${key}' stopped`);
     } else {
       console.warn('[PhaserManager] Cannot stop scene - game not initialized');
     }
@@ -207,8 +189,6 @@ export class PhaserManager {
 
     // 监听战斗开始事件
     this.battleStartOff = this.eventBus.on('battle:start', (payload: any) => {
-      console.log('[PhaserManager] Received battle:start event:', payload);
-
       if (!this.game) {
         console.error('[PhaserManager] Game not initialized');
         return;
@@ -216,13 +196,10 @@ export class PhaserManager {
 
       // 将战斗配置存储到 registry
       this.game.registry.set('battleConfig', payload);
-      console.log('[PhaserManager] Battle config set to registry:', payload);
 
       // 启动战斗场景
       this.startScene('BattleScene');
     });
-
-    console.log('[PhaserManager] Event listeners setup complete');
   }
 
   private setupResizeHandlers(): void {
@@ -233,7 +210,6 @@ export class PhaserManager {
 
     // 监听 Phaser 缩放事件
     this.game.scale.on('resize', (gameSize: any) => {
-      console.log('[PhaserManager] Game resized to:', gameSize.width, 'x', gameSize.height);
       // 通知 BattleScene 画布尺寸已变化
       this.eventBus.emit('phaser:canvas-resized', {
         width: gameSize.width,
@@ -248,7 +224,6 @@ export class PhaserManager {
         if (container) {
           const newWidth = container.clientWidth;
           const newHeight = container.clientHeight;
-          console.log('[PhaserManager] Window resized, updating game size to:', newWidth, 'x', newHeight);
           this.game.scale.resize(newWidth, newHeight);
 
           // 重新优化画布清晰度
@@ -261,8 +236,6 @@ export class PhaserManager {
 
     // 存储清理函数
     this.windowResizeHandler = handleWindowResize;
-
-    console.log('[PhaserManager] Resize handlers setup complete');
   }
 
   private windowResizeHandler?: () => void;
@@ -296,10 +269,6 @@ export class PhaserManager {
       // 设置画布的实际像素尺寸
       canvas.width = containerWidth * dpr;
       canvas.height = containerHeight * dpr;
-
-      console.log(
-        `[PhaserManager] Canvas optimized for clarity - Physical: ${canvas.width}x${canvas.height}, Display: ${containerWidth}x${containerHeight}, DPR: ${dpr}`,
-      );
     }
   }
 

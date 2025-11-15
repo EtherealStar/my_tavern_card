@@ -4,6 +4,14 @@ import { TYPES } from '../core/ServiceIdentifiers';
 import { BattleLogItem, BattleStoryResult } from '../models/BattleLogSchemas';
 import type { BattleResult } from '../models/BattleSchemas';
 import type { SaveLoadManagerService } from './SaveLoadManagerService';
+
+// 参与者信息类型
+export interface ParticipantInfo {
+  id: string;
+  name: string;
+  side: 'player' | 'enemy';
+}
+
 @injectable()
 export class BattleResultHandler {
   constructor(
@@ -11,10 +19,14 @@ export class BattleResultHandler {
     @inject(TYPES.SaveLoadManagerService) private saveLoad: SaveLoadManagerService,
   ) {}
 
-  public async persistAndAnnounce(result: BattleResult, battleLog: BattleLogItem[]): Promise<void> {
+  public async persistAndAnnounce(
+    result: BattleResult,
+    battleLog: BattleLogItem[],
+    participants: ParticipantInfo[],
+  ): Promise<void> {
     try {
-      // 生成战斗故事
-      const battleStory = this.generateBattleStory(battleLog, result);
+      // 生成战斗故事（传递参与者信息）
+      const battleStory = this.generateBattleStory(battleLog, result, participants);
 
       await this.saveLoad.setSetting('battle:last_result', {
         timestamp: new Date().toISOString(),
@@ -32,9 +44,13 @@ export class BattleResultHandler {
   /**
    * 生成战斗故事
    */
-  private generateBattleStory(battleLog: BattleLogItem[], result: BattleResult): BattleStoryResult {
+  private generateBattleStory(
+    battleLog: BattleLogItem[],
+    result: BattleResult,
+    participants: ParticipantInfo[],
+  ): BattleStoryResult {
     const storyParts = [
-      this.generateBattleIntroduction(battleLog),
+      this.generateBattleIntroduction(participants),
       this.generateBattleNarrative(battleLog),
       this.generateBattleConclusion(result),
     ];
@@ -52,9 +68,9 @@ export class BattleResultHandler {
   /**
    * 生成战斗介绍
    */
-  private generateBattleIntroduction(battleLog: BattleLogItem[]): string {
-    const participants = this.extractParticipants(battleLog);
-    return `战斗开始了！${participants.player}与${participants.enemy}展开了激烈的对决。`;
+  private generateBattleIntroduction(participants: ParticipantInfo[]): string {
+    const participantInfo = this.extractParticipants(participants);
+    return `战斗开始了！${participantInfo.player}与${participantInfo.enemy}展开了激烈的对决。`;
   }
 
   /**
@@ -77,16 +93,17 @@ export class BattleResultHandler {
 
   /**
    * 提取参与者信息
+   * 根据 side 属性准确区分玩家和敌人
+   * @param participants 参与者信息
    */
-  private extractParticipants(battleLog: BattleLogItem[]): { player: string; enemy: string } {
-    const participants = [
-      ...new Set([...battleLog.map(log => log.actorId), ...battleLog.map(log => log.targetId)]),
-    ].filter(id => id && id !== '未知');
+  private extractParticipants(participants: ParticipantInfo[]): { player: string; enemy: string } {
+    // 根据 side 属性区分玩家和敌人
+    const playerParticipant = participants.find(p => p.side === 'player');
+    const enemyParticipant = participants.find(p => p.side === 'enemy');
 
-    // 简单假设第一个是玩家，第二个是敌人
     return {
-      player: participants[0] || '玩家',
-      enemy: participants[1] || '敌人',
+      player: playerParticipant?.name || '玩家',
+      enemy: enemyParticipant?.name || '敌人',
     };
   }
 }

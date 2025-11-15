@@ -1,20 +1,31 @@
 <template>
   <div class="enemy-status-panel" :style="positionStyle">
     <div class="enemy-name">{{ enemyName }}</div>
+    <div v-if="enemyWeakness" class="enemy-weakness">
+      <span class="weakness-label">弱点:</span>
+      <span class="weakness-value" :class="`weakness-${enemyWeakness}`">{{ enemyWeakness }}</span>
+    </div>
     <div class="status-container">
       <div class="horizontal-bars">
         <BattleHealthBar label="HP" :current="currentHp" :max="maxHp" type="hp" />
-        <BattleHealthBar v-if="mpBar" :label="mpBar.label" :current="mpBar.current" :max="mpBar.max" :type="mpBar.type" />
+        <BattleHealthBar
+          v-if="mpBar"
+          :label="mpBar.label"
+          :current="mpBar.current"
+          :max="mpBar.max"
+          :type="mpBar.type"
+        />
       </div>
       <div class="vertical-bars">
-        <BattleVerticalHealthBar
+        <!-- 暂时删除HHP显示 -->
+        <!-- <BattleVerticalHealthBar
           v-if="hhpBar"
           :label="hhpBar.label"
           :current="hhpBar.current"
           :max="hhpBar.max"
           :color="hhpBar.color"
           class="enemy-style"
-        />
+        /> -->
       </div>
     </div>
     <!-- 伤害数字显示 -->
@@ -27,7 +38,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import BattleHealthBar from './BattleHealthBar.vue';
-import BattleVerticalHealthBar from './BattleVerticalHealthBar.vue';
+// 暂时删除HHP显示 - 暂时注释掉导入
+// import BattleVerticalHealthBar from './BattleVerticalHealthBar.vue';
 
 interface EnemyData {
   id: string;
@@ -39,6 +51,7 @@ interface EnemyData {
   stats?: {
     hhp?: number;
   };
+  weakness?: '体术' | '符术';
   position?: {
     x: number;
     y: number;
@@ -66,6 +79,7 @@ const damageClass = ref('');
 const enemyName = computed(() => props.enemyData?.name || '敌人');
 const currentHp = computed(() => props.enemyData?.hp ?? 0);
 const maxHp = computed(() => props.enemyData?.maxHp ?? 1);
+const enemyWeakness = computed(() => props.enemyData?.weakness);
 
 // MP条数据
 const mpBar = computed(() => {
@@ -80,18 +94,19 @@ const mpBar = computed(() => {
   };
 });
 
-// H血量条数据
-const hhpBar = computed(() => {
-  if (!props.enemyData?.stats?.hhp) return null;
-
-  return {
-    type: 'hhp',
-    label: 'H血量',
-    current: props.enemyData.stats.hhp,
-    max: props.enemyData.stats.hhp, // H血量通常等于最大值
-    color: undefined,
-  };
-});
+// 暂时删除HHP显示 - 暂时注释掉HHP计算属性
+// // H血量条数据
+// const hhpBar = computed(() => {
+//   if (!props.enemyData?.stats?.hhp) return null;
+//
+//   return {
+//     type: 'hhp',
+//     label: 'H血量',
+//     current: props.enemyData.stats.hhp,
+//     max: props.enemyData.stats.hhp, // H血量通常等于最大值
+//     color: undefined,
+//   };
+// });
 
 const positionStyle = computed(() => {
   const pos = props.position || props.enemyData?.position;
@@ -161,6 +176,35 @@ defineExpose({
   margin-bottom: 6px;
   text-align: center;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.enemy-weakness {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.weakness-label {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.weakness-value {
+  font-weight: bold;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.weakness-value.weakness-体术 {
+  color: #fbbf24;
+}
+
+.weakness-value.weakness-符术 {
+  color: #93c5fd;
 }
 
 .status-container {

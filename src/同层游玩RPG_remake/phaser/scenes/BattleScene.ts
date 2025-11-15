@@ -83,9 +83,19 @@ export class BattleScene extends Phaser.Scene {
           this.load.image(portraitKey, resolvedPath);
           this.loadedTextureKeys.set(enemy.enemyPortrait.image, portraitKey);
 
-          // DOM<video> 方案不再通过 Phaser 预加载视频，改为运行时在 EnemyBattleObject 中创建
+          // 预加载技能资源（视频和图片）
           if (enemy.enemyPortrait.videos) {
-            // no-op
+            for (const [skillId, resourceConfig] of Object.entries(enemy.enemyPortrait.videos)) {
+              const config = resourceConfig as any;
+              // 如果是图片资源，需要预加载
+              if (config.type === 'image' && config.src) {
+                const imageKey = `skill_image_${enemy.id}_${skillId}_${Date.now()}`;
+                const resolvedPath = this.resourceService.resolveAssetPath(config.src);
+                this.load.image(imageKey, resolvedPath);
+                this.loadedTextureKeys.set(config.src, imageKey);
+              }
+              // 视频资源在运行时创建，不需要预加载
+            }
           }
         }
 
@@ -522,10 +532,19 @@ export class BattleScene extends Phaser.Scene {
    * 根据URL查找对应的纹理键
    */
   public findTextureByUrl(url: string): string | null {
-    // 首先尝试从存储的映射中查找
+    // 首先尝试从存储的映射中查找（使用原始路径）
     const storedKey = this.loadedTextureKeys.get(url);
     if (storedKey && this.textures.exists(storedKey)) {
       return storedKey;
+    }
+
+    // 如果是本地资源路径，也尝试使用解析后的路径查找
+    if (this.resourceService.isLocalAsset(url)) {
+      const resolvedPath = this.resourceService.resolveAssetPath(url);
+      const storedKeyByResolved = this.loadedTextureKeys.get(resolvedPath);
+      if (storedKeyByResolved && this.textures.exists(storedKeyByResolved)) {
+        return storedKeyByResolved;
+      }
     }
 
     // 如果映射中没有找到，尝试遍历所有纹理
@@ -535,6 +554,12 @@ export class BattleScene extends Phaser.Scene {
     // 尝试通过敌人ID匹配（因为纹理键包含敌人ID）
     const urlParts = url.split('/');
     const urlFileName = urlParts[urlParts.length - 1];
+
+    // 如果是本地资源路径，也准备解析后的路径用于匹配
+    let resolvedPathForMatch: string | null = null;
+    if (this.resourceService.isLocalAsset(url)) {
+      resolvedPathForMatch = this.resourceService.resolveAssetPath(url);
+    }
 
     for (const key of textureKeys) {
       // 检查是否包含敌人ID的纹理键
@@ -546,13 +571,23 @@ export class BattleScene extends Phaser.Scene {
         if (texture && texture.source[0]) {
           const source = texture.source[0];
 
-          // 检查直接的src属性
+          // 检查直接的src属性（原始路径）
           if (source.src === url) {
+            return key;
+          }
+
+          // 检查解析后的路径
+          if (resolvedPathForMatch && source.src === resolvedPathForMatch) {
             return key;
           }
 
           // 检查image元素的src属性
           if (source.image && source.image.src === url) {
+            return key;
+          }
+
+          // 检查解析后的路径（image元素）
+          if (resolvedPathForMatch && source.image && source.image.src === resolvedPathForMatch) {
             return key;
           }
 
@@ -612,7 +647,10 @@ export class BattleScene extends Phaser.Scene {
     const enemies = participants.filter(p => p && p.side === 'enemy');
     enemies.forEach(enemy => {
       if (enemy.enemyPortrait?.image) {
-        if (!this.resourceService.isValidUrl(enemy.enemyPortrait.image)) {
+        // 检查是否是有效的URL或本地资源路径
+        const isValidUrl = this.resourceService.isValidUrl(enemy.enemyPortrait.image);
+        const isLocalAsset = this.resourceService.isLocalAsset(enemy.enemyPortrait.image);
+        if (!isValidUrl && !isLocalAsset) {
           console.warn(
             '[BattleScene] Invalid enemy portrait URL:',
             enemy.enemyPortrait.image,
@@ -635,7 +673,7 @@ export class BattleScene extends Phaser.Scene {
         }
 
         try {
-          const enemyObj = new EnemyBattleObject(this, enemy);
+          const enemyObj = new EnemyBattleObject(this, enemy, this.resourceService);
           this.enemyObjects.set(enemy.id, enemyObj);
         } catch (error) {
           console.error('[BattleScene] Failed to create enemy object for:', enemy.name, error);
@@ -665,14 +703,10 @@ export class BattleScene extends Phaser.Scene {
       const player = state.participants.find((p: any) => p.side === 'player');
       const enemies = state.participants.filter((p: any) => p.side === 'enemy');
 
-      // 记录每个参与者 hp 变化
+      // 记录每个参与者 hp 变化（用于内部跟踪，不输出日志）
       try {
         for (const p of state.participants) {
-          const prev = this.lastHpById.get(p.id);
           const curr = typeof p.hp === 'number' ? p.hp : undefined;
-          if (typeof prev === 'number' && typeof curr === 'number' && prev !== curr) {
-            console.log('[BattleScene] hp changed:', { id: p.id, name: p.name, oldHp: prev, newHp: curr });
-          }
           if (typeof curr === 'number') {
             this.lastHpById.set(p.id, curr);
           }

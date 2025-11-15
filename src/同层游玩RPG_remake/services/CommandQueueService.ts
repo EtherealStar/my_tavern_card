@@ -12,6 +12,7 @@ export enum CommandType {
   INVENTORY = 'inventory', // 背包操作
   SKILL = 'skill', // 技能使用
   ITEM_USE = 'item_use', // 物品使用
+  LEVEL_UP = 'level_up', // 升级
 }
 
 // 指令接口
@@ -24,6 +25,7 @@ export interface Command {
   timestamp: number; // 创建时间
   priority?: number; // 优先级（可选）
   dependencies?: string[]; // 依赖的指令ID（可选）
+  nonRemovable?: boolean; // 是否不可删除（可选）
 }
 
 // 队列状态
@@ -115,6 +117,14 @@ export class CommandQueueService {
     const index = this.queue.findIndex(cmd => cmd.id === id);
     if (index === -1) return false;
 
+    const command = this.queue[index];
+    // 检查是否为不可删除的指令
+    if (command.nonRemovable === true) {
+      console.warn('[CommandQueue] 无法删除不可删除的指令:', command.description);
+      this.showToast('该指令不可删除', 'warning');
+      return false;
+    }
+
     const removed = this.queue.splice(index, 1)[0];
     this.eventBus.emit('command-queue:removed', removed);
     this.notifyUIUpdate();
@@ -123,10 +133,20 @@ export class CommandQueueService {
 
   // 清空队列
   clearQueue(): void {
-    const cleared = [...this.queue];
-    this.queue = [];
-    this.eventBus.emit('command-queue:cleared', cleared);
-    this.notifyUIUpdate();
+    // 保留不可删除的指令
+    const nonRemovableCommands = this.queue.filter(cmd => cmd.nonRemovable === true);
+    const cleared = this.queue.filter(cmd => cmd.nonRemovable !== true);
+
+    this.queue = nonRemovableCommands;
+
+    if (cleared.length > 0) {
+      this.eventBus.emit('command-queue:cleared', cleared);
+      this.notifyUIUpdate();
+    }
+
+    if (nonRemovableCommands.length > 0) {
+      console.log(`[CommandQueue] 保留了 ${nonRemovableCommands.length} 个不可删除的指令`);
+    }
   }
 
   // 执行所有指令
@@ -457,6 +477,9 @@ export const COMMAND_MAPPING = {
   'inventory.add': { method: 'addToInventory', params: ['type', 'item', 'reason'] },
   'inventory.remove': { method: 'removeFromInventory', params: ['type', 'itemIndex', 'reason'] },
   'inventory.clear': { method: 'clearInventoryType', params: ['type', 'reason'] },
+
+  // 升级相关
+  'level_up.apply': { method: 'applyLevelUp', params: ['newLevel', 'reason'] },
 } as const;
 
 // 指令执行器类
@@ -498,10 +521,17 @@ class CommandExecutor {
       throw new Error(`Method ${mapping.method} not found in StatDataBindingService`);
     }
 
-    // 验证参数数量
+    // 验证参数数量（对于升级指令，reason 是可选的）
     const expectedParams = mapping.params.length;
     const actualParams = Object.keys(command.params).length;
-    if (actualParams !== expectedParams) {
+
+    // 对于升级指令，允许 reason 参数缺失
+    if (command.type === CommandType.LEVEL_UP && actualParams === expectedParams - 1) {
+      // 如果缺少 reason 参数，添加默认值
+      if (!command.params.reason) {
+        command.params.reason = '自动升级';
+      }
+    } else if (actualParams !== expectedParams) {
       throw new Error(
         `Parameter count mismatch for ${command.action}: expected ${expectedParams}, got ${actualParams}`,
       );
@@ -509,7 +539,9 @@ class CommandExecutor {
 
     // 执行方法
     try {
-      const result = await method.call(this.statDataBinding, ...Object.values(command.params));
+      // 按照映射的参数顺序提取参数值
+      const paramValues = mapping.params.map(paramName => command.params[paramName]);
+      const result = await method.call(this.statDataBinding, ...paramValues);
       return { command, success: true, result };
     } catch (error) {
       return {

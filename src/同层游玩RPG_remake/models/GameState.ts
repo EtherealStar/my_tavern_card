@@ -88,7 +88,6 @@ export interface GameStateError extends Error {
 export interface ServiceStatus {
   gameStateService: boolean;
   eventBus: boolean;
-  uiService: boolean;
 }
 
 // 状态变化事件类型

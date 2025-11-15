@@ -8,9 +8,6 @@ export const TYPES = {
   EventBus: Symbol.for('EventBus'),
   GameCore: Symbol.for('GameCore'),
 
-  // 基础服务
-  UIService: Symbol.for('UIService'),
-
   // MVU 相关服务
   StatDataBindingService: Symbol.for('StatDataBindingService'),
 
@@ -25,9 +22,9 @@ export const TYPES = {
   SaveLoadManagerService: Symbol.for('SaveLoadManagerService'),
 
   // 其他服务
-  AchievementService: Symbol.for('AchievementService'),
   DomPortalService: Symbol.for('DomPortalService'),
   ResponsiveService: Symbol.for('ResponsiveService'),
+  GlobalStateManager: Symbol.for('GlobalStateManager'),
 
   // 指令队列服务
   CommandQueueService: Symbol.for('CommandQueueService'),

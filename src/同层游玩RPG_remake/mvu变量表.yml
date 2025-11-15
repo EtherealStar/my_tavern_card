@@ -40,31 +40,23 @@ equipment:
 inventory:
   $meta:
     recursiveExtensible: true
-  weapons: []
-  armors: []
-  accessories: []
-  others: []
+  items: []
 relationships:
   $meta:
     recursiveExtensible: true
     template:
       gender: 未知
       race: 未知
-      age: 未知
       background: 未知
       personality: 未知
       outfit: 未知
-      thoughts: 未知
       relationship: 陌生人
-      others: 未知
-      events: []
       affinity: 0
+      avatarUrl: null
 enemies:
   $meta:
     recursiveExtensible: true
-    Id:
-      template: 未知敌人名称
-      variantId: 未知敌人变体ID
-      gender: 未知
+    template:
+      variant: 未知敌人变体
       race: 未知
       battle_end: false

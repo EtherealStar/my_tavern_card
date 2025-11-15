@@ -15,8 +15,8 @@ import { inject, injectable } from 'inversify';
 import { z } from 'zod';
 import { EventBus } from '../core/EventBus';
 import { TYPES } from '../core/ServiceIdentifiers';
+import { getAttributesByLevel, isValidLevel, type LevelAttributes } from '../data/levelAttributes';
 import { ATTRIBUTE_KEYS, ATTRIBUTE_NAME_MAP, CHINESE_ATTRIBUTE_NAMES } from '../models/CreationSchemas';
-// SafeValueHelper 已移除，统一使用 MVU 框架
 
 // 导入 MVU 相关类型
 type VariableOption = {
@@ -127,15 +127,10 @@ export class StatDataBindingService {
     }
   }
 
-  // 单例模式已移除，使用依赖注入
-
-  // 依赖注入已通过构造函数完成，无需手动初始化
-
   /**
    * 订阅MVU事件
    */
   private _subscribeMvuEvents(): void {
-    const Mvu = (window as any).Mvu;
     const eventOn = (window as any).eventOn;
 
     if (!Mvu?.events || typeof eventOn !== 'function') {
@@ -194,7 +189,6 @@ export class StatDataBindingService {
     id: string;
     name: string;
     variantId: string;
-    gender: string;
     race: string;
     defeated: boolean;
   } | null> {
@@ -207,18 +201,16 @@ export class StatDataBindingService {
         (typeof nameFromTemplate === 'string' && nameFromTemplate) ||
         String(enemyId);
 
-      const variantId = await this.getMvuVariable(`enemies.${enemyId}.variantId`, { default_value: '未知' });
-      const gender = await this.getMvuVariable(`enemies.${enemyId}.gender`, { default_value: '未知' });
+      const variant = await this.getMvuVariable(`enemies.${enemyId}.variant`, { default_value: '未知' });
       const race = await this.getMvuVariable(`enemies.${enemyId}.race`, { default_value: '未知' });
-      const defeated = await this.getMvuVariable(`enemies.${enemyId}.defeated`, { default_value: false });
+      const battleEnd = await this.getMvuVariable(`enemies.${enemyId}.battle_end`, { default_value: false });
 
       return {
         id: enemyId,
         name: typeof name === 'string' ? name : String(enemyId),
-        variantId: typeof variantId === 'string' ? variantId : '未知',
-        gender: typeof gender === 'string' ? gender : '未知',
+        variantId: typeof variant === 'string' ? variant : '未知',
         race: typeof race === 'string' ? race : '未知',
-        defeated: Boolean(defeated),
+        defeated: Boolean(battleEnd), // battle_end: true 表示战斗已结束（敌人被击败）
       };
     } catch (error) {
       console.error('[StatDataBindingService] 获取敌人基础信息失败:', error);
@@ -234,7 +226,6 @@ export class StatDataBindingService {
       id: string;
       name: string;
       variantId: string;
-      gender: string;
       race: string;
       defeated: boolean;
     }>
@@ -245,7 +236,6 @@ export class StatDataBindingService {
         id: string;
         name: string;
         variantId: string;
-        gender: string;
         race: string;
         defeated: boolean;
       }> = [];
@@ -264,11 +254,13 @@ export class StatDataBindingService {
 
   /**
    * 获取敌人是否被击败
+   * 注意：基于 battle_end 字段，battle_end: true 表示战斗已结束（敌人被击败）
    */
   public async getEnemyDefeated(enemyId: string, defaultValue: boolean = false): Promise<boolean> {
     try {
-      const v = await this.getMvuVariable(`enemies.${enemyId}.defeated`, { default_value: defaultValue });
-      return Boolean(v);
+      // battle_end: true 表示战斗已结束（敌人被击败），所以直接返回 battleEnd 的值
+      const battleEnd = await this.getMvuVariable(`enemies.${enemyId}.battle_end`, { default_value: defaultValue });
+      return Boolean(battleEnd);
     } catch (error) {
       console.error('[StatDataBindingService] 获取敌人击败状态失败:', error);
       return defaultValue;
@@ -277,11 +269,13 @@ export class StatDataBindingService {
 
   /**
    * 设置敌人是否被击败
+   * 注意：基于 battle_end 字段，defeated: true 对应 battle_end: true（战斗已结束）
    */
   public async setEnemyDefeated(enemyId: string, defeated: boolean, reason?: string): Promise<boolean> {
     try {
+      // defeated: true 表示敌人被击败，对应 battle_end: true（战斗已结束）
       return await this.setAttributeValue(
-        `enemies.${enemyId}.defeated`,
+        `enemies.${enemyId}.battle_end`,
         Boolean(defeated),
         reason || 'set_enemy_defeated',
       );
@@ -299,34 +293,15 @@ export class StatDataBindingService {
     if (this.isInitialized) return true;
 
     this.config = config;
-    const maxRetries = 3;
-    const retryDelay = 1000;
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        // 订阅 MVU 事件
-        this._subscribeMvuEvents();
+    // 订阅 MVU 事件
+    this._subscribeMvuEvents();
 
-        // 初始加载数据
-        await this.loadStatData();
+    // 初始加载数据
+    await this.loadStatData();
 
-        this.isInitialized = true;
-        return true;
-      } catch (error) {
-        console.error(`[StatDataBindingService] 初始化失败 (尝试 ${attempt}/${maxRetries}):`, error);
-
-        if (attempt === maxRetries) {
-          console.error('[StatDataBindingService] 初始化最终失败，将以降级模式运行');
-          this.isInitialized = true;
-          return false;
-        }
-
-        // 等待后重试
-        await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
-      }
-    }
-
-    return false;
+    this.isInitialized = true;
+    return true;
   }
 
   /**
@@ -373,7 +348,6 @@ export class StatDataBindingService {
       return defaultValue;
     }
 
-    const Mvu = (window as any).Mvu;
     return Mvu.getMvuVariable(mvuData, path, { default_value: defaultValue });
   }
 
@@ -551,7 +525,6 @@ export class StatDataBindingService {
       }
 
       // 设置变量
-      const Mvu = (window as any).Mvu;
       const success = await Mvu.setMvuVariable(mvuData, attributeName, value, {
         reason: reason || 'stat_data_binding_update',
         is_recursive: false,
@@ -597,19 +570,30 @@ export class StatDataBindingService {
     // 获取MVU数据
     const mvuData = this.getMvuData();
 
+    let workingMvuData = mvuData;
+
     const results: boolean[] = [];
     const updatedPaths: string[] = [];
 
-    // 检查是否是角色创建时的属性数据（包含中文属性名）
+    // 检查是否是角色创建时的属性数据
     const isCharacterCreation = this._isCharacterCreationAttributes(attributes);
 
     if (isCharacterCreation) {
       // 在角色创建时，先重新加载初始数据
       try {
-        const Mvu = (window as any).Mvu;
         if (Mvu && typeof Mvu.reloadInitVar === 'function') {
           const reloadSuccess = await Mvu.reloadInitVar(mvuData);
-          if (!reloadSuccess) {
+          console.log(
+            '[StatDataBindingService] Mvu.reloadInitVar 返回结果:',
+            reloadSuccess,
+            '是否成功:',
+            reloadSuccess === true,
+          );
+          if (reloadSuccess) {
+            // 成功后重新获取一份最新的 MVU 数据，避免继续基于旧引用进行写入
+            workingMvuData = this.getMvuData();
+            console.log('[StatDataBindingService] 初始变量数据已重新加载，已刷新本地数据引用');
+          } else {
             console.warn('[StatDataBindingService] 重新加载初始数据失败，但继续执行属性设置');
           }
         } else {
@@ -621,9 +605,8 @@ export class StatDataBindingService {
       }
 
       // 直接设置属性，让 MVU 框架自动处理格式
-
       // 设置 base_attributes
-      const baseSuccess = await Mvu.setMvuVariable(mvuData, 'base_attributes', attributes, {
+      const baseSuccess = await Mvu.setMvuVariable(workingMvuData, 'base_attributes', attributes, {
         reason: reason || 'character_creation_base_attributes',
         is_recursive: false,
       });
@@ -633,7 +616,7 @@ export class StatDataBindingService {
       }
 
       // 设置 current_attributes
-      const currentSuccess = await Mvu.setMvuVariable(mvuData, 'current_attributes', attributes, {
+      const currentSuccess = await Mvu.setMvuVariable(workingMvuData, 'current_attributes', attributes, {
         reason: reason || 'character_creation_current_attributes',
         is_recursive: false,
       });
@@ -647,7 +630,7 @@ export class StatDataBindingService {
         // 验证并清理数据值
         const validatedValue = this._validateAndCleanValue(attributeName, value);
 
-        const success = await Mvu.setMvuVariable(mvuData, attributeName, validatedValue, {
+        const success = await Mvu.setMvuVariable(workingMvuData, attributeName, validatedValue, {
           reason: reason || 'stat_data_binding_batch_update',
           is_recursive: false,
         });
@@ -661,7 +644,7 @@ export class StatDataBindingService {
 
     // 批量写回数据
     if (updatedPaths.length > 0) {
-      await this.replaceMvuData(mvuData);
+      await this.replaceMvuData(workingMvuData);
     }
 
     // 更新本地缓存
@@ -907,7 +890,6 @@ export class StatDataBindingService {
    */
   public getMvuData(options: VariableOption = { type: 'message', message_id: 0 }): Mvu.MvuData {
     try {
-      const Mvu = (window as any).Mvu;
       const mvuData = Mvu.getMvuData(options);
 
       if (!mvuData) {
@@ -955,7 +937,6 @@ export class StatDataBindingService {
     options: VariableOption = { type: 'message', message_id: 0 },
   ): Promise<boolean> {
     try {
-      const Mvu = (window as any).Mvu;
       await Mvu.replaceMvuData(mvuData, options);
 
       // 由于 replaceMvuData 是"完全替换"而不是"增量更新"，
@@ -1058,9 +1039,13 @@ export class StatDataBindingService {
    * 获取背包信息（从 MVU 变量）
    */
   public async getMvuInventory(): Promise<Record<string, any>> {
-    // 直接使用 MVU 框架获取数据，框架会自动处理 [值, "描述"] 格式
+    // 仅支持新结构：inventory.items 为数组
     const data = await this.getMvuVariable('inventory', { default_value: {} });
-    return data && typeof data === 'object' ? data : {};
+    const inv = data && typeof data === 'object' ? data : {};
+    if (!Array.isArray(inv.items)) {
+      inv.items = [];
+    }
+    return inv;
   }
 
   /**
@@ -1496,11 +1481,19 @@ export class StatDataBindingService {
   public async unequipWeapon(reason?: string): Promise<boolean> {
     try {
       const currentEquipment = await this.getMvuEquipment();
+      const weapon = currentEquipment.weapon; // 保存卸下前的装备信息
+
+      // 如果没有装备，直接返回成功（无需操作）
+      if (!weapon) {
+        return true;
+      }
+
       const updatedEquipment = { ...currentEquipment, weapon: null };
 
       const success = await this.setStatDataField('equipment', updatedEquipment, reason || '卸下武器');
-      if (success) {
-        this.eventBus.emit('equipment:weapon_unequipped', { timestamp: new Date() });
+      if (success && weapon) {
+        // 只有在有装备时才发出事件，确保事件数据中包含装备信息
+        this.eventBus.emit('equipment:weapon_unequipped', { weapon, timestamp: new Date() });
       }
       return success;
     } catch (error) {
@@ -1525,11 +1518,19 @@ export class StatDataBindingService {
   public async unequipArmor(reason?: string): Promise<boolean> {
     try {
       const currentEquipment = await this.getMvuEquipment();
+      const armor = currentEquipment.armor; // 保存卸下前的装备信息
+
+      // 如果没有装备，直接返回成功（无需操作）
+      if (!armor) {
+        return true;
+      }
+
       const updatedEquipment = { ...currentEquipment, armor: null };
 
       const success = await this.setStatDataField('equipment', updatedEquipment, reason || '卸下防具');
-      if (success) {
-        this.eventBus.emit('equipment:armor_unequipped', { timestamp: new Date() });
+      if (success && armor) {
+        // 只有在有装备时才发出事件，确保事件数据中包含装备信息
+        this.eventBus.emit('equipment:armor_unequipped', { armor, timestamp: new Date() });
       }
       return success;
     } catch (error) {
@@ -1554,11 +1555,19 @@ export class StatDataBindingService {
   public async unequipAccessory(reason?: string): Promise<boolean> {
     try {
       const currentEquipment = await this.getMvuEquipment();
+      const accessory = currentEquipment.accessory; // 保存卸下前的装备信息
+
+      // 如果没有装备，直接返回成功（无需操作）
+      if (!accessory) {
+        return true;
+      }
+
       const updatedEquipment = { ...currentEquipment, accessory: null };
 
       const success = await this.setStatDataField('equipment', updatedEquipment, reason || '卸下饰品');
-      if (success) {
-        this.eventBus.emit('equipment:accessory_unequipped', { timestamp: new Date() });
+      if (success && accessory) {
+        // 只有在有装备时才发出事件，确保事件数据中包含装备信息
+        this.eventBus.emit('equipment:accessory_unequipped', { accessory, timestamp: new Date() });
       }
       return success;
     } catch (error) {
@@ -1637,7 +1646,8 @@ export class StatDataBindingService {
   public async getInventoryWeapons(): Promise<any[]> {
     try {
       const inventory = await this.getMvuInventory();
-      return Array.isArray(inventory.weapons) ? inventory.weapons : [];
+      const items: any[] = Array.isArray(inventory.items) ? inventory.items : [];
+      return items.filter(it => it && it.type === '武器');
     } catch (error) {
       console.error('[StatDataBindingService] 获取背包武器失败:', error);
       return [];
@@ -1658,7 +1668,8 @@ export class StatDataBindingService {
   public async getInventoryArmors(): Promise<any[]> {
     try {
       const inventory = await this.getMvuInventory();
-      return Array.isArray(inventory.armors) ? inventory.armors : [];
+      const items: any[] = Array.isArray(inventory.items) ? inventory.items : [];
+      return items.filter(it => it && it.type === '防具');
     } catch (error) {
       console.error('[StatDataBindingService] 获取背包防具失败:', error);
       return [];
@@ -1679,7 +1690,8 @@ export class StatDataBindingService {
   public async getInventoryAccessories(): Promise<any[]> {
     try {
       const inventory = await this.getMvuInventory();
-      return Array.isArray(inventory.accessories) ? inventory.accessories : [];
+      const items: any[] = Array.isArray(inventory.items) ? inventory.items : [];
+      return items.filter(it => it && it.type === '饰品');
     } catch (error) {
       console.error('[StatDataBindingService] 获取背包饰品失败:', error);
       return [];
@@ -1700,7 +1712,8 @@ export class StatDataBindingService {
   public async getInventoryOthers(): Promise<any[]> {
     try {
       const inventory = await this.getMvuInventory();
-      return Array.isArray(inventory.others) ? inventory.others : [];
+      const items: any[] = Array.isArray(inventory.items) ? inventory.items : [];
+      return items.filter(it => it && it.type === '其他物品');
     } catch (error) {
       console.error('[StatDataBindingService] 获取背包其他物品失败:', error);
       return [];
@@ -1753,22 +1766,31 @@ export class StatDataBindingService {
         return false;
       }
 
-      // 4. 获取当前inventory数组
-      const currentItems = Mvu.getMvuVariable(mvuData, `inventory.${type}`, { default_value: [] });
+      // 4. 获取当前 items 数组（新结构）
+      const inv = Mvu.getMvuVariable(mvuData, `inventory`, { default_value: {} }) || {};
+      const currentItems = Array.isArray(inv.items) ? inv.items : [];
 
       // 5. 添加新物品
-      const updatedItems = [...currentItems, validationResult.data];
+      const mappedType =
+        type === 'weapons' ? '武器' : type === 'armors' ? '防具' : type === 'accessories' ? '饰品' : '其他物品';
+      const normalized = {
+        ...validationResult.data,
+        type: mappedType,
+        quantity:
+          typeof (validationResult.data as any).quantity === 'number' ? (validationResult.data as any).quantity : 1,
+      };
+      const updatedItems = [...currentItems, normalized];
 
       // 6. 直接设置到stat_data
-      const success = await Mvu.setMvuVariable(mvuData, `inventory.${type}`, updatedItems, {
-        reason: reason || `添加物品到${type}`,
+      const success = await Mvu.setMvuVariable(mvuData, `inventory.items`, updatedItems, {
+        reason: reason || `添加物品到items(${mappedType})`,
         is_recursive: false,
       });
 
       if (success) {
         // 7. 写回数据
         await this.replaceMvuData(mvuData);
-        this.eventBus.emit('inventory:item_added', { type, item, timestamp: new Date() });
+        this.eventBus.emit('inventory:item_added', { type: mappedType, item: normalized, timestamp: new Date() });
       }
 
       return success;
@@ -1808,27 +1830,44 @@ export class StatDataBindingService {
         return false;
       }
 
-      // 3. 获取当前inventory数组
-      const currentItems = Mvu.getMvuVariable(mvuData, `inventory.${type}`, { default_value: [] });
+      // 3. 获取当前 items
+      const inv = Mvu.getMvuVariable(mvuData, `inventory`, { default_value: {} }) || {};
+      const currentItems: any[] = Array.isArray(inv.items) ? inv.items : [];
 
-      if (itemIndex < 0 || itemIndex >= currentItems.length) {
+      const mappedType =
+        type === 'weapons' ? '武器' : type === 'armors' ? '防具' : type === 'accessories' ? '饰品' : '其他物品';
+      const typedItems = currentItems.filter(it => it && it.type === mappedType);
+
+      if (itemIndex < 0 || itemIndex >= typedItems.length) {
         console.warn(`[StatDataBindingService] 物品索引 ${itemIndex} 超出范围`);
         return false;
       }
 
-      const removedItem = currentItems[itemIndex];
-      const updatedItems = currentItems.filter((_: any, index: number) => index !== itemIndex);
+      const target = typedItems[itemIndex];
+      let removed = false;
+      const updatedItems = currentItems.filter(it => {
+        if (!removed && it && it.type === mappedType && it === target) {
+          removed = true;
+          return false;
+        }
+        return true;
+      });
 
       // 4. 直接设置到stat_data
-      const success = await Mvu.setMvuVariable(mvuData, `inventory.${type}`, updatedItems, {
-        reason: reason || `从${type}移除物品`,
+      const success = await Mvu.setMvuVariable(mvuData, `inventory.items`, updatedItems, {
+        reason: reason || `从items(${mappedType})移除物品`,
         is_recursive: false,
       });
 
       if (success) {
         // 5. 写回数据
         await this.replaceMvuData(mvuData);
-        this.eventBus.emit('inventory:item_removed', { type, itemIndex, removedItem, timestamp: new Date() });
+        this.eventBus.emit('inventory:item_removed', {
+          type: mappedType,
+          itemIndex,
+          removedItem: target,
+          timestamp: new Date(),
+        });
       }
 
       return success;
@@ -1893,11 +1932,18 @@ export class StatDataBindingService {
   ): Promise<boolean> {
     try {
       const currentInventory = await this.getMvuInventory();
-      const updatedInventory = { ...currentInventory, [type]: [] };
+      const mappedType =
+        type === 'weapons' ? '武器' : type === 'armors' ? '防具' : type === 'accessories' ? '饰品' : '其他物品';
+      const items: any[] = Array.isArray(currentInventory.items) ? currentInventory.items : [];
+      const updatedItems = items.filter(it => !(it && it.type === mappedType));
 
-      const success = await this.setStatDataField('inventory', updatedInventory, reason || `清空${type}背包`);
+      const success = await this.setStatDataField(
+        'inventory',
+        { ...currentInventory, items: updatedItems },
+        reason || `清空${mappedType}背包`,
+      );
       if (success) {
-        this.eventBus.emit('inventory:type_cleared', { type, timestamp: new Date() });
+        this.eventBus.emit('inventory:type_cleared', { type: mappedType, timestamp: new Date() });
       }
       return success;
     } catch (error) {
@@ -2232,12 +2278,12 @@ export class StatDataBindingService {
    * console.log(`当前随机事件: ${randomEvent}`);
    * ```
    */
-  public async getCurrentRandomEvent(defaultValue: string = '无'): Promise<string> {
+  public async getCurrentEvent(defaultValue: string = '无'): Promise<string> {
     try {
-      const data = await this.getMvuVariable('random_event', { default_value: defaultValue });
+      const data = await this.getMvuVariable('event', { default_value: defaultValue });
       return typeof data === 'string' ? data : defaultValue;
     } catch (error) {
-      console.error('[StatDataBindingService] 获取当前随机事件失败:', error);
+      console.error('[StatDataBindingService] 获取当前事件失败:', error);
       return defaultValue;
     }
   }
@@ -2411,8 +2457,8 @@ export class StatDataBindingService {
    */
   public async isRandomEventActive(): Promise<boolean> {
     try {
-      const randomEvent = await this.getCurrentRandomEvent();
-      return randomEvent !== '无' && randomEvent.trim() !== '';
+      const ev = await this.getCurrentEvent();
+      return ev !== '无' && ev.trim() !== '';
     } catch (error) {
       console.error('[StatDataBindingService] 检查随机事件状态失败:', error);
       return false;
@@ -2448,7 +2494,7 @@ export class StatDataBindingService {
     date: string;
     time: string;
     location: string;
-    randomEvent: string;
+    event: string;
     hasActiveEvent: boolean;
     dateTime: string;
     character: {
@@ -2458,21 +2504,21 @@ export class StatDataBindingService {
     };
   }> {
     try {
-      const [date, time, location, randomEvent, characterInfo] = await Promise.all([
+      const [date, time, location, event, characterInfo] = await Promise.all([
         this.getCurrentDate(),
         this.getCurrentTime(),
         this.getCurrentLocation(),
-        this.getCurrentRandomEvent(),
+        this.getCurrentEvent(),
         this.getCharacterInfo(),
       ]);
 
-      const hasActiveEvent = randomEvent !== '无' && randomEvent.trim() !== '';
+      const hasActiveEvent = event !== '无' && event.trim() !== '';
 
       return {
         date,
         time,
         location,
-        randomEvent,
+        event,
         hasActiveEvent,
         dateTime: `${date} ${time}`,
         character: characterInfo,
@@ -2483,7 +2529,7 @@ export class StatDataBindingService {
         date: '2030-01-01',
         time: '12:00',
         location: '未知地点',
-        randomEvent: '无',
+        event: '无',
         hasActiveEvent: false,
         dateTime: '2030-01-01 12:00',
         character: {
@@ -2643,6 +2689,191 @@ export class StatDataBindingService {
     }
   }
 
+  // ==================== 升级相关函数 ====================
+
+  /**
+   * 获取玩家当前等级
+   * @param defaultValue 默认等级，当等级不存在时返回
+   * @returns 玩家当前等级
+   *
+   * @example
+   * ```typescript
+   * const level = await statDataService.getPlayerLevel(1);
+   * console.log(`当前等级: ${level}`);
+   * ```
+   */
+  public async getPlayerLevel(defaultValue: number = 1): Promise<number> {
+    try {
+      const data = await this.getMvuVariable('level', { default_value: defaultValue });
+      const numValue = Number(data);
+      return Number.isFinite(numValue) && numValue >= 1 && numValue <= 20 ? numValue : defaultValue;
+    } catch (error) {
+      console.error('[StatDataBindingService] 获取玩家等级失败:', error);
+      return defaultValue;
+    }
+  }
+
+  /**
+   * 检查是否可以升级到目标等级
+   * @param targetLevel 目标等级
+   * @returns 是否可以升级（等级有效且在1-20范围内）
+   *
+   * @example
+   * ```typescript
+   * const canUpgrade = await statDataService.canLevelUp(5);
+   * if (canUpgrade) {
+   *   console.log('可以升级到5级');
+   * }
+   * ```
+   */
+  public async canLevelUp(targetLevel: number): Promise<boolean> {
+    try {
+      if (!isValidLevel(targetLevel)) {
+        return false;
+      }
+
+      const currentLevel = await this.getPlayerLevel(1);
+      return targetLevel > currentLevel && targetLevel <= 20;
+    } catch (error) {
+      console.error('[StatDataBindingService] 检查是否可以升级失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 计算升级到目标等级的属性值
+   * @param targetLevel 目标等级
+   * @returns 目标等级的属性值对象，如果等级无效则返回null
+   *
+   * @example
+   * ```typescript
+   * const attributes = await statDataService.calculateLevelUpAttributes(5);
+   * if (attributes) {
+   *   console.log('升级到5级的属性:', attributes);
+   * }
+   * ```
+   */
+  public async calculateLevelUpAttributes(targetLevel: number): Promise<LevelAttributes | null> {
+    try {
+      if (!isValidLevel(targetLevel)) {
+        console.warn(`[StatDataBindingService] 无效的目标等级: ${targetLevel}`);
+        return null;
+      }
+
+      const attributes = getAttributesByLevel(targetLevel);
+      return attributes;
+    } catch (error) {
+      console.error('[StatDataBindingService] 计算升级属性失败:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 应用升级，更新 base_attributes 和 current_attributes
+   * 注意：虽然 base_attributes 在 MVU 规则中标记为 readonly，但升级属于特殊业务场景，
+   * 我们通过 Mvu.setMvuVariable 直接设置属性值（原因标记为 level_up）
+   *
+   * @param newLevel 新的等级
+   * @param reason 升级原因（用于日志记录）
+   * @returns 是否升级成功
+   *
+   * @example
+   * ```typescript
+   * const success = await statDataService.applyLevelUp(5, '经验值达到升级条件');
+   * if (success) {
+   *   console.log('升级成功');
+   * }
+   * ```
+   */
+  public async applyLevelUp(newLevel: number, reason?: string): Promise<boolean> {
+    try {
+      // 1. 验证目标等级
+      if (!isValidLevel(newLevel)) {
+        console.warn(`[StatDataBindingService] 无效的目标等级: ${newLevel}`);
+        return false;
+      }
+
+      // 2. 检查是否可以升级
+      const canUpgrade = await this.canLevelUp(newLevel);
+      if (!canUpgrade) {
+        const currentLevel = await this.getPlayerLevel(1);
+        console.warn(`[StatDataBindingService] 无法升级到等级 ${newLevel}，当前等级: ${currentLevel}`);
+        return false;
+      }
+
+      // 3. 获取目标等级的属性值
+      const newAttributes = getAttributesByLevel(newLevel);
+      if (!newAttributes) {
+        console.warn(`[StatDataBindingService] 无法获取等级 ${newLevel} 的属性值`);
+        return false;
+      }
+
+      // 4. 获取当前等级
+      const currentLevel = await this.getPlayerLevel(1);
+
+      // 5. 获取MVU数据
+      const mvuData = this.getMvuData();
+      if (!mvuData) {
+        console.warn('[StatDataBindingService] 无法获取MVU数据');
+        return false;
+      }
+
+      // 6. 获取MVU框架实例
+      if (!Mvu || typeof Mvu.setMvuVariable !== 'function') {
+        console.warn('[StatDataBindingService] MVU框架或setMvuVariable方法不可用');
+        return false;
+      }
+
+      // 7. 更新 base_attributes（直接设置为目标值）
+      // 注意：虽然 base_attributes 标记为 readonly，但升级是特殊情况，使用 level_up 作为原因
+      const baseSuccess = await Mvu.setMvuVariable(mvuData, 'base_attributes', newAttributes, {
+        reason: reason || `升级从 ${currentLevel} 到 ${newLevel}`,
+        is_recursive: false,
+      });
+
+      if (!baseSuccess) {
+        console.error('[StatDataBindingService] 更新 base_attributes 失败');
+        return false;
+      }
+
+      // 8. 更新 current_attributes（直接设置为目标值）
+      // current_attributes 通常由 base_attributes + 装备加成计算，但升级时也直接设置为目标值
+      // 后续装备加成会通过其他机制重新计算
+      const currentSuccess = await Mvu.setMvuVariable(mvuData, 'current_attributes', newAttributes, {
+        reason: reason || `升级从 ${currentLevel} 到 ${newLevel}`,
+        is_recursive: false,
+      });
+
+      if (!currentSuccess) {
+        console.error('[StatDataBindingService] 更新 current_attributes 失败');
+        // 即使 current_attributes 更新失败，base_attributes 已经更新了，返回部分成功
+        // 但为了数据一致性，这里返回失败，让调用方处理
+        return false;
+      }
+
+      // 9. 写回数据
+      await this.replaceMvuData(mvuData);
+
+      // 10. 重新加载统计数据
+      await this.loadStatData();
+
+      // 11. 触发升级事件
+      this.eventBus.emit('stat_data:level_up', {
+        fromLevel: currentLevel,
+        toLevel: newLevel,
+        newAttributes,
+        timestamp: new Date(),
+      });
+
+      console.log(`[StatDataBindingService] 成功升级从等级 ${currentLevel} 到 ${newLevel}`, newAttributes);
+
+      return true;
+    } catch (error) {
+      console.error('[StatDataBindingService] 应用升级失败:', error);
+      return false;
+    }
+  }
+
   // ==================== 私有辅助方法 ====================
 
   /**
@@ -2666,8 +2897,6 @@ export class StatDataBindingService {
     // 检查是否包含英文属性名（角色创建时使用英文属性名）
     return ATTRIBUTE_KEYS.some(name => Object.prototype.hasOwnProperty.call(attributes, name));
   }
-
-  // _convertToMvuFormat 方法已移除，MVU 框架会自动处理格式转换
 
   /**
    * 验证并清理数据值

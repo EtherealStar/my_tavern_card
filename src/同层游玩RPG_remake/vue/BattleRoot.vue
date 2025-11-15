@@ -1,26 +1,29 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, onUnmounted, ref } from 'vue';
 import { useBattleSystem } from '同层游玩RPG_remake/composables/useBattleSystem';
+import { BattleConfigService } from '同层游玩RPG_remake/services/BattleConfigService';
 import { useBattleConfig } from '../composables/useBattleConfig';
-import { useGameServices } from '../composables/useGameServices';
-import { useGameStateManager } from '../composables/useGameStateManager';
+import { useStatData } from '../composables/useStatData';
 import type { EventBus } from '../core/EventBus';
 import { TYPES } from '../core/ServiceIdentifiers';
+import { getEnemyExpByLevel } from '../data/levelExpTable';
 import { historyManager } from '../services/HistoryManager';
+import type { StatDataBindingService } from '../services/StatDataBindingService';
+import { battleConsoleLog } from '../utils/battleConsoleLogger';
 import BattleDebugPanel from './components/BattleDebugPanel.vue';
 import BattleLayout from './components/BattleLayout.vue';
 import BattleResultDialog from './components/BattleResultDialog.vue';
-const gameState = useGameStateManager();
 const battleConfigManager = useBattleConfig();
 
-// 使用游戏服务
-const { showSuccess, showError, showWarning } = useGameServices();
+// 使用统计数据服务（用于经验值结算）
+const statData = useStatData();
 
 // ✅ 在 setup 阶段初始化战斗系统（inject 只能在这里使用）
 const battleSystem = useBattleSystem();
 const battleState = (battleSystem as any).battleState; // 从 battleSystem 中获取 battleState
 const eventBus = inject<EventBus>(TYPES.EventBus);
 const battleConfigService = inject<BattleConfigService>(TYPES.BattleConfigService);
+const statDataBindingService = inject<StatDataBindingService>(TYPES.StatDataBindingService);
 
 // 战斗结果相关状态
 const showBattleResult = ref(false);
@@ -42,6 +45,7 @@ const newSkill = ref({
   flatPower: 0,
   hitModifier: 0,
   critBonus: 0,
+  mpCost: 0,
   animationKey: '',
   tags: [],
 });
@@ -132,7 +136,7 @@ const activeEnemies = computed(() => {
   if (list.length === 0) {
     console.warn('[BattleRoot] No enemies found in participants:', {
       totalParticipants: participants.value.length,
-      participants: participants.value.map(p => ({ id: p?.id, name: p?.name, side: p?.side })),
+      participants: participants.value.map((p: any) => ({ id: p?.id, name: p?.name, side: p?.side })),
     });
     return [];
   }
@@ -169,6 +173,7 @@ const activeEnemies = computed(() => {
       mp: enemy.mp ?? 0,
       maxMp: enemy.maxMp ?? 0,
       stats: enemy.stats,
+      weakness: enemy.weakness, // 添加弱点信息
       enemyPortrait: {
         ...enemy.enemyPortrait,
         position,
@@ -249,6 +254,7 @@ function createAndAddSkill() {
     flatPower: newSkill.value.flatPower || 0,
     hitModifier: newSkill.value.hitModifier || 0,
     critBonus: newSkill.value.critBonus || 0,
+    mpCost: newSkill.value.mpCost || 0,
     animationKey: newSkill.value.animationKey || '',
     tags: newSkill.value.tags || [],
   };
@@ -265,7 +271,7 @@ function createAndAddSkill() {
     battleState.updateParticipant(activePlayer.value.id, { skills: currentSkills });
   }
 
-  console.log('[BattleRoot] 创建并添加新技能:', skill);
+  battleConsoleLog('[BattleRoot] 创建并添加新技能:', skill);
 
   // 关闭创建器
   showSkillCreator.value = false;
@@ -283,6 +289,7 @@ function clearNewSkillForm() {
     flatPower: 0,
     hitModifier: 0,
     critBonus: 0,
+    mpCost: 0,
     animationKey: '',
     tags: [],
   };
@@ -295,36 +302,36 @@ function openSkillCreator() {
 }
 
 function onActionSelected(actionId: string) {
-  console.log('[BattleRoot] 行动选择:', actionId);
+  battleConsoleLog('[BattleRoot] 行动选择:', actionId);
   selectedAction.value = actionId;
 }
 
 async function onActionConfirmed(actionId: string) {
-  console.log('[BattleRoot] onActionConfirmed called with actionId:', actionId);
+  battleConsoleLog('[BattleRoot] onActionConfirmed called with actionId:', actionId);
 
   try {
     const player = activePlayer.value;
     const enemy = activeEnemy.value;
 
-    console.log('[BattleRoot] onActionConfirmed - current state:', {
+    battleConsoleLog('[BattleRoot] onActionConfirmed - current state:', {
       hasPlayer: !!player,
       hasEnemy: !!enemy,
       player: player ? { id: player.id, name: player.name, side: player.side, hp: player.hp } : null,
       enemy: enemy ? { id: enemy.id, name: enemy.name, side: enemy.side, hp: enemy.hp } : null,
       participantsCount: participants.value.length,
-      participants: participants.value.map(p => ({ id: p?.id, name: p?.name, side: p?.side, hp: p?.hp })),
+      participants: participants.value.map((p: any) => ({ id: p?.id, name: p?.name, side: p?.side, hp: p?.hp })),
     });
 
     if (!player || !enemy) {
       console.warn('[BattleRoot] Missing battle targets:', { player, enemy, participants: participants.value });
-      showWarning('无法找到有效的战斗目标');
+      // 无法找到有效的战斗目标
       return;
     }
 
     // 检查战斗是否已完全初始化
     if (player.hp === undefined || enemy.hp === undefined) {
       console.warn('[BattleRoot] Battle not fully initialized yet:', { playerHp: player.hp, enemyHp: enemy.hp });
-      showWarning('战斗尚未完全初始化，请稍候...');
+      // 战斗尚未完全初始化
       return;
     }
 
@@ -344,7 +351,7 @@ async function onActionConfirmed(actionId: string) {
     }
   } catch (error) {
     console.error('[BattleRoot] 执行行动失败:', error);
-    showError('执行行动失败');
+    // 执行行动失败
   }
 }
 
@@ -359,14 +366,14 @@ async function onSkillSelected(skillId: string) {
         enemy,
         participants: participants.value,
       });
-      showWarning('无法找到有效的战斗目标');
+      // 无法找到有效的战斗目标
       return;
     }
 
     // 检查战斗是否已完全初始化
     if (player.hp === undefined || enemy.hp === undefined) {
       console.warn('[BattleRoot] Battle not fully initialized for skill:', { playerHp: player.hp, enemyHp: enemy.hp });
-      showWarning('战斗尚未完全初始化，请稍候...');
+      // 战斗尚未完全初始化
       return;
     }
 
@@ -380,7 +387,7 @@ async function onSkillSelected(skillId: string) {
     showSkillSelection.value = false;
   } catch (error) {
     console.error('[BattleRoot] 施放技能失败:', error);
-    showError('施放技能失败');
+    // 施放技能失败
   }
 }
 
@@ -395,17 +402,52 @@ async function exitBattle() {
   try {
     gameState.exitBattle(true);
     battleState.resetBattle();
-    showSuccess('已退出战斗');
+    // 已退出战斗
   } catch (error) {
     console.error('[BattleRoot] 退出战斗失败:', error);
-    showError('退出战斗失败');
+    // 退出战斗失败
   }
 }
 
-function closeBattleResult() {
+async function closeBattleResult() {
+  // 如果战斗胜利，结算经验值
+  if (battleResult.value?.winner === 'player') {
+    try {
+      // 获取敌人信息（从战斗状态中）
+      const enemyParticipant = battleState.battleState.value?.participants?.find((p: any) => p.side === 'enemy');
+
+      if (enemyParticipant?.level) {
+        // 计算经验值
+        const expGained = getEnemyExpByLevel(enemyParticipant.level);
+
+        if (expGained > 0) {
+          // 获取当前经验值
+          const currentExp = await statData.getTotalExp();
+          const newExp = currentExp + expGained;
+
+          // 更新MVU变量
+          if (statDataBindingService) {
+            await statDataBindingService.setStatDataField('exp', newExp, '战斗胜利获得经验');
+
+            // 刷新经验条
+            await statData.refreshExpBarData();
+
+            // 显示提示
+            // 获得经验值
+          } else {
+            console.warn('[BattleRoot] StatDataBindingService 不可用，无法更新经验值');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[BattleRoot] 结算经验值失败:', error);
+      // 即使失败也继续关闭对话框
+    }
+  }
+
+  // 关闭对话框和退出战斗
   showBattleResult.value = false;
   battleResult.value = null;
-  // 关闭结果对话框时退出战斗
   exitBattle();
 }
 
@@ -424,7 +466,7 @@ const teardownBattleEventListeners = () => {
 };
 
 const setupBattleEventListeners = () => {
-  console.log('[BattleRoot] Setting up battle event listeners');
+  battleConsoleLog('[BattleRoot] Setting up battle event listeners');
 
   if (!eventBus) {
     console.warn('[BattleRoot] EventBus not available for battle event listeners');
@@ -435,7 +477,7 @@ const setupBattleEventListeners = () => {
 
   battleEventUnsubscribers.push(
     eventBus.on('battle:damage', (data: any) => {
-      console.log('[BattleRoot] Damage event:', data);
+      battleConsoleLog('[BattleRoot] Damage event:', data);
 
       // 使用生成的描述而不是简单文本
       if (data.description) {
@@ -476,7 +518,7 @@ const setupBattleEventListeners = () => {
 
   battleEventUnsubscribers.push(
     eventBus.on('battle:miss', (data: any) => {
-      console.log('[BattleRoot] Miss event:', data);
+      battleConsoleLog('[BattleRoot] Miss event:', data);
 
       if (data.description) {
         addBattleLog(data.description, 'warning');
@@ -500,7 +542,7 @@ const setupBattleEventListeners = () => {
 
   battleEventUnsubscribers.push(
     eventBus.on('battle:critical', (data: any) => {
-      console.log('[BattleRoot] Critical event:', data);
+      battleConsoleLog('[BattleRoot] Critical event:', data);
 
       if (data.description) {
         addBattleLog(data.description, 'success');
@@ -540,11 +582,13 @@ const setupBattleEventListeners = () => {
 
   battleEventUnsubscribers.push(
     eventBus.on('battle:state-updated', (payload: any) => {
-      console.log('[BattleRoot] Battle state updated:', payload);
+      battleConsoleLog('[BattleRoot] Battle state updated:', payload);
 
       // 只处理来自 BattleService 的事件（直接状态对象），忽略来自 useBattleState 的事件（包含 updates 和 battleState 的对象）
       if (payload?.updates !== undefined || payload?.battleState !== undefined) {
-        console.log('[BattleRoot] Ignoring battle:state-updated event from useBattleState to prevent circular updates');
+        battleConsoleLog(
+          '[BattleRoot] Ignoring battle:state-updated event from useBattleState to prevent circular updates',
+        );
         return;
       }
 
@@ -556,13 +600,13 @@ const setupBattleEventListeners = () => {
       }
 
       if (isSyncingBattleStateFromEvent) {
-        console.log('[BattleRoot] Already syncing battle state, skipping to prevent circular updates');
+        battleConsoleLog('[BattleRoot] Already syncing battle state, skipping to prevent circular updates');
         return;
       }
 
       isSyncingBattleStateFromEvent = true;
       try {
-        console.log('[BattleRoot] Syncing battle state from BattleService event');
+        battleConsoleLog('[BattleRoot] Syncing battle state from BattleService event');
         battleState.updateBattleState(resolvedState);
 
         // 记录历史（仅在调试模式下）
@@ -579,7 +623,7 @@ const setupBattleEventListeners = () => {
 
   battleEventUnsubscribers.push(
     eventBus.on('battle:result', (result: any) => {
-      console.log('[BattleRoot] Battle result:', result);
+      battleConsoleLog('[BattleRoot] Battle result:', result);
       battleResult.value = result;
       showBattleResult.value = true;
     }),
@@ -588,7 +632,7 @@ const setupBattleEventListeners = () => {
   // 调试面板事件监听器
   battleEventUnsubscribers.push(
     eventBus.on('battle:debug-update-enemy', (data: any) => {
-      console.log('[BattleRoot] Debug update enemy:', data);
+      battleConsoleLog('[BattleRoot] Debug update enemy:', data);
       if (data.participantId && data.updates) {
         battleState.updateParticipant(data.participantId, data.updates);
       }
@@ -597,7 +641,7 @@ const setupBattleEventListeners = () => {
 
   battleEventUnsubscribers.push(
     eventBus.on('battle:debug-update-player', (data: any) => {
-      console.log('[BattleRoot] Debug update player:', data);
+      battleConsoleLog('[BattleRoot] Debug update player:', data);
       if (data.participantId && data.updates) {
         battleState.updateParticipant(data.participantId, data.updates);
       }
@@ -606,7 +650,7 @@ const setupBattleEventListeners = () => {
 
   battleEventUnsubscribers.push(
     eventBus.on('battle:debug-reset-enemy', (data: any) => {
-      console.log('[BattleRoot] Debug reset enemy:', data);
+      battleConsoleLog('[BattleRoot] Debug reset enemy:', data);
       // 重置敌人到初始状态
       if (data.participantId && battleState.battleConfig.value) {
         const initialEnemy = battleState.battleConfig.value.participants.find((p: any) => p.id === data.participantId);
@@ -619,7 +663,7 @@ const setupBattleEventListeners = () => {
 
   battleEventUnsubscribers.push(
     eventBus.on('battle:debug-reset-player', (data: any) => {
-      console.log('[BattleRoot] Debug reset player:', data);
+      battleConsoleLog('[BattleRoot] Debug reset player:', data);
       // 重置玩家到初始状态
       if (data.participantId && battleState.battleConfig.value) {
         const initialPlayer = battleState.battleConfig.value.participants.find((p: any) => p.id === data.participantId);
@@ -632,7 +676,7 @@ const setupBattleEventListeners = () => {
 
   battleEventUnsubscribers.push(
     eventBus.on('battle:debug-import-enemy', (data: any) => {
-      console.log('[BattleRoot] Debug import enemy:', data);
+      battleConsoleLog('[BattleRoot] Debug import enemy:', data);
       if (activeEnemy.value) {
         battleState.updateParticipant(activeEnemy.value.id, data);
       }
@@ -641,7 +685,7 @@ const setupBattleEventListeners = () => {
 
   battleEventUnsubscribers.push(
     eventBus.on('battle:debug-import-full-config', (data: any) => {
-      console.log('[BattleRoot] Debug import full config:', data);
+      battleConsoleLog('[BattleRoot] Debug import full config:', data);
       if (data.enemy && activeEnemy.value) {
         battleState.updateParticipant(activeEnemy.value.id, data.enemy);
       }
@@ -654,45 +698,45 @@ const setupBattleEventListeners = () => {
   // 历史管理事件监听器
   battleEventUnsubscribers.push(
     eventBus.on('battle:debug-undo', () => {
-      console.log('[BattleRoot] Debug undo requested');
+      battleConsoleLog('[BattleRoot] Debug undo requested');
       const previousState = historyManager.undo();
       if (previousState) {
         battleState.updateBattleState(previousState);
-        showSuccess('已撤销到上一个状态');
+        // 已撤销到上一个状态
       } else {
-        showWarning('没有可撤销的操作');
+        // 没有可撤销的操作
       }
     }),
   );
 
   battleEventUnsubscribers.push(
     eventBus.on('battle:debug-redo', () => {
-      console.log('[BattleRoot] Debug redo requested');
+      battleConsoleLog('[BattleRoot] Debug redo requested');
       const nextState = historyManager.redo();
       if (nextState) {
         battleState.updateBattleState(nextState);
-        showSuccess('已重做到下一个状态');
+        // 已重做到下一个状态
       } else {
-        showWarning('没有可重做的操作');
+        // 没有可重做的操作
       }
     }),
   );
 
   battleEventUnsubscribers.push(
     eventBus.on('battle:debug-reset', () => {
-      console.log('[BattleRoot] Debug reset requested');
+      battleConsoleLog('[BattleRoot] Debug reset requested');
       if (battleState.battleConfig.value) {
         const initialState = battleState.createInitialState(battleState.battleConfig.value);
         battleState.updateBattleState(initialState);
         historyManager.clear();
-        showSuccess('已重置到初始状态');
+        // 已重置到初始状态
       }
     }),
   );
 
   battleEventUnsubscribers.push(
     eventBus.on('battle:debug-preset', (preset: string) => {
-      console.log('[BattleRoot] Debug preset requested:', preset);
+      battleConsoleLog('[BattleRoot] Debug preset requested:', preset);
       // 根据预设调整敌人属性
       if (activeEnemy.value) {
         let updates: any = {};
@@ -755,17 +799,17 @@ const setupBattleEventListeners = () => {
 
         if (Object.keys(updates).length > 0) {
           battleState.updateParticipant(activeEnemy.value.id, updates);
-          showSuccess(`已应用${preset}预设`);
+          // 已应用预设
         }
       }
     }),
   );
 
-  console.log('[BattleRoot] Battle event listeners set up successfully');
+  battleConsoleLog('[BattleRoot] Battle event listeners set up successfully');
 };
 
 onMounted(async () => {
-  console.log('[BattleRoot] Component mounted');
+  battleConsoleLog('[BattleRoot] Component mounted');
   try {
     setupBattleEventListeners();
     if (gameState.isInBattle.value && gameState.hasBattleConfig.value) {
@@ -774,17 +818,17 @@ onMounted(async () => {
       hasRequestedInitialBattle.value = true;
       const started = await battleConfigManager.startBattle(INITIAL_BATTLE_ID, undefined, { silent: true });
       if (!started) {
-        showError('自动启动战斗失败', '请手动选择战斗配置');
+        // 自动启动战斗失败
       }
     }
   } catch (error) {
     console.error('[BattleRoot] Failed to initialize battle system:', error);
-    showError('战斗系统初始化失败');
+    // 战斗系统初始化失败
   }
 });
 
 onUnmounted(() => {
-  console.log('[BattleRoot] Component unmounted');
+  battleConsoleLog('[BattleRoot] Component unmounted');
   teardownBattleEventListeners();
 });
 
@@ -795,11 +839,11 @@ async function initializeBattleFromStore() {
     return;
   }
   if (battleState.isInitialized.value) {
-    console.log('[BattleRoot] Battle already initialized, skip re-initialization');
+    battleConsoleLog('[BattleRoot] Battle already initialized, skip re-initialization');
     return;
   }
   try {
-    console.log('[BattleRoot] Initializing battle system...');
+    battleConsoleLog('[BattleRoot] Initializing battle system...');
 
     // 从 BattleConfigItem 中提取实际的 BattleConfig
     const battleConfig = battleConfigItem.config || battleConfigItem;
@@ -809,13 +853,13 @@ async function initializeBattleFromStore() {
       return;
     }
 
-    console.log('[BattleRoot] Starting battle with config:', {
+    battleConsoleLog('[BattleRoot] Starting battle with config:', {
       participantsCount: battleConfig.participants.length,
       participants: battleConfig.participants.map((p: any) => ({ id: p.id, side: p.side, name: p.name })),
     });
 
     await battleSystem.startBattle(battleConfig);
-    console.log('[BattleRoot] Battle initialized successfully');
+    battleConsoleLog('[BattleRoot] Battle initialized successfully');
   } catch (error) {
     console.error('[BattleRoot] Failed to initialize battle:', error);
   }

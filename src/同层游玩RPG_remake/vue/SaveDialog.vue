@@ -17,14 +17,14 @@
               v-for="it in saves"
               :key="it.slotId"
               :class="[
-                selected.value?.has(it.slotId)
+                selected.has(it.slotId)
                   ? 'border-2 border-[var(--color-primary)] bg-pink-50/80 ring-1 ring-[var(--color-primary)]'
                   : '',
                 expandedSlots.has(it.slotId) ? 'expanded' : '',
               ]"
               @click="toggleExpand(it.slotId)"
             >
-              <input type="checkbox" :checked="selected.value?.has(it.slotId)" @change.stop="toggleSelect(it.slotId)" />
+              <input type="checkbox" :checked="selected.has(it.slotId)" @change.stop="toggleSelect(it.slotId)" />
               <div class="flex-1">
                 <div class="font-semibold">
                   <template v-if="renamingId !== it.slotId">{{ it.name || '未命名存档' }}</template>
@@ -70,7 +70,7 @@
             </svg>
             {{ isAllSelected ? '全不选' : '全选' }}
           </button>
-          <button class="btn btn-danger" :disabled="selected.value?.size === 0 || busy.value" @click="onDelete">
+          <button class="btn btn-danger" :disabled="selected.size === 0 || busy.value" @click="onDelete">
             <svg fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" clip-rule="evenodd" />
               <path
@@ -93,7 +93,7 @@
             </svg>
             导入存档
           </button>
-          <button class="btn btn-export" :disabled="selected.value?.size !== 1 || busy.value" @click="onExport">
+          <button class="btn btn-export" :disabled="selected.size !== 1 || busy.value" @click="onExport">
             <svg fill="currentColor" viewBox="0 0 20 20">
               <path
                 fill-rule="evenodd"
@@ -139,7 +139,6 @@
 // @ts-nocheck
 /* eslint-disable */
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { useGameServices } from '../composables/useGameServices';
 import { useSaveLoad } from '../composables/useSaveLoad';
 
 // 声明全局函数类型
@@ -162,7 +161,6 @@ function onClose() {
 }
 
 // 使用组合式函数
-const { showSuccess, showError, showWarning } = useGameServices();
 const {
   refreshSaveList,
   deleteSelectedSaves,
@@ -187,7 +185,7 @@ const expandedSlots = ref<Set<string>>(new Set<string>());
 
 // 计算属性：是否全选
 const isAllSelected = computed(() => {
-  return saves.value.length > 0 && selected.value?.size === saves.value.length;
+  return saves.value.length > 0 && selected.value.size === saves.value.length;
 });
 
 // 检测是否全屏
@@ -252,10 +250,19 @@ function toggleSelect(id: string) {
 
 // 全选/全不选功能
 function toggleSelectAll() {
+  // 确保有存档数据
+  if (saves.value.length === 0) {
+    console.warn('[SaveDialog] 没有存档可全选');
+    return;
+  }
+
   if (isAllSelected.value) {
+    // 全不选
     selected.value = new Set();
   } else {
-    selected.value = new Set(saves.value.map(s => s.slotId));
+    // 全选：创建包含所有存档 slotId 的新 Set
+    const allSlotIds = saves.value.map(s => s.slotId).filter(id => id != null && id !== '');
+    selected.value = new Set(allSlotIds);
   }
 }
 
@@ -271,12 +278,12 @@ async function confirmRename(it: SaveSummary) {
     if (isSaveLoadAvailable()) {
       const success = await renameSaveWithFeedback(it.slotId, String(renameInput.value || '').trim());
       if (!success) {
-        showError('重命名失败');
+        // showError('重命名失败');
         return;
       }
     } else {
       console.error('[SaveDialog] SaveLoadManagerService不可用，无法重命名');
-      showError('重命名失败', '重命名服务不可用');
+      // showError('重命名失败', '重命名服务不可用');
       return;
     }
 
@@ -287,7 +294,7 @@ async function confirmRename(it: SaveSummary) {
     }
   } catch {
     if (isMounted.value) {
-      showError('重命名失败');
+      // showError('重命名失败');
     }
   } finally {
     if (isMounted.value) {
@@ -312,7 +319,7 @@ async function onLoad() {
     if (isSaveLoadAvailable()) {
       const loadResult = await loadSaveWithFeedback(ids[0]);
       if (!loadResult.success || !loadResult.data) {
-        return showError('读档失败', loadResult.error || '未找到存档');
+        return; // showError('读档失败', loadResult.error || '未找到存档');
       }
 
       // 检查组件是否仍然挂载
@@ -321,12 +328,12 @@ async function onLoad() {
       }
     } else {
       console.error('[SaveDialog] SaveLoadManagerService不可用，无法读档');
-      showError('读档失败', '读档服务不可用');
+      // showError('读档失败', '读档服务不可用');
       return;
     }
   } catch {
     if (isMounted.value) {
-      showError('读档失败');
+      // showError('读档失败');
     }
   } finally {
     if (isMounted.value) {
@@ -345,11 +352,10 @@ async function onLoadSingle(slotId: string) {
       // 1. 获取存档数据
       const loadResult = await loadSaveWithFeedback(slotId);
       if (!loadResult.success || !loadResult.data) {
-        return showError('读档失败', loadResult.error || '未找到存档');
+        return; // showError('读档失败', loadResult.error || '未找到存档');
       }
 
       // 2. 读档数据验证
-      console.log('[SaveDialog] 读档数据获取成功:', loadResult.data.name);
 
       // 3. 触发界面跳转
       if (isMounted.value) {
@@ -357,13 +363,13 @@ async function onLoadSingle(slotId: string) {
       }
     } else {
       console.error('[SaveDialog] SaveLoadManagerService不可用，无法读档');
-      showError('读档失败', '读档服务不可用');
+      // showError('读档失败', '读档服务不可用');
       return;
     }
   } catch (error) {
     console.error('[SaveDialog] 读档异常:', error);
     if (isMounted.value) {
-      showError('读档失败', error instanceof Error ? error.message : '未知错误');
+      // showError('读档失败', error instanceof Error ? error.message : '未知错误');
     }
   } finally {
     if (isMounted.value) {
@@ -385,23 +391,23 @@ async function onDelete() {
     if (isSaveLoadAvailable()) {
       const success = await deleteSelectedSaves([...currentSelected]);
       if (!success) {
-        showError('删除失败');
+        // showError('删除失败');
         return;
       }
     } else {
       console.error('[SaveDialog] SaveLoadManagerService不可用，无法删除存档');
-      showError('删除失败', '删除服务不可用');
+      // showError('删除失败', '删除服务不可用');
       return;
     }
 
     if (isMounted.value) {
       selected.value = new Set();
       await refresh();
-      showSuccess('已删除');
+      // showSuccess('已删除');
     }
   } catch {
     if (isMounted.value) {
-      showError('删除失败');
+      // showError('删除失败');
     }
   } finally {
     if (isMounted.value) {
@@ -415,12 +421,12 @@ function onImport() {
     if (fileRef.value) fileRef.value.value = '';
     fileRef.value?.click();
   } catch {
-    showWarning('导入存档', '暂未实现');
+    // showWarning('导入存档', '暂未实现');
   }
 }
 
 function onPickFile(e: Event) {
-  showWarning('导入存档', '暂未实现');
+  // showWarning('导入存档', '暂未实现');
 }
 
 // 导出存档功能
@@ -435,7 +441,7 @@ async function onExport() {
     if (isSaveLoadAvailable()) {
       const loadResult = await loadSaveWithFeedback(ids[0]);
       if (!loadResult.success || !loadResult.data) {
-        return showError('导出失败', loadResult.error || '未找到存档');
+        return; // showError('导出失败', loadResult.error || '未找到存档');
       }
 
       const data = loadResult.data;
@@ -450,14 +456,14 @@ async function onExport() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      showSuccess('导出成功');
+      // showSuccess('导出成功');
     } else {
       console.error('[SaveDialog] SaveLoadManagerService不可用，无法导出存档');
-      showError('导出失败', '导出服务不可用');
+      // showError('导出失败', '导出服务不可用');
     }
   } catch (error) {
     console.error('[SaveDialog] 导出存档失败:', error);
-    showError('导出失败');
+    // showError('导出失败');
   } finally {
     busy.value = false;
   }
@@ -469,7 +475,7 @@ async function onCreateNew() {
 
     if (!isSaveLoadAvailable()) {
       console.error('[SaveDialog] SaveLoadManagerService不可用，无法创建存档');
-      showError('创建存档失败', '创建服务不可用');
+      // showError('创建存档失败', '创建服务不可用');
       return;
     }
 
@@ -484,22 +490,21 @@ async function onCreateNew() {
           const success = await createNewSaveWithManualMode(currentSaveInfo.slotId, currentSaveInfo.saveName);
           if (success) {
             await refresh();
-            showSuccess('已创建备份存档');
+            // showSuccess('已创建备份存档');
             return;
           } else {
-            showError('创建备份存档失败');
+            // showError('创建备份存档失败');
             return;
           }
         } else {
           // 3. 如果没有当前存档，创建全新存档
-          console.log('[SaveDialog] 没有找到当前存档，创建全新存档');
           const success = await createNewEmptySave('我的大冒险');
           if (success) {
             await refresh();
-            showSuccess('已创建新存档');
+            // showSuccess('已创建新存档');
             return;
           } else {
-            showError('创建存档失败');
+            // showError('创建存档失败');
             return;
           }
         }
@@ -509,10 +514,10 @@ async function onCreateNew() {
         const success = await createNewEmptySave('我的大冒险');
         if (success) {
           await refresh();
-          showSuccess('已创建新存档');
+          // showSuccess('已创建新存档');
           return;
         } else {
-          showError('创建存档失败');
+          // showError('创建存档失败');
           return;
         }
       }
@@ -521,14 +526,14 @@ async function onCreateNew() {
       const success = await createNewEmptySave('我的大冒险');
       if (success) {
         await refresh();
-        showSuccess('已创建新存档');
+        // showSuccess('已创建新存档');
       } else {
-        showError('创建存档失败');
+        // showError('创建存档失败');
       }
     }
   } catch (error) {
     console.error('[SaveDialog] 创建存档异常:', error);
-    showError('创建存档失败');
+    // showError('创建存档失败');
   } finally {
     busy.value = false;
   }

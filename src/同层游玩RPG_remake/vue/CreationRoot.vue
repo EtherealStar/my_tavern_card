@@ -19,7 +19,7 @@
     <div v-if="currentStep === 'difficulty'" key="difficulty" class="flex-1 overflow-y-auto p-5" data-step="difficulty">
       <div class="mb-[30px] text-center">
         <div class="mb-2 text-[24px] font-black text-[var(--color-primary)]">选择难度</div>
-        <div class="text-[14px] text-[var(--color-accent)] opacity-90">不同难度将影响初始可分配的属性点与天命点</div>
+        <div class="text-[14px] text-[var(--color-accent)] opacity-90">不同难度将影响初始可分配的属性点</div>
       </div>
       <div class="flex items-center justify-center">
         <div class="responsive-grid grid w-full max-w-[400px] gap-4">
@@ -33,7 +33,7 @@
             @click="selectDifficulty('简单')"
           >
             <div class="text-lg font-bold">简单</div>
-            <div class="mt-1 text-sm text-[var(--color-accent)]">更高天命与属性点，更轻松</div>
+            <div class="mt-1 text-sm text-[var(--color-accent)]">更高属性点，更轻松</div>
           </button>
           <button
             class="w-full cursor-pointer rounded-lg border bg-white/90 p-4 text-center transition-all duration-300 ease-in-out hover:border-[var(--color-primary)] hover:bg-pink-50/50"
@@ -58,41 +58,6 @@
           >
             <div class="text-lg font-bold">困难</div>
             <div class="mt-1 text-sm text-[var(--color-accent)]">更具挑战</div>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div v-else-if="currentStep === 'world'" key="world" class="flex-1 overflow-y-auto p-5" data-step="world">
-      <div class="mb-[30px] text-center">
-        <div class="mb-2 text-[24px] font-black text-[var(--color-primary)]">选择世界</div>
-        <div class="text-[14px] text-[var(--color-accent)] opacity-90">不同世界拥有不同的背景与遭遇</div>
-      </div>
-      <div class="flex items-center justify-center">
-        <div class="responsive-grid grid w-full max-w-[400px] gap-4">
-          <button
-            class="w-full cursor-pointer rounded-lg border bg-white/90 p-4 text-center transition-all duration-300 ease-in-out hover:border-[var(--color-primary)] hover:bg-pink-50/50"
-            :class="
-              creationState.world === '现代：阴阳师'
-                ? 'border-2 border-[var(--color-primary)] bg-pink-50/80 ring-1 ring-[var(--color-primary)]'
-                : 'border-[var(--border-color)]'
-            "
-            @click="selectWorld('现代：阴阳师')"
-          >
-            <div class="text-lg font-bold">现代：阴阳师</div>
-            <div class="mt-1 text-sm text-[var(--color-accent)]">现代都市与阴阳师传说</div>
-          </button>
-          <button
-            class="w-full cursor-pointer rounded-lg border bg-white/90 p-4 text-center transition-all duration-300 ease-in-out hover:border-[var(--color-primary)] hover:bg-pink-50/50"
-            :class="
-              creationState.world === '西幻'
-                ? 'border-2 border-[var(--color-primary)] bg-pink-50/80 ring-1 ring-[var(--color-primary)]'
-                : 'border-[var(--border-color)]'
-            "
-            @click="selectWorld('西幻')"
-          >
-            <div class="text-lg font-bold">西幻</div>
-            <div class="mt-1 text-sm text-[var(--color-accent)]">剑与魔法的大陆</div>
           </button>
         </div>
       </div>
@@ -181,7 +146,6 @@
             >
               <div class="flex items-baseline justify-between">
                 <div class="font-bold">{{ bg.name }}</div>
-                <div class="text-xs text-amber-700">花费 {{ bg.cost }}</div>
               </div>
               <div class="mt-1 text-sm text-gray-600">{{ bg.description }}</div>
               <div v-if="bg.genderRestrictions || bg.raceRestrictions" class="mt-2 text-xs text-blue-600">
@@ -249,6 +213,45 @@
       </div>
     </div>
 
+    <div v-else-if="currentStep === 'opening'" key="opening" class="flex-1 overflow-y-auto p-5" data-step="opening">
+      <div class="mb-[30px] text-center">
+        <div class="mb-2 text-[24px] font-black text-[var(--color-primary)]">选择开局</div>
+        <div class="text-[14px] text-[var(--color-accent)] opacity-90">你可以从预置开局中选择，或自定义开局</div>
+      </div>
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <!-- 左侧：预置开局 -->
+        <div>
+          <div class="mb-3 text-lg font-bold">预置开局</div>
+          <div class="grid gap-3">
+            <button
+              v-for="op in openingList"
+              :key="op.id"
+              class="w-full cursor-pointer rounded-lg border bg-white/90 p-4 text-left transition-all duration-300 ease-in-out hover:border-[var(--color-primary)] hover:bg-pink-50/50"
+              :class="
+                selectedOpeningId === op.id
+                  ? 'border-2 border-[var(--color-primary)] bg-pink-50/80 ring-1 ring-[var(--color-primary)]'
+                  : 'border-[var(--border-color)]'
+              "
+              @click="selectOpeningPreset(op.id)"
+            >
+              <div class="text-lg font-bold">{{ op.name }}</div>
+              <div class="mt-1 text-sm text-[var(--color-accent)]">{{ op.description }}</div>
+            </button>
+          </div>
+        </div>
+        <!-- 右侧：自定义 -->
+        <div class="flex flex-col">
+          <div class="mb-3 text-lg font-bold">自定义开局</div>
+          <textarea
+            class="min-h-[100px] flex-1 rounded-lg border border-gray-300 p-3 text-sm"
+            v-model="customOpeningText"
+            placeholder="输入你想要的开局..."
+            @input="onCustomOpeningInput"
+          />
+        </div>
+      </div>
+    </div>
+
     <div
       class="bottom-navigation flex flex-shrink-0 items-center justify-between rounded-b-[16px] border-t border-[rgba(220,177,140,0.3)] bg-white/95 px-5 py-4 backdrop-blur-[12px]"
     >
@@ -256,10 +259,6 @@
         <div
           class="h-2 w-8 rounded-full transition-colors"
           :class="currentStep === 'difficulty' ? 'bg-[var(--color-primary)]' : 'bg-gray-300'"
-        ></div>
-        <div
-          class="h-2 w-8 rounded-full transition-colors"
-          :class="currentStep === 'world' ? 'bg-[var(--color-primary)]' : 'bg-gray-300'"
         ></div>
         <div
           class="h-2 w-8 rounded-full transition-colors"
@@ -273,6 +272,10 @@
           class="h-2 w-8 rounded-full transition-colors"
           :class="currentStep === 'identity' ? 'bg-[var(--color-primary)]' : 'bg-gray-300'"
         ></div>
+        <div
+          class="h-2 w-8 rounded-full transition-colors"
+          :class="currentStep === 'opening' ? 'bg-[var(--color-primary)]' : 'bg-gray-300'"
+        ></div>
       </div>
       <div class="flex gap-3">
         <button
@@ -283,7 +286,7 @@
           上一步
         </button>
         <button
-          v-if="!isLast"
+          v-if="currentStep !== 'opening'"
           class="rounded-lg border border-[rgba(220,177,140,0.4)] bg-white/90 px-5 py-2 text-sm font-semibold text-[var(--color-primary)] backdrop-blur-sm transition-all duration-300 ease-in-out hover:-translate-y-0.5 hover:border-[var(--color-primary)] hover:bg-pink-50/50 hover:shadow-lg disabled:transform-none disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="!canNext"
           @click="next"
@@ -345,49 +348,88 @@
         </div>
       </div>
     </div>
+
+    <!-- 首条生成等待遮罩 -->
+    <div
+      v-if="isBootstrapping"
+      class="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+    >
+      <div class="flex w-full max-w-sm flex-col items-center gap-3 rounded-2xl bg-white/95 p-6 text-center shadow-2xl">
+        <div
+          class="h-6 w-6 animate-spin rounded-full border-2 border-[var(--color-primary)] border-t-transparent"
+        ></div>
+        <div class="text-[16px] font-semibold text-[var(--color-primary)]">正在生成开局内容</div>
+        <div class="text-[12px] text-gray-600">{{ bootstrapMsg }}</div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, inject, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { useGameStateManager } from '同层游玩RPG_remake/composables/useGameStateManager';
 import { useCharacterCreation } from '../composables/useCharacterCreation';
-import { useGameServices } from '../composables/useGameServices';
+import { useGlobalState } from '../composables/useGlobalState';
+import { usePlayingLogic } from '../composables/usePlayingLogic';
+import { usePromptInjector } from '../composables/usePromptInjector';
 import { useSaveLoad } from '../composables/useSaveLoad';
 import { useWorldbookToggle } from '../composables/useWorldbookToggle';
+import { TYPES } from '../core/ServiceIdentifiers';
 import { getBackgroundsForWorld } from '../data/backgrounds';
+import { getOpeningsForWorld } from '../data/openings';
 import { getWorldExpansions } from '../data/worldExpansions';
 import {
   ATTRIBUTE_KEYS,
   ATTRIBUTE_NAME_MAP,
   buildEmptyAttributes,
   DifficultySchema,
-  GameWorldSchema,
   GenderSchema,
   RaceSchema,
   validateAndCorrectAttributes,
   type AttributeKey,
   type Background,
 } from '../models/CreationSchemas';
-// 获取 composables
+import type { SameLayerService } from '../services/SameLayerService';
+import type { SaveLoadManagerService } from '../services/SaveLoadManagerService';
 const saveLoad = useSaveLoad();
 const characterCreation = useCharacterCreation();
-const { showError, showInfo, emitEvent } = useGameServices();
 const gameState = useGameStateManager();
 const { applyBackgroundToggles, applyExpansionToggles } = useWorldbookToggle();
+const globalState = useGlobalState();
+const emitEvent = (event: string, payload?: any) => {
+  try {
+    globalState.getEventBus()?.emit?.(event, payload);
+  } catch (error) {
+    console.warn('[CreationRoot] emitEvent failed:', event, payload, error);
+  }
+};
+const injector = usePromptInjector();
+
+// 使用 usePlayingLogic 获取 postProcessMessage 函数
+// 注意：这里只使用 postProcessMessage，不依赖 messages 数组
+// 因为创建阶段的消息会在切换到 playing 界面后通过正常流程加载
+const { postProcessMessage } = usePlayingLogic();
 
 // 从composables获取方法
 const { createNewEmptySave } = saveLoad;
 
+// 服务注入
+const sameLayerService = inject<SameLayerService>(TYPES.SameLayerService);
+const saveLoadManager = inject<SaveLoadManagerService>(TYPES.SaveLoadManagerService);
+
 // 创建状态
 const creationState = ref({
   difficulty: null as '简单' | '普通' | '困难' | null,
-  world: null as '现代：阴阳师' | '西幻' | null,
+  world: '现代：阴阳师' as const,
   expansions: new Set<string>(),
   attributes: buildEmptyAttributes(20),
   background: null as Background | null,
   gender: null as '男性' | '女性' | '男生女相' | '扶她' | null,
   race: null as '人族' | '灵族' | '妖族' | null,
+  opening: {
+    selectedId: '' as string,
+    customText: '' as string,
+  },
 });
 
 // 属性相关 - 使用统一的属性顺序
@@ -406,24 +448,68 @@ const maxAttr = computed(() => {
   return 20;
 });
 
-const backgroundList = computed(() =>
-  creationState.value.world ? getBackgroundsForWorld(creationState.value.world) : [],
-);
+const backgroundList = computed(() => getBackgroundsForWorld('现代：阴阳师'));
 
-const expansionList = computed(() => (creationState.value.world ? getWorldExpansions(creationState.value.world) : []));
+const expansionList = computed(() => getWorldExpansions('现代：阴阳师'));
+
+// 开局预置列表
+const openingList = computed(() => getOpeningsForWorld('现代：阴阳师'));
+
+// 自定义开局校验
+const customOpeningText = computed({
+  get: () => creationState.value.opening.customText,
+  set: v => (creationState.value.opening.customText = v),
+});
+const selectedOpeningId = computed({
+  get: () => creationState.value.opening.selectedId,
+  set: v => (creationState.value.opening.selectedId = v),
+});
+const customOpeningError = ref('');
+
+const selectOpeningPreset = (id: string) => {
+  selectedOpeningId.value = id;
+  // 选择预置则清空自定义
+  if (customOpeningText.value) {
+    customOpeningText.value = '';
+    customOpeningError.value = '';
+  }
+};
+
+const onCustomOpeningInput = () => {
+  // 自定义时，清空预置选择
+  if (selectedOpeningId.value) {
+    selectedOpeningId.value = '';
+  }
+  const t = (customOpeningText.value || '').trim();
+  if (!t) {
+    customOpeningError.value = '';
+    return;
+  }
+  if (t.length < 10) {
+    customOpeningError.value = '自定义开局过短，建议至少10字';
+  } else if (t.length > 2000) {
+    customOpeningError.value = '自定义开局过长，请控制在2000字以内';
+  } else {
+    customOpeningError.value = '';
+  }
+};
 
 const canProceed = computed(() => {
   switch (currentStep.value) {
     case 'difficulty':
       return creationState.value.difficulty !== null;
-    case 'world':
-      return creationState.value.world !== null;
     case 'expansions':
       return true;
     case 'attributes':
-      return creationState.value.attributes.pointsLeft === 0;
+      return creationState.value.attributes.pointsLeft === 0 && creationState.value.background !== null;
     case 'identity':
       return creationState.value.gender !== null && creationState.value.race !== null;
+    case 'opening': {
+      const t = (creationState.value.opening.customText || '').trim();
+      const hasCustom = t.length >= 10 && t.length <= 2000 && !customOpeningError.value;
+      const hasPreset = !!creationState.value.opening.selectedId;
+      return hasCustom || hasPreset;
+    }
     default:
       return false;
   }
@@ -434,10 +520,11 @@ const canNext = computed(() => canProceed.value);
 const canStart = computed(
   () =>
     creationState.value.difficulty &&
-    creationState.value.world &&
     creationState.value.attributes.pointsLeft === 0 &&
     creationState.value.gender &&
-    creationState.value.race,
+    creationState.value.race &&
+    (Boolean(creationState.value.opening.selectedId) ||
+      ((creationState.value.opening.customText || '').trim().length >= 10 && !customOpeningError.value)),
 );
 
 // 根据选择的出身计算可选的性别
@@ -463,51 +550,18 @@ const availableRaces = computed(() => {
 });
 
 // 步骤管理
-type Step = 'difficulty' | 'world' | 'expansions' | 'attributes' | 'identity';
-const steps: Step[] = ['difficulty', 'world', 'expansions', 'attributes', 'identity'];
+type Step = 'difficulty' | 'expansions' | 'attributes' | 'identity' | 'opening';
+const steps: Step[] = ['difficulty', 'expansions', 'attributes', 'identity', 'opening'];
 const currentStep = ref<Step>('difficulty');
 
 const canPrev = computed(() => steps.indexOf(currentStep.value) > 0);
 const isLast = computed(() => steps.indexOf(currentStep.value) >= steps.length - 1);
 
-// 监听世界变化，重置相关状态
-watch(
-  () => creationState.value.world,
-  () => {
-    creationState.value.background = null;
-    creationState.value.expansions = new Set();
-  },
-);
-
-// 监听出身变化，自动调整性别和种族选择
-watch(
-  () => creationState.value.background,
-  newBackground => {
-    if (!newBackground) return;
-
-    // 检查当前性别是否还可用
-    if (creationState.value.gender && newBackground.genderRestrictions) {
-      if (!newBackground.genderRestrictions.includes(creationState.value.gender)) {
-        // 如果当前性别不可用，选择第一个可用的性别
-        creationState.value.gender = availableGenders.value[0] || null;
-      }
-    }
-
-    // 检查当前种族是否还可用
-    if (creationState.value.race && newBackground.raceRestrictions) {
-      if (!newBackground.raceRestrictions.includes(creationState.value.race)) {
-        // 如果当前种族不可用，选择第一个可用的种族
-        creationState.value.race = availableRaces.value[0] || null;
-      }
-    }
-  },
-);
-
 // 角色创建方法
 const selectDifficulty = async (raw: string) => {
   const parsed = DifficultySchema.safeParse(raw);
   if (!parsed.success) {
-    showInfo('选择无效', '请选择有效的难度');
+    console.info('[CreationRoot] 选择无效: 请选择有效的难度');
     return;
   }
 
@@ -516,28 +570,9 @@ const selectDifficulty = async (raw: string) => {
   const res = validateAndCorrectAttributes(buildEmptyAttributes(max), max);
   creationState.value.attributes = res.data ?? buildEmptyAttributes(max);
 
-  emitEvent?.('creation:difficulty-selected', { difficulty: parsed.data });
+  emitEvent('creation:difficulty-selected', { difficulty: parsed.data });
 
   if (currentStep.value === 'difficulty') {
-    currentStep.value = 'world';
-  }
-};
-
-const selectWorld = async (raw: string) => {
-  const parsed = GameWorldSchema.safeParse(raw);
-  if (!parsed.success) {
-    showInfo('选择无效', '请选择有效的世界');
-    return;
-  }
-  if (parsed.data !== '现代：阴阳师' && parsed.data !== '西幻') {
-    showInfo('该世界即将开放', '目前只支持现代：阴阳师和西幻世界');
-    return;
-  }
-
-  creationState.value.world = parsed.data;
-  emitEvent?.('creation:world-selected', { world: parsed.data });
-
-  if (currentStep.value === 'world') {
     currentStep.value = 'expansions';
   }
 };
@@ -559,7 +594,7 @@ const selectBackground = async (bg: Background) => {
     }
   }
 
-  emitEvent?.('creation:background-selected', { background: bg });
+  emitEvent('creation:background-selected', { background: bg });
 };
 
 const toggleExpansion = async (id: string) => {
@@ -572,21 +607,16 @@ const toggleExpansion = async (id: string) => {
   creationState.value.expansions = now;
 
   // 只发送事件通知扩展状态变化，世界书开关将在离开扩展选择步骤时统一应用
-  emitEvent?.('creation:expansions-changed', { selected: [...now] });
+  emitEvent('creation:expansions-changed', { selected: [...now] });
 };
 
 /**
  * 应用扩展世界书开关（在离开扩展选择步骤时调用）
  */
 const applyExpansionTogglesLocal = async (): Promise<void> => {
-  if (!creationState.value.world) {
-    console.warn('[CreationRoot] 无法应用扩展开关：未选择世界');
-    return;
-  }
-
   try {
     const selectedExpansions = Array.from(creationState.value.expansions);
-    const result = await applyExpansionToggles(creationState.value.world, selectedExpansions);
+    const result = await applyExpansionToggles('现代：阴阳师', selectedExpansions);
 
     if (result.success) {
       console.log('[CreationRoot] 扩展世界书开关应用成功');
@@ -603,35 +633,35 @@ const applyExpansionTogglesLocal = async (): Promise<void> => {
 const selectGender = (raw: string) => {
   const parsed = GenderSchema.safeParse(raw);
   if (!parsed.success) {
-    showInfo('选择无效', '请选择有效的性别');
+    console.info('[CreationRoot] 选择无效: 请选择有效的性别');
     return;
   }
 
   // 检查是否被出身限制
   if (!availableGenders.value.includes(parsed.data)) {
-    showInfo('选择受限', '该性别与当前出身不兼容');
+    console.info('[CreationRoot] 选择受限: 该性别与当前出身不兼容');
     return;
   }
 
   creationState.value.gender = parsed.data;
-  emitEvent?.('creation:gender-selected', { gender: parsed.data });
+  emitEvent('creation:gender-selected', { gender: parsed.data });
 };
 
 const selectRace = (raw: string) => {
   const parsed = RaceSchema.safeParse(raw);
   if (!parsed.success) {
-    showInfo('选择无效', '请选择有效的种族');
+    console.info('[CreationRoot] 选择无效: 请选择有效的种族');
     return;
   }
 
   // 检查是否被出身限制
   if (!availableRaces.value.includes(parsed.data)) {
-    showInfo('选择受限', '该种族与当前出身不兼容');
+    console.info('[CreationRoot] 选择受限: 该种族与当前出身不兼容');
     return;
   }
 
   creationState.value.race = parsed.data;
-  emitEvent?.('creation:race-selected', { race: parsed.data });
+  emitEvent('creation:race-selected', { race: parsed.data });
 };
 
 const onAttrSlide = (k: AttributeKey, e: Event) => {
@@ -684,6 +714,11 @@ const saveName = ref('我的大冒险');
 const isSaving = ref(false);
 const nameError = ref('');
 
+// 首次生成等待态
+const isBootstrapping = ref(false);
+const bootstrapMsg = ref('正在准备开局...');
+const retryCount = ref(0);
+
 const openSaveModal = () => {
   saveName.value = '我的大冒险';
   nameError.value = '';
@@ -716,7 +751,7 @@ async function handleConfirmCreateSave() {
       if (createResult.error === 'DUPLICATE_NAME') {
         nameError.value = '已存在同名存档，请更改名称';
       } else {
-        showError('创建存档失败', createResult.error || '请稍后重试');
+        console.warn('[CreationRoot] 创建存档失败', createResult.error || '请稍后重试');
       }
       return;
     }
@@ -741,11 +776,81 @@ async function handleConfirmCreateSave() {
 
     if (!processSuccess) {
       console.error('[CreationRoot] 角色创建数据处理失败');
-      showError('角色创建失败', characterCreation.creationError.value || '请稍后重试');
+      console.warn('[CreationRoot] 角色创建失败', characterCreation.creationError.value || '请稍后重试');
       return;
     }
 
     console.log('[CreationRoot] 角色创建数据处理成功，MVU变量已应用');
+
+    // 生成首条消息（等待界面 + 3次重试）
+    const slotId = createResult.slotId!;
+    if (!slotId || !sameLayerService || !saveLoadManager) {
+      console.warn('[CreationRoot] 启动游戏失败', '服务不可用或存档无效');
+      return;
+    }
+
+    // 组装开局提示词并注入为系统提示
+    let openingPrompt = (creationState.value.opening.customText || '').trim();
+    if (!openingPrompt) {
+      const preset = openingList.value.find(p => p.id === creationState.value.opening.selectedId);
+      openingPrompt = preset?.prompt || '';
+    }
+    if (openingPrompt) {
+      try {
+        injector.addSystemHintNext(openingPrompt, { priority: 100, source: 'opening' });
+      } catch (e) {
+        console.warn('[CreationRoot] 注入开局提示词失败，将继续生成:', e);
+      }
+    }
+
+    isBootstrapping.value = true;
+    retryCount.value = 0;
+    let generated = false;
+    let lastError: any = null;
+
+    while (retryCount.value < 3 && !generated) {
+      const attempt = retryCount.value + 1;
+      bootstrapMsg.value = `正在生成开局内容（第 ${attempt} 次尝试）...`;
+      try {
+        // 收集下轮注入（含上面的系统提示）
+        const injects = (injector as any)?.collectForNextGeneration?.() || undefined;
+        // 使用非流式一次性拿结果；user_input 留空串代表"开始"
+        const result = await sameLayerService.generateWithSaveHistorySync(
+          { user_input: '', slotId },
+          undefined,
+          injects,
+        );
+
+        // 使用统一的 postProcessMessage 进行后处理
+        // 这会自动处理：应用MVU数据变更、格式化总结、保存到存档等
+        // 传入 slotId 确保在游戏状态切换前也能正确保存消息
+        bootstrapMsg.value = '正在处理消息数据...';
+        const postProcessSuccess = await postProcessMessage('', result, slotId);
+
+        if (!postProcessSuccess) {
+          throw new Error('消息后处理失败');
+        }
+
+        generated = true;
+        bootstrapMsg.value = '开局内容生成完成';
+      } catch (err: any) {
+        console.error('[CreationRoot] 开局生成失败:', err);
+        lastError = err;
+        retryCount.value += 1;
+        if (retryCount.value < 3) {
+          bootstrapMsg.value = `生成失败，准备第 ${retryCount.value + 1} 次重试...`;
+          // 简单退避
+          await new Promise(r => setTimeout(r, 800 * retryCount.value));
+        }
+      }
+    }
+
+    if (!generated) {
+      isBootstrapping.value = false;
+      console.warn('[CreationRoot] 创建开局失败', '已重试 3 次仍失败，请稍后重试');
+      console.warn('[CreationRoot] 开局生成连续失败:', lastError);
+      return;
+    }
 
     // 先更新创建数据到游戏状态
     gameState.setCreationData(creationData);
@@ -754,16 +859,18 @@ async function handleConfirmCreateSave() {
     const transitionSuccess = await gameState.transitionToPlaying(createResult.saveName || name, createResult.slotId);
 
     if (!transitionSuccess) {
-      showError('启动游戏失败');
+      console.warn('[CreationRoot] 启动游戏失败');
       return;
     }
 
     console.log('[CreationRoot] 游戏状态切换成功，角色创建完成');
   } catch (error: any) {
     console.error('[CreationRoot] 创建存档异常:', error);
-    showError('创建存档失败', error?.message || '请稍后重试');
+    console.warn('[CreationRoot] 创建存档失败', error?.message || '请稍后重试');
+    globalState.clearPendingSaveData();
   } finally {
     isSaving.value = false;
+    isBootstrapping.value = false;
   }
 }
 
@@ -773,11 +880,11 @@ async function backMenu() {
     const success = await gameState.transitionToInitial();
 
     if (!success) {
-      showError('返回主菜单失败');
+      console.warn('[CreationRoot] 返回主菜单失败');
     }
   } catch (error) {
     console.error('[CreationRoot] Failed to go back to menu:', error);
-    showError('返回主菜单失败');
+    console.warn('[CreationRoot] 返回主菜单失败');
   }
 }
 

@@ -15,13 +15,6 @@ export type Gender = z.infer<typeof GenderSchema>;
 export const RaceSchema = z.enum(['人族', '灵族', '妖族']);
 export type Race = z.infer<typeof RaceSchema>;
 
-export const DestinyPointsSchema = z.object({
-  total: z.number().int().min(0),
-  used: z.number().int().min(0),
-  left: z.number().int().min(0),
-});
-export type DestinyPoints = z.infer<typeof DestinyPointsSchema>;
-
 export type AttributeKey =
   | 'strength'
   | 'agility'
@@ -100,7 +93,6 @@ export interface Background {
   id: string;
   name: string;
   description: string;
-  cost: number; // 天命点消耗
   attributeBonus: Partial<Record<AttributeKey, number>>;
   world?: GameWorld; // 限定世界；不填为通用
   genderRestrictions?: Gender[]; // 性别限制；不填为无限制
@@ -121,23 +113,6 @@ export function buildEmptyAttributes(maxPoints: number): Attributes {
     luck: 0,
     pointsLeft: Math.max(0, maxPoints),
   };
-}
-
-export function validateDestinyPoints(input: Partial<DestinyPoints>): {
-  success: boolean;
-  data?: DestinyPoints;
-  errors?: string[];
-} {
-  const total = Math.max(0, Number(input.total ?? 0));
-  const usedRaw = Math.max(0, Number(input.used ?? 0));
-  const used = Math.min(usedRaw, total);
-  const left = Math.max(0, total - used);
-
-  const parsed = DestinyPointsSchema.safeParse({ total, used, left });
-  if (parsed.success) {
-    return { success: true, data: parsed.data };
-  }
-  return { success: false, errors: parsed.error.issues.map(i => i.message) };
 }
 
 export function validateAndCorrectAttributes(

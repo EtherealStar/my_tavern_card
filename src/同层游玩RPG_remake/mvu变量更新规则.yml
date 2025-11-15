@@ -1,0 +1,60 @@
+  variable_type_check:
+  只读变量: &readonly
+    readonly. 只读。永不更新或修改
+  date: string. 当前的游戏内日期，会随着<user>的行动更新。格式如：'2025-01-01'。
+  time: string. 当前的游戏内时间，会随着<user>的行动更新。格式如：'06:00'。
+  location: string. 记录<user>当前所在的具体位置，在<user>移动到新地点时更新。格式：'城区-建筑'，如'北城区-<user>的家'。
+  gender: readonly. <user>的性别。禁止更改。
+  race: readonly. <user>的种族。禁止更改。
+  age: number. <user>的年龄。根据时间流逝而更新。
+  level: readonly. <user>的等级。禁止更改。
+    base_attributes:
+      strength: readonly. 力量
+      agility: readonly. 敏捷
+      constitution: readonly. 体质
+      intelligence: readonly. 智力
+      willpower: readonly. 意志
+      luck: readonly. 幸运
+  current_attributes: 
+    description: object. <user>当前属性的列表，每个属性随着<user>穿戴卸下装备实时更新。
+    strength: number. 力量。
+    agility: number. 敏捷。
+    constitution: number. 体质。
+    intelligence: number. 智力。
+    willpower: number. 意志。
+    luck: number. 幸运。
+  equipment:
+    description: object. <user>当前装备的列表，每个装备为一个对象，对象的键名即为装备名称，随故事发展改变。可以添加或删除装备（即增删键值对，装备更新模板在'variables_update_format'中，添加装备时需严格遵守装备更新模板）
+    weapon: object. <user>当前装备的武器。
+    armor: object. <user>当前装备的防具。
+    accessory: object. <user>当前装备的饰品。
+  inventory:
+      description: object. 当前<user>背包中的物品列表，每个物品为一个对象，对象的键名即为物品名称，随故事发展改变。可以添加或删除物品（即增删键值对，物品更新模板在'variables_update_format'中，添加物品时需严格遵守物品更新模板）
+      item: &item
+        quality: string. 物品的品质，分为破损、普通、优良、稀有、史诗、传说、神话七种品质。
+        quantity: number. 物品的数量
+        type: string. 物品的类型，有且仅有'武器'，'防具'，'饰品'，'其他物品'四种类型
+        description: string. 物品的描述。
+      "${物品名称}":
+        <<: *item
+  relationships:
+    description: object. <user>当前的关系列表，每个关系为一个对象，对象的键名即为关系名称，随故事发展改变。可以添加或删除关系（即增删键值对，关系更新模板在'variables_update_format'中，添加关系时需严格遵守关系更新模板）
+    relationship: &relationship
+      gender: string. 关系对象的性别。
+      race: string. 关系对象的种族。
+      background: string. 关系对象的背景故事。
+      personality: string. 关系对象的性格。
+      outfit: string. 关系对象的穿着的衣物服饰。
+      affinity: number. 关系对象对<user>的好感度。范围[-200, 200]。越低越讨厌，越高越喜欢
+      avatarUrl: string. (可选) 关系对象的自定义头像URL，可以是base64编码的图片数据。
+      "${人物名}":
+        <<: *relationship
+  enemies:
+    description: object. <user>当前的敌人列表，每个敌人为一个对象，对象的键名即为敌人名称，随故事发展改变。可以添加或删除敌人（即增删键值对，敌人更新模板在'variables_update_format'中，添加敌人时需严格遵守敌人更新模板）
+    enemy: &enemy
+      name: string. 敌人名称。
+      variantId: string. 敌人变体ID，根据剧情中敌人外貌，根据<enemy_rules>生成。
+      race: string. 敌人种族。
+      battle_end: readonly. 与敌人的战斗是否结束。禁止更改。
+    "${敌人ID}":
+      <<: *enemy

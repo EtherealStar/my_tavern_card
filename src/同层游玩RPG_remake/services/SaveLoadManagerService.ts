@@ -1,4 +1,5 @@
 import { injectable } from 'inversify';
+import type { GameWorld } from '../models/CreationSchemas';
 import {
   generateMessageId,
   getLastMessageId,
@@ -234,6 +235,41 @@ export class SaveLoadManagerService {
         reject(e);
       }
     });
+  }
+
+  /**
+   * 生成“存档选中扩展”在 settings 表中的键
+   */
+  private buildSelectedExpansionsKey(slotId: string): string {
+    return `save_selected_expansions_${slotId}`;
+  }
+
+  /**
+   * 持久化存档所选的世界与扩展列表
+   */
+  public async setSelectedExpansions(slotId: string, world: GameWorld, selectedExpansions: string[]): Promise<void> {
+    const key = this.buildSelectedExpansionsKey(slotId);
+    const value = {
+      world,
+      selectedExpansions: Array.isArray(selectedExpansions) ? selectedExpansions : [],
+      savedAt: this.generateTimestamp(),
+    } as const;
+    await this.setSetting(key, value);
+  }
+
+  /**
+   * 读取存档所选的世界与扩展列表
+   */
+  public async getSelectedExpansions(
+    slotId: string,
+  ): Promise<{ world: GameWorld; selectedExpansions: string[] } | null> {
+    const key = this.buildSelectedExpansionsKey(slotId);
+    const v = await this.getSetting<{ world: GameWorld; selectedExpansions?: string[] }>(key);
+    if (!v) return null;
+    return {
+      world: v.world,
+      selectedExpansions: Array.isArray(v.selectedExpansions) ? v.selectedExpansions : [],
+    };
   }
 
   /**
@@ -688,12 +724,19 @@ export class SaveLoadManagerService {
   /**
    * 添加助手消息
    */
-  async addAssistantMessage(slotId: string, content: string, html?: string, mvuSnapshot?: any): Promise<SaveMessage> {
+  async addAssistantMessage(
+    slotId: string,
+    content: string,
+    html?: string,
+    mvuSnapshot?: any,
+    summary?: { short?: string; long?: string },
+  ): Promise<SaveMessage> {
     return await this.addMessage(slotId, {
       role: 'assistant',
       content,
       html,
       mvuSnapshot,
+      summary,
     });
   }
 

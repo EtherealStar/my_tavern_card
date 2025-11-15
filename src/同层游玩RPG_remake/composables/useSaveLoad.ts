@@ -12,12 +12,14 @@
 import { inject, ref, type Ref } from 'vue';
 import type { EventBus } from '../core/EventBus';
 import { TYPES } from '../core/ServiceIdentifiers';
+import type { GameWorld } from '../models/CreationSchemas';
 import type { GameState } from '../models/GameState';
 import { GamePhase } from '../models/GameState';
 import type { SaveSummary } from '../models/SaveSchemas';
 import type { SaveLoadManagerService } from '../services/SaveLoadManagerService';
 import type { StatDataBindingService } from '../services/StatDataBindingService';
-import type { UIService } from '../services/UIService';
+import { useGlobalState } from './useGlobalState';
+import { useWorldbookToggle } from './useWorldbookToggle';
 
 // 定义 CreateSaveOptions 类型
 export interface CreateSaveOptions {
@@ -56,9 +58,13 @@ export function buildPreview(messages: any[], max = 40): string {
 export function useSaveLoad() {
   // ==================== 依赖注入 ====================
   const saveLoadManager = inject<SaveLoadManagerService>(TYPES.SaveLoadManagerService);
-  const ui = inject<UIService>(TYPES.UIService);
-  const eventBus = inject<EventBus>(TYPES.EventBus);
   const statDataBinding = inject<StatDataBindingService>(TYPES.StatDataBindingService);
+  const globalState = useGlobalState();
+
+  const resolveEventBus = (): EventBus | undefined => {
+    const bus = globalState.getEventBus();
+    return bus as EventBus | undefined;
+  };
 
   // ==================== 响应式状态 ====================
   const isLoading = ref(false);
@@ -74,11 +80,8 @@ export function useSaveLoad() {
     const errorMessage = error instanceof Error ? error.message : `${operation}失败`;
     console.error(`[useSaveLoad] ${operation}失败:`, error);
 
-    // UI反馈
-    ui?.error?.(`${operation}失败`, errorMessage);
-
     // 事件通知
-    eventBus?.emit?.('save-load:error', { operation, error: errorMessage });
+    resolveEventBus()?.emit?.('save-load:error', { operation, error: errorMessage });
 
     throw new Error(errorMessage);
   };
@@ -115,11 +118,19 @@ export function useSaveLoad() {
       // 4. 更新游戏状态
       await saveLoadManager.updateGameState(saveData);
 
-      // UI反馈
-      ui?.success?.('读档成功');
+      // 5. 应用存档记录的世界扩展到世界书（幂等）
+      try {
+        const selection = await saveLoadManager.getSelectedExpansions(slotId);
+        if (selection) {
+          const { applyExpansionToggles } = useWorldbookToggle();
+          await applyExpansionToggles(selection.world as GameWorld, selection.selectedExpansions || []);
+        }
+      } catch (e) {
+        console.warn('[useSaveLoad] 应用世界扩展失败，已跳过：', e);
+      }
 
       // 事件通知
-      eventBus?.emit?.('save-load:loaded-to-ui', { slotId });
+      resolveEventBus()?.emit?.('save-load:loaded-to-ui', { slotId });
     } catch (error) {
       handleError('读档到UI', error);
       throw error; // 重新抛出错误
@@ -141,7 +152,7 @@ export function useSaveLoad() {
       await saveLoadManager.setSetting(`mvu_snapshot_${saveName}`, {});
 
       // 事件通知
-      eventBus?.emit?.('save-load:mvu-snapshot-saved', { saveName });
+      resolveEventBus()?.emit?.('save-load:mvu-snapshot-saved', { saveName });
     } catch (error) {
       handleError('保存MVU快照', error);
     }
@@ -201,8 +212,8 @@ export function useSaveLoad() {
   const checkSaveLoadServices = () => {
     return {
       saveLoadManager: !!saveLoadManager,
-      ui: !!ui,
-      eventBus: !!eventBus,
+      ui: false,
+      eventBus: !!resolveEventBus(),
       statDataBinding: !!statDataBinding,
     };
   };
@@ -255,6 +266,39 @@ export function useSaveLoad() {
     } catch (error) {
       console.error('[useSaveLoad] 重命名存档失败:', error);
       return false;
+    }
+  };
+
+  /**
+   * 保存所选世界扩展（Vue专用）
+   */
+  const saveSelectedExpansions = async (
+    slotId: string,
+    world: GameWorld,
+    selectedExpansions: string[],
+  ): Promise<boolean> => {
+    if (!saveLoadManager) return false;
+    try {
+      await saveLoadManager.setSelectedExpansions(slotId, world, selectedExpansions);
+      return true;
+    } catch (error) {
+      console.error('[useSaveLoad] 保存世界扩展失败:', error);
+      return false;
+    }
+  };
+
+  /**
+   * 读取所选世界扩展（Vue专用）
+   */
+  const loadSelectedExpansions = async (
+    slotId: string,
+  ): Promise<{ world: GameWorld; selectedExpansions: string[] } | null> => {
+    if (!saveLoadManager) return null;
+    try {
+      return await saveLoadManager.getSelectedExpansions(slotId);
+    } catch (error) {
+      console.error('[useSaveLoad] 读取世界扩展失败:', error);
+      return null;
     }
   };
 
@@ -586,6 +630,8 @@ export function useSaveLoad() {
     getCurrentSaveInfo,
     checkSaveAvailability,
     loadGame,
+    saveSelectedExpansions,
+    loadSelectedExpansions,
 
     // 消息管理包装方法
     addUserMessage,

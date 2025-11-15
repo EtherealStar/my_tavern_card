@@ -16,7 +16,7 @@ import type {
 } from '../models/GameState';
 import { GamePhase } from '../models/GameState';
 import type { GameStateService } from '../services/GameStateService';
-import type { UIService } from '../services/UIService';
+import { useGlobalState } from './useGlobalState';
 
 export interface GameStateManager {
   // 状态查询
@@ -113,8 +113,16 @@ class ComposableCoordinator {
 export function useGameStateManager(): GameStateManager {
   // 依赖注入
   const gameStateService = inject<GameStateService>(TYPES.GameStateService);
-  const eventBus = inject<EventBus>(TYPES.EventBus);
-  const ui = inject<UIService>(TYPES.UIService);
+  const globalState = useGlobalState();
+
+  const resolveEventBus = (): EventBus | undefined => {
+    return globalState.getEventBus() as EventBus | undefined;
+  };
+
+  const emitEvent = (eventName: string, payload?: any, silent?: boolean) => {
+    if (silent) return;
+    resolveEventBus()?.emit?.(eventName, payload);
+  };
 
   // 响应式状态
   const currentState = ref<GameState>({ phase: GamePhase.INITIAL, started: false });
@@ -133,7 +141,7 @@ export function useGameStateManager(): GameStateManager {
   const hasBattleConfig = computed(() => !!currentState.value.battleConfig);
   const hasBattleState = computed(() => !!currentState.value.battleState);
   const isServiceAvailable = computed(() => {
-    return !!(gameStateService && eventBus);
+    return !!(gameStateService && resolveEventBus());
   });
 
   // ==================== 错误处理 ====================
@@ -176,19 +184,16 @@ export function useGameStateManager(): GameStateManager {
 
     console.error(`[useGameStateManager] ${operation}失败:`, gameStateError);
 
-    // UI反馈
-    if (!options?.silent && ui?.error) {
-      ui.error(`${operation}失败`, gameStateError.message);
-    }
-
     // 事件通知
-    if (eventBus?.emit) {
-      eventBus.emit('game:transition-failed', {
+    emitEvent(
+      'game:transition-failed',
+      {
         targetPhase: phase,
         error: gameStateError,
         options,
-      });
-    }
+      },
+      options?.silent,
+    );
 
     return false;
   };
@@ -232,9 +237,7 @@ export function useGameStateManager(): GameStateManager {
   ): Promise<boolean> => {
     try {
       // 触发开始事件
-      if (eventBus?.emit && !options.silent) {
-        eventBus.emit('game:transition-start', { targetPhase, options });
-      }
+      emitEvent('game:transition-start', { targetPhase, options }, options.silent);
 
       let success = false;
 
@@ -278,16 +281,12 @@ export function useGameStateManager(): GameStateManager {
       }
 
       // 触发完成事件
-      if (eventBus?.emit && !options.silent) {
-        eventBus.emit('game:transition-complete', { targetPhase, success: true });
-      }
+      emitEvent('game:transition-complete', { targetPhase, success: true }, options.silent);
 
       return true;
     } catch (error) {
       // 触发失败事件
-      if (eventBus?.emit && !options.silent) {
-        eventBus.emit('game:transition-failed', { targetPhase, error, options });
-      }
+      emitEvent('game:transition-failed', { targetPhase, error, options }, options.silent);
       throw error;
     }
   };
@@ -380,12 +379,10 @@ export function useGameStateManager(): GameStateManager {
       }
 
       // 发送事件
-      if (eventBus?.emit) {
-        eventBus.emit('game:enter-battle', {
-          battleConfig,
-          previousPhase: previousPhase || oldPhase,
-        });
-      }
+      emitEvent('game:enter-battle', {
+        battleConfig,
+        previousPhase: previousPhase || oldPhase,
+      });
 
       console.log('[useGameStateManager] Entered battle:', {
         battleConfig,
@@ -422,12 +419,10 @@ export function useGameStateManager(): GameStateManager {
       }
 
       // 发送事件
-      if (eventBus?.emit) {
-        eventBus.emit('game:exit-battle', {
-          returnToPrevious,
-          previousPhase,
-        });
-      }
+      emitEvent('game:exit-battle', {
+        returnToPrevious,
+        previousPhase,
+      });
 
       console.log('[useGameStateManager] Exited battle:', {
         returnToPrevious,
@@ -468,9 +463,7 @@ export function useGameStateManager(): GameStateManager {
       }
 
       // 发送事件
-      if (eventBus?.emit) {
-        eventBus.emit('game:battle-state-changed', { battleState });
-      }
+      emitEvent('game:battle-state-changed', { battleState });
 
       return true;
     } catch (error) {
@@ -587,9 +580,7 @@ export function useGameStateManager(): GameStateManager {
         await gameStateService.setGameState(resetState);
       }
 
-      if (eventBus?.emit) {
-        eventBus.emit('game:state-reset');
-      }
+      emitEvent('game:state-reset');
 
       return true;
     } catch (error) {
@@ -645,13 +636,10 @@ export function useGameStateManager(): GameStateManager {
 
   // ==================== 服务状态检查 ====================
 
-  const getServiceStatus = (): ServiceStatus => {
-    return {
-      gameStateService: !!gameStateService,
-      eventBus: !!eventBus,
-      uiService: !!ui,
-    };
-  };
+  const getServiceStatus = (): ServiceStatus => ({
+    gameStateService: !!gameStateService,
+    eventBus: !!resolveEventBus(),
+  });
 
   // ==================== 组合式函数协调 ====================
 

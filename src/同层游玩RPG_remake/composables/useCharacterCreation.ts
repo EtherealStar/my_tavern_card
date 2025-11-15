@@ -227,7 +227,6 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
           id: 'default',
           name: backgroundName,
           description: '默认出身',
-          cost: 0,
           attributeBonus: {},
         };
 

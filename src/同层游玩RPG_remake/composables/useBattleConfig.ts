@@ -3,7 +3,7 @@ import { TYPES } from '../core/ServiceIdentifiers';
 import type { BattleConfig } from '../models/BattleSchemas';
 import { GamePhase } from '../models/GameState';
 import type { BattleConfigItem, BattleConfigService } from '../services/BattleConfigService';
-import type { UIService } from '../services/UIService';
+import type { DynamicEnemyService } from '../services/DynamicEnemyService';
 import { useGameStateManager } from './useGameStateManager';
 
 /**
@@ -12,7 +12,7 @@ import { useGameStateManager } from './useGameStateManager';
  */
 export function useBattleConfig() {
   const battleConfigService = inject<BattleConfigService>(TYPES.BattleConfigService);
-  const ui = inject<UIService>(TYPES.UIService);
+  const dynamicEnemyService = inject<DynamicEnemyService>(TYPES.DynamicEnemyService);
 
   // 使用Composable替代Pinia store
   const gameState = useGameStateManager();
@@ -20,33 +20,14 @@ export function useBattleConfig() {
   // 添加调试信息
   console.log('[useBattleConfig] Service injection status:', {
     battleConfigService: !!battleConfigService,
-    ui: !!ui,
+    dynamicEnemyService: !!dynamicEnemyService,
+    ui: false,
   });
 
   // UI 反馈方法包装
-  const showSuccess = (title: string, message?: string) => {
-    try {
-      ui?.success?.(title, message);
-    } catch (error) {
-      console.warn('[useBattleConfig] UI success failed:', error);
-    }
-  };
-
-  const showError = (title: string, message?: string) => {
-    try {
-      ui?.error?.(title, message);
-    } catch (error) {
-      console.warn('[useBattleConfig] UI error failed:', error);
-    }
-  };
-
-  const showWarning = (title: string, message?: string) => {
-    try {
-      ui?.warning?.(title, message);
-    } catch (error) {
-      console.warn('[useBattleConfig] UI warning failed:', error);
-    }
-  };
+  const showSuccess = (_title: string, _message?: string) => {};
+  const showError = (_title: string, _message?: string) => {};
+  const showWarning = (_title: string, _message?: string) => {};
 
   // 响应式状态
   const isLoading = ref(false);
@@ -90,17 +71,7 @@ export function useBattleConfig() {
     try {
       isLoading.value = true;
 
-      // 获取服务容器
-      const container = (window as any).__RPG_SERVICE_CONTAINER__;
-      if (!container) {
-        const error = '服务容器不可用';
-        console.error('[useBattleConfig]', error);
-        if (!options?.silent) showError('启动战斗失败', error);
-        return false;
-      }
-
-      // 获取动态敌人生成服务
-      const dynamicEnemyService = container.get('DynamicEnemyService');
+      // 检查动态敌人生成服务是否可用
       if (!dynamicEnemyService) {
         const error = '动态敌人生成服务不可用';
         console.error('[useBattleConfig]', error);

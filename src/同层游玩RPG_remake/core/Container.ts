@@ -11,15 +11,14 @@ import { BattleResultHandler } from '同层游玩RPG_remake/services/BattleResul
 import { BattleService } from '同层游玩RPG_remake/services/BattleService';
 import { DynamicEnemyService } from '同层游玩RPG_remake/services/DynamicEnemyService';
 import { PhaserManager } from '同层游玩RPG_remake/services/PhaserManager';
-import { AchievementService } from '../services/AchievementService';
 import { CommandQueueService } from '../services/CommandQueueService';
 import { DomPortalService } from '../services/DomPortalService';
 import { GameStateService } from '../services/GameStateService';
+import { GlobalStateManager } from '../services/GlobalStateManager';
 import { ResponsiveService } from '../services/ResponsiveService';
 import { SameLayerService } from '../services/SameLayerService';
 import { SaveLoadManagerService } from '../services/SaveLoadManagerService';
 import { StatDataBindingService } from '../services/StatDataBindingService';
-import { UIService } from '../services/UIService';
 import { EventBus } from './EventBus';
 import { GameCore } from './GameCore';
 
@@ -63,9 +62,6 @@ export class ServiceContainer {
     this.container.bind<EventBus>(TYPES.EventBus).to(EventBus).inSingletonScope();
     this.container.bind<GameCore>(TYPES.GameCore).to(GameCore).inSingletonScope();
 
-    // 基础服务 - 单例
-    this.container.bind<UIService>(TYPES.UIService).to(UIService).inSingletonScope();
-
     // MVU 相关服务 - 单例
     this.container
       .bind<StatDataBindingService>(TYPES.StatDataBindingService)
@@ -86,9 +82,9 @@ export class ServiceContainer {
     // LoadManager功能已整合到useSaveLoad中，不再需要单独绑定
 
     // 其他服务 - 单例
-    this.container.bind<AchievementService>(TYPES.AchievementService).to(AchievementService).inSingletonScope();
     this.container.bind<DomPortalService>(TYPES.DomPortalService).to(DomPortalService).inSingletonScope();
     this.container.bind<ResponsiveService>(TYPES.ResponsiveService).to(ResponsiveService).inSingletonScope();
+    this.container.bind<GlobalStateManager>(TYPES.GlobalStateManager).to(GlobalStateManager).inSingletonScope();
 
     // 指令队列服务 - 单例
     this.container.bind<CommandQueueService>(TYPES.CommandQueueService).to(CommandQueueService).inSingletonScope();
@@ -145,8 +141,6 @@ export class ServiceContainer {
   private initializeServiceTracking(): void {
     // 定义服务依赖关系
     this.serviceDependencies.set('EventBus', []);
-    this.serviceDependencies.set('UIService', []);
-    this.serviceDependencies.set('AchievementService', []);
     // StatDataBindingService 依赖 MVU 框架，但 MVU 框架在 GameCoreFactory 中等待
     this.serviceDependencies.set('StatDataBindingService', ['EventBus']);
     this.serviceDependencies.set('GameStateService', ['EventBus']);
@@ -154,6 +148,7 @@ export class ServiceContainer {
     this.serviceDependencies.set('SaveLoadManagerService', []);
     // LoadManager功能已整合到useSaveLoad中
     this.serviceDependencies.set('DomPortalService', []);
+    this.serviceDependencies.set('GlobalStateManager', []);
     this.serviceDependencies.set('CommandQueueService', ['EventBus', 'StatDataBindingService']);
 
     // 战斗相关服务依赖
@@ -173,11 +168,9 @@ export class ServiceContainer {
 
     this.serviceDependencies.set('GameCore', [
       'EventBus',
-      'UIService',
       'StatDataBindingService',
       'GameStateService',
       'SameLayerService',
-      'AchievementService',
       'SaveLoadManagerService',
       'CommandQueueService',
       'BattleConfigService',

@@ -82,6 +82,12 @@ function getCooldownReplies(scriptVars: Record<string, any>): number {
 
 async function tryTriggerRandomEvent(variables: Mvu.MvuData, _out_is_updated?: boolean): Promise<void> {
   try {
+    // 检查是否为0层消息，如果是则不触发随机事件
+    const currentMessageId = getLastMessageId();
+    if (currentMessageId === 0) {
+      return;
+    }
+
     // 若存在"好感事件待触发"（阶段为奇数），优先让好感事件占用，跳过本次随机触发
     const affectionStages = Mvu.getMvuVariable(variables, 'tavern_helper.affection_events.stage', {
       default_value: {},

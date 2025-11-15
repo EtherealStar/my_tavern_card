@@ -23,6 +23,24 @@ const importError = ref<string | null>(null);
 const importSuccess = ref<string | null>(null);
 
 // JSON 验证 Schema
+// 资源路径验证函数（支持URL或本地资源路径）
+const resourcePathSchema = z.string().refine(
+  val => {
+    // 如果是有效的URL，则通过
+    try {
+      new URL(val);
+      return true;
+    } catch {
+      // 如果不是URL，检查是否为本地资源路径
+      // 本地资源路径应该以 assets/ 开头，或者是相对路径
+      return val.startsWith('assets/') || val.startsWith('./assets/') || val.startsWith('../assets/');
+    }
+  },
+  {
+    message: '必须是有效的URL地址或本地资源路径（以 assets/ 开头）',
+  },
+);
+
 const BattleParticipantStatsSchema = z.object({
   atk: z.number().nonnegative().default(10),
   hatk: z.number().nonnegative().default(10),
@@ -56,7 +74,7 @@ const FullBattleConfigSchema = z.object({
     .object({
       background: z
         .object({
-          image: z.string().url(),
+          image: resourcePathSchema,
         })
         .optional(),
     })

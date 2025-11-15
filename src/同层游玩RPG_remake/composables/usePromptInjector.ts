@@ -4,7 +4,9 @@
  * 使用 InjectionPrompt 格式，注入到用户输入位置
  */
 
-import { ref } from 'vue';
+import { inject, onMounted, ref } from 'vue';
+import type { EventBus } from '../core/EventBus';
+import { TYPES } from '../core/ServiceIdentifiers';
 
 // 注入提示词条目类型定义
 interface PromptEntry {
@@ -36,7 +38,14 @@ const generateId = (): string => {
   return `prompt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 };
 
+// 装备事件监听器的取消订阅函数存储
+let equipmentEventUnsubscribers: (() => void)[] = [];
+// 标志是否已经设置了监听器（避免重复设置）
+let equipmentListenersSetup = false;
+
 export function usePromptInjector() {
+  // 获取 EventBus
+  const eventBus = inject<EventBus>(TYPES.EventBus);
   /**
    * 添加下一次生成时使用的注入提示词
    * @param content 提示词内容
@@ -203,6 +212,113 @@ export function usePromptInjector() {
     };
   };
 
+  /**
+   * 设置装备事件监听器
+   * 监听指令队列里的装备指令被装备或卸下时，自动注入提示词
+   */
+  const setupEquipmentListeners = (): void => {
+    if (!eventBus) {
+      console.warn('[usePromptInjector] EventBus 不可用，无法设置装备事件监听器');
+      return;
+    }
+
+    // 如果已经设置过监听器，直接返回（避免重复设置）
+    if (equipmentListenersSetup) {
+      console.log('[usePromptInjector] 装备事件监听器已设置，跳过重复设置');
+      return;
+    }
+
+    // 清理之前的监听器（防止有残留）
+    cleanupEquipmentListeners();
+
+    // 监听装备事件
+    equipmentEventUnsubscribers.push(
+      eventBus.on('equipment:weapon_equipped', (payload: any) => {
+        if (payload?.weapon?.name) {
+          const prompt = `<user>装备了${payload.weapon.name}`;
+          addNextInjection(prompt, { source: 'equipment-listener' });
+          console.log('[usePromptInjector] 装备武器事件，注入提示词:', prompt);
+        }
+      }),
+    );
+
+    equipmentEventUnsubscribers.push(
+      eventBus.on('equipment:armor_equipped', (payload: any) => {
+        if (payload?.armor?.name) {
+          const prompt = `<user>装备了${payload.armor.name}`;
+          addNextInjection(prompt, { source: 'equipment-listener' });
+          console.log('[usePromptInjector] 装备防具事件，注入提示词:', prompt);
+        }
+      }),
+    );
+
+    equipmentEventUnsubscribers.push(
+      eventBus.on('equipment:accessory_equipped', (payload: any) => {
+        if (payload?.accessory?.name) {
+          const prompt = `<user>装备了${payload.accessory.name}`;
+          addNextInjection(prompt, { source: 'equipment-listener' });
+          console.log('[usePromptInjector] 装备饰品事件，注入提示词:', prompt);
+        }
+      }),
+    );
+
+    // 监听卸下事件
+    equipmentEventUnsubscribers.push(
+      eventBus.on('equipment:weapon_unequipped', (payload: any) => {
+        if (payload?.weapon?.name) {
+          const prompt = `<user>卸下了${payload.weapon.name}`;
+          addNextInjection(prompt, { source: 'equipment-listener' });
+          console.log('[usePromptInjector] 卸下武器事件，注入提示词:', prompt);
+        }
+      }),
+    );
+
+    equipmentEventUnsubscribers.push(
+      eventBus.on('equipment:armor_unequipped', (payload: any) => {
+        if (payload?.armor?.name) {
+          const prompt = `<user>卸下了${payload.armor.name}`;
+          addNextInjection(prompt, { source: 'equipment-listener' });
+          console.log('[usePromptInjector] 卸下防具事件，注入提示词:', prompt);
+        }
+      }),
+    );
+
+    equipmentEventUnsubscribers.push(
+      eventBus.on('equipment:accessory_unequipped', (payload: any) => {
+        if (payload?.accessory?.name) {
+          const prompt = `<user>卸下了${payload.accessory.name}`;
+          addNextInjection(prompt, { source: 'equipment-listener' });
+          console.log('[usePromptInjector] 卸下饰品事件，注入提示词:', prompt);
+        }
+      }),
+    );
+
+    equipmentListenersSetup = true;
+    console.log('[usePromptInjector] 装备事件监听器已设置');
+  };
+
+  /**
+   * 清理装备事件监听器
+   */
+  const cleanupEquipmentListeners = (): void => {
+    equipmentEventUnsubscribers.forEach(unsubscribe => {
+      try {
+        unsubscribe();
+      } catch (error) {
+        console.error('[usePromptInjector] 清理装备事件监听器失败:', error);
+      }
+    });
+    equipmentEventUnsubscribers = [];
+    equipmentListenersSetup = false;
+  };
+
+  // 生命周期管理：在组件挂载时设置监听器
+  // 注意：由于 usePromptInjector 是全局单例，监听器也是全局的，
+  // 因此不应该在组件卸载时清理，应该保持激活状态
+  onMounted(() => {
+    setupEquipmentListeners();
+  });
+
   return {
     // 添加方法
     addNextInjection,
@@ -219,5 +335,9 @@ export function usePromptInjector() {
 
     // 调试方法
     getStatus,
+
+    // 装备监听器管理方法
+    setupEquipmentListeners,
+    cleanupEquipmentListeners,
   };
 }

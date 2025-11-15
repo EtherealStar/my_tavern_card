@@ -1,5 +1,5 @@
 import { inject, nextTick, onMounted, onUnmounted, readonly, ref } from 'vue';
-import { EventBus } from '同层游玩RPG/core/EventBus';
+import type { EventBus } from '../core/EventBus';
 import { TYPES } from '../core/ServiceIdentifiers';
 import type { BattleAction, BattleConfig, BattleResult } from '../models/BattleSchemas';
 import type { BattleService } from '../services/BattleService';
@@ -50,36 +50,7 @@ import { usePhaserBattle } from './usePhaserBattle';
  * ```
  */
 
-/**
- * 手动战斗系统（当 Vue 运行时环境不可用时使用）
- */
-function createManualBattleSystem() {
-  console.log('[useBattleSystem] Creating manual battle system (fallback)');
-
-  return {
-    state: { value: null },
-    isInBattle: { value: false },
-    result: { value: null },
-    startBattle: async (config: any) => {
-      console.log('[useBattleSystem] Manual startBattle called with config:', config);
-    },
-    processPlayerAction: async (action: any) => {
-      console.log('[useBattleSystem] Manual processPlayerAction called with action:', action);
-    },
-    getCurrentState: () => null,
-    resetBattleSystem: () => {
-      console.log('[useBattleSystem] Manual resetBattleSystem called');
-    },
-  };
-}
-
 export function useBattleSystem() {
-  // 检查 Vue 运行时环境是否可用
-  if (typeof onMounted === 'undefined' || typeof onUnmounted === 'undefined') {
-    console.warn('[useBattleSystem] Vue lifecycle functions not available, using manual event management');
-    return createManualBattleSystem();
-  }
-
   const battleService = inject<BattleService>(TYPES.BattleService);
   const eventBus = inject<EventBus>(TYPES.EventBus);
 
@@ -97,8 +68,6 @@ export function useBattleSystem() {
    * 从 BattleService 发送的初始化完成事件
    */
   const handleBattleStart = (config: BattleConfig) => {
-    console.log('[useBattleSystem] Handling battle start event with config:', config);
-
     // 验证配置
     if (!config || !Array.isArray(config.participants)) {
       console.error('[useBattleSystem] Invalid config in handleBattleStart:', config);
@@ -108,7 +77,6 @@ export function useBattleSystem() {
     try {
       battleState.initializeBattle(config);
       phaserBattle.startBattleScene();
-      console.log('[useBattleSystem] Battle start event handled successfully');
     } catch (error) {
       console.error('[useBattleSystem] Failed to handle battle start event:', error);
       throw error;
@@ -120,7 +88,6 @@ export function useBattleSystem() {
    * 从 BattleService 发送的 battle:result 事件触发
    */
   const handleBattleEnd = (battleResult: BattleResult) => {
-    console.log('[useBattleSystem] Handling battle end event:', battleResult);
     // 不直接退出战斗，让 BattleRoot.vue 显示结果对话框
     // gameState.exitBattle(true); // 移除直接退出
     battleState.handleBattleEnd(battleResult);
@@ -161,17 +128,13 @@ export function useBattleSystem() {
     }
 
     if (battleState.isInitialized.value) {
-      console.log('[useBattleSystem] Battle already initialized, skipping startBattle call');
       return;
     }
 
     try {
-      console.log('[useBattleSystem] Starting battle...');
-
       // Step 1: 初始化 BattleService（注册技能、验证配置、映射属性）
       // 这会发送 battle:initialized 事件，触发 handleBattleStart 来初始化战斗状态
       const processedConfig = await battleService.initializeBattle(config);
-      console.log('[useBattleSystem] Battle service initialized');
 
       // Step 2: 等待 Vue 更新，确保 Phaser 容器已挂载
       await nextTick();
@@ -180,13 +143,10 @@ export function useBattleSystem() {
       if (battleState.battleState.value) {
         // 使用类型断言解决readonly类型问题
         await battleService.startBattle(battleState.battleState.value as any, processedConfig);
-        console.log('[useBattleSystem] Phaser battle scene started');
       } else {
         console.error('[useBattleSystem] Battle state is null after initialization');
         throw new Error('Battle state initialization failed');
       }
-
-      console.log('[useBattleSystem] Battle started successfully');
     } catch (error) {
       console.error('[useBattleSystem] Failed to start battle:', error);
       throw error;
@@ -214,50 +174,16 @@ export function useBattleSystem() {
     }
 
     try {
-      console.log('[useBattleSystem] Processing player action:', action);
-
       // 调用 BattleService 处理行动并获取新状态
       // BattleService 会：
       // 1. 调用 BattleEngine 计算
       // 2. 发送事件（battle:damage, battle:miss 等）
       // 3. 处理 AI 回合
       // 4. 返回新状态
-      console.log('[useBattleSystem] Calling BattleService.processPlayerAction with current state:', {
-        currentParticipants: battleState.battleState.value?.participants?.length || 0,
-        currentState: battleState.battleState.value
-          ? {
-              ended: battleState.battleState.value.ended,
-              participants: battleState.battleState.value.participants?.map(p => ({
-                id: p.id,
-                name: p.name,
-                side: p.side,
-                hp: p.hp,
-              })),
-            }
-          : null,
-      });
-
       const newState = await battleService.processPlayerAction(action, battleState.battleState.value as any);
-
-      console.log('[useBattleSystem] BattleService.processPlayerAction returned:', {
-        hasNewState: !!newState,
-        newStateParticipants: newState?.participants?.length || 0,
-        newState: newState
-          ? {
-              ended: newState.ended,
-              winner: newState.winner,
-              participants: newState.participants?.map(p => ({ id: p.id, name: p.name, side: p.side, hp: p.hp })),
-            }
-          : null,
-      });
 
       // 更新 battleState 中的状态，确保状态同步
       if (newState) {
-        console.log('[useBattleSystem] Updating battle state with new state:', {
-          participantsCount: newState.participants?.length || 0,
-          ended: newState.ended,
-          winner: newState.winner,
-        });
         battleState.updateBattleState(newState);
       } else {
         console.error('[useBattleSystem] BattleService.processPlayerAction returned null/undefined newState!');
@@ -265,8 +191,6 @@ export function useBattleSystem() {
 
       // 检查战斗是否结束
       if (newState?.ended) {
-        console.log('[useBattleSystem] Battle ended, winner:', newState.winner);
-
         // 不直接退出战斗，让 BattleService 发送 battle:result 事件
         // gameState.exitBattle(true); // 移除直接退出
         battleState.endBattle(newState.winner || 'player');
@@ -277,8 +201,6 @@ export function useBattleSystem() {
           summary: newState.winner === 'player' ? '胜利！' : '失败…',
         };
       }
-
-      console.log('[useBattleSystem] Player action processed successfully');
     } catch (error) {
       console.error('[useBattleSystem] Failed to process player action:', error);
       throw error;
@@ -299,7 +221,6 @@ export function useBattleSystem() {
    */
   const resetBattleSystem = () => {
     result.value = null;
-    console.log('[useBattleSystem] Battle system reset');
   };
 
   return {

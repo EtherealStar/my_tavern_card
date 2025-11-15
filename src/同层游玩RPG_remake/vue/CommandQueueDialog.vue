@@ -22,7 +22,10 @@
               <div class="command-description">{{ command.description }}</div>
               <div class="command-time">{{ formatTime(command.timestamp) }}</div>
             </div>
-            <button class="remove-btn" @click="removeCommand(command.id)" title="移除指令">✕</button>
+            <button v-if="!command.nonRemovable" class="remove-btn" @click="removeCommand(command.id)" title="移除指令">
+              ✕
+            </button>
+            <span v-else class="non-removable-tag" title="将在下个回复前自动执行">自动</span>
           </div>
         </div>
       </div>
@@ -293,6 +296,16 @@ onUnmounted(() => {
 .remove-btn:hover {
   background: #fef2f2;
   color: #dc2626;
+}
+
+.non-removable-tag {
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #fef3c7;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
 }
 
 .dialog-actions {

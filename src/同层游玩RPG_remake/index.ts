@@ -54,6 +54,27 @@ async function ensureJQueryLoaded(): Promise<void> {
   }
   (window as any).__RPG_REMAKE_INIT_DONE__ = true;
 
+  // 加载并应用阅读设置
+  function loadReadingSettings() {
+    try {
+      const saved = localStorage.getItem('rpg_reading_settings');
+      if (saved) {
+        const settings = JSON.parse(saved);
+        const root = document.getElementById('rpg-root');
+        if (root) {
+          root.style.setProperty('--reading-font-family', settings.fontFamily);
+          root.style.setProperty('--reading-font-size', `${settings.fontSize}px`);
+          root.style.setProperty('--reading-line-height', String(settings.lineHeight));
+          root.style.setProperty('--reading-max-width', `${settings.maxWidth}px`);
+          root.style.setProperty('--reading-paragraph-spacing', `${settings.paragraphSpacing}px`);
+        }
+      }
+    } catch (error) {
+      console.warn('[RPG] 加载阅读设置失败:', error);
+    }
+  }
+  loadReadingSettings();
+
   try {
     // 等待服务初始化完成
     await GameCoreFactory.initializeWithStages();
@@ -86,21 +107,9 @@ async function ensureJQueryLoaded(): Promise<void> {
         }
 
         try {
-          app.provide(TYPES.UIService, serviceContainer.get(TYPES.UIService));
-        } catch (error) {
-          console.error('[index.ts] UIService 服务获取失败:', error);
-        }
-
-        try {
           app.provide(TYPES.SameLayerService, serviceContainer.get(TYPES.SameLayerService));
         } catch (error) {
           console.error('[index.ts] SameLayerService 服务获取失败:', error);
-        }
-
-        try {
-          app.provide(TYPES.AchievementService, serviceContainer.get(TYPES.AchievementService));
-        } catch (error) {
-          console.error('[index.ts] AchievementService 服务获取失败:', error);
         }
 
         try {
@@ -164,11 +173,23 @@ async function ensureJQueryLoaded(): Promise<void> {
           console.error('[index.ts] BattleConfigInitializer 服务获取失败:', error);
         }
 
+        try {
+          app.provide(TYPES.DynamicEnemyService, serviceContainer.get(TYPES.DynamicEnemyService));
+        } catch (error) {
+          console.error('[index.ts] DynamicEnemyService 服务获取失败:', error);
+        }
+
         // 提供游戏状态服务给状态管理器使用
         try {
           app.provide(TYPES.GameStateService, serviceContainer.get(TYPES.GameStateService));
         } catch (error) {
           console.error('[index.ts] GameStateService 服务获取失败:', error);
+        }
+
+        try {
+          app.provide(TYPES.GlobalStateManager, serviceContainer.get(TYPES.GlobalStateManager));
+        } catch (error) {
+          console.error('[index.ts] GlobalStateManager 服务获取失败:', error);
         }
         (window as any).__RPG_VUE_REMOUNT__ = (el: Element) => {
           try {
@@ -185,21 +206,9 @@ async function ensureJQueryLoaded(): Promise<void> {
           }
 
           try {
-            next.provide(TYPES.UIService, serviceContainer.get(TYPES.UIService));
-          } catch (error) {
-            console.error('[index.ts] UIService 服务获取失败 (remount):', error);
-          }
-
-          try {
             next.provide(TYPES.SameLayerService, serviceContainer.get(TYPES.SameLayerService));
           } catch (error) {
             console.error('[index.ts] SameLayerService 服务获取失败 (remount):', error);
-          }
-
-          try {
-            next.provide(TYPES.AchievementService, serviceContainer.get(TYPES.AchievementService));
-          } catch (error) {
-            console.error('[index.ts] AchievementService 服务获取失败 (remount):', error);
           }
 
           try {
@@ -263,11 +272,23 @@ async function ensureJQueryLoaded(): Promise<void> {
             console.error('[index.ts] BattleConfigInitializer 服务获取失败 (remount):', error);
           }
 
+          try {
+            next.provide(TYPES.DynamicEnemyService, serviceContainer.get(TYPES.DynamicEnemyService));
+          } catch (error) {
+            console.error('[index.ts] DynamicEnemyService 服务获取失败 (remount):', error);
+          }
+
           // 提供游戏状态服务给状态管理器使用
           try {
             next.provide(TYPES.GameStateService, serviceContainer.get(TYPES.GameStateService));
           } catch (error) {
             console.error('[index.ts] GameStateService 服务获取失败 (remount):', error);
+          }
+
+          try {
+            next.provide(TYPES.GlobalStateManager, serviceContainer.get(TYPES.GlobalStateManager));
+          } catch (error) {
+            console.error('[index.ts] GlobalStateManager 服务获取失败 (remount):', error);
           }
           next.mount(el);
         };
