@@ -2,7 +2,11 @@
   "id": "8ff7ac03-7deb-4040-b00b-e65c462e3cf5",
   "scriptName": "界面-实时修改",
   "findRegex": ".*",
+<<<<<<< HEAD
   "replaceString": "```text\n<body>\n<script>\n$('body').load('http://localhost:5500/dist/界面示例/index.html')\n</script>\n</body>\n```",
+=======
+  "replaceString": "```\n<body>\n<script>\n$('body').load('http://localhost:5500/dist/界面示例/index.html')\n</script>\n</body>\n```",
+>>>>>>> 4d711bd501f9f52d211bfb86391113e9f3d8504e
   "trimStrings": [],
   "placement": [1, 2],
   "disabled": true,
