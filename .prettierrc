@@ -9,6 +9,10 @@
   "singleQuote": true,
   "tabWidth": 2,
   "trailingComma": "all",
+<<<<<<< HEAD
   "useTabs": false,
   "plugins": ["prettier-plugin-tailwindcss"]
+=======
+  "useTabs": false
+>>>>>>> 33527c80a66276af6720263f25e29f2d6fbff9cb
 }
