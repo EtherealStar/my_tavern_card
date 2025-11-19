@@ -151,10 +151,6 @@ export function usePlayingLogic() {
     }
   };
 
-  // 旧的事件处理器已移除，统一使用新的generateMessage接口
-
-  // 旧的事件监听器已移除，统一使用新的生成接口
-
   // 设置ResizeObserver
   const setupResizeObserver = () => {
     try {
@@ -268,58 +264,10 @@ export function usePlayingLogic() {
         // 存储取消注册函数
         (window as any).__RPG_PLAYING_LOGIC_UNREGISTER__ = unregister;
       } else {
-        console.warn('[usePlayingLogic] 状态管理器不可用，使用降级模式');
-        // 降级到旧的事件监听方式
-        setupLegacyGameStateListener(loadUserPanel, loadMvuData, loadGameStateData);
+        console.warn('[usePlayingLogic] 状态管理器不可用，跳过注册');
       }
     } catch (error) {
       console.warn('[usePlayingLogic] 注册到状态管理协调机制失败:', error);
-      // 降级到旧的事件监听方式
-      setupLegacyGameStateListener(loadUserPanel, loadMvuData, loadGameStateData);
-    }
-  };
-
-  // 降级模式：旧的事件监听方式
-  const setupLegacyGameStateListener = (
-    loadUserPanel: () => Promise<void>,
-    loadMvuData: () => Promise<void>,
-    loadGameStateData: () => Promise<void>,
-  ) => {
-    try {
-      // const gameStateService = inject<GameStateService>('gameState'); // GameStateService 不存在，暂时注释
-      const globalEventBus = (window as any).__RPG_EVENT_BUS__;
-
-      const handleGameStateChange = async (newState: any) => {
-        // 检查是否转换到进行状态
-        if (newState.phase === 'playing' && (newState.started || newState.saveName)) {
-          try {
-            // 重新加载用户面板数据
-            await loadUserPanel();
-            // 重新加载MVU数据
-            await loadMvuData();
-            // 重新加载游戏状态数据
-            await loadGameStateData();
-          } catch (error) {
-            console.error('[usePlayingLogic] 游戏状态恢复失败:', error);
-          }
-        }
-      };
-
-      // 通过GameStateService监听状态变化 - 暂时注释，因为GameStateService不存在
-      // if (gameStateService) {
-      //   gameStateService.onStateChange(handleGameStateChange);
-      //   (window as any).__RPG_GAME_STATE_SERVICE__ = gameStateService;
-      // }
-
-      // 通过事件总线监听状态变化
-      if (globalEventBus) {
-        globalEventBus.on('game:state-changed', handleGameStateChange);
-      }
-
-      // 存储监听器以便清理
-      (window as any).__RPG_GAME_STATE_LISTENER__ = handleGameStateChange;
-    } catch (error) {
-      console.warn('[usePlayingLogic] 设置降级游戏状态监听失败:', error);
     }
   };
 
@@ -333,24 +281,6 @@ export function usePlayingLogic() {
         (window as any).__RPG_PLAYING_LOGIC_UNREGISTER__ = undefined;
         return;
       }
-
-      // 降级清理：清理旧的事件监听
-      // const gameStateService = (window as any).__RPG_GAME_STATE_SERVICE__; // 暂时注释，因为GameStateService不存在
-      const listener = (window as any).__RPG_GAME_STATE_LISTENER__;
-      const globalEventBus = (window as any).__RPG_EVENT_BUS__;
-
-      // 清理GameStateService监听器 - 暂时注释，因为GameStateService不存在
-      // if (gameStateService && listener) {
-      //   gameStateService.offStateChange(listener);
-      //   (window as any).__RPG_GAME_STATE_SERVICE__ = undefined;
-      // }
-
-      // 清理事件总线监听器
-      if (globalEventBus && listener) {
-        globalEventBus.off('game:state-changed', listener);
-      }
-
-      (window as any).__RPG_GAME_STATE_LISTENER__ = undefined;
     } catch (error) {
       console.warn('[usePlayingLogic] 清理状态管理协调失败:', error);
     }
@@ -360,24 +290,48 @@ export function usePlayingLogic() {
 
   /**
    * 统一的消息后处理方法
-   * 处理生成结果：应用MVU数据变更、保存到存档、创建UI消息对象、更新UI
+   * 处理生成结果：应用MVU数据变更、创建UI消息对象、更新UI、保存到存档
+   * @param skipUIUpdate 如果为true，跳过UI消息数组操作（用于创建阶段，此时PlayingRoot尚未挂载）
    */
   const postProcessMessage = async (
     _userInput: string,
     result: { html: string; newMvuData?: Mvu.MvuData; summary?: { short?: string; long?: string } },
     providedSlotId?: string,
+    skipUIUpdate?: boolean,
   ): Promise<boolean> => {
+    let slotIdForEvent: string | null = null;
+    let messageIdForEvent: string | null = null;
+    let saveSuccessForEvent = false;
+
     try {
-      // 0. 若存在总结，先准备"序号|时间|"前缀并格式化总结文本（在保存前计算）
+      console.debug('[usePlayingLogic] postProcessMessage 开始', {
+        skipUIUpdate,
+        providedSlotId,
+        hasNewMvuData: !!result.newMvuData,
+        hasSummary: !!result.summary,
+      });
       let formattedSummary: { short?: string; long?: string } | undefined = undefined;
+      // 1. 应用MVU数据变更
+      // 注意：replaceMvuData 已经完成了数据替换和 loadStatData()，数据已经更新
+      // mvu:update-ended 事件会在 replaceMvuData 内部触发，用于通知 UI 更新
+      // useStatData.ts 中已经监听了该事件来自动更新 UI，这里不需要等待
+      if (result.newMvuData && statDataBinding) {
+        const success = await statDataBinding.replaceMvuData(result.newMvuData, {
+          type: 'message',
+          message_id: 0,
+        });
+
+        if (!success) {
+          console.warn('[usePlayingLogic] MVU数据应用失败');
+        }
+      }
+
+      // 2. 若存在总结，先准备"序号|时间|"前缀并格式化总结文本
       try {
         if (result.summary && (result.summary.short || result.summary.long)) {
-          // 获取当前存档ID（优先使用传入的 slotId，否则从游戏状态获取）
           const slotIdForSummary = providedSlotId || (await getCurrentSaveSlotId());
-          // 获取当前日期时间
           const dateStr = (await statDataBinding?.getCurrentDate()) || '';
           const timeStr = (await statDataBinding?.getCurrentTime()) || '';
-          // 统计现有已保存且带summary的assistant消息数量，作为编号基数
           let currentIndex = 0;
           if (slotIdForSummary && saveLoadManager) {
             try {
@@ -404,57 +358,43 @@ export function usePlayingLogic() {
         formattedSummary = result.summary;
       }
 
-      // 1. 应用MVU数据变更
-      if (result.newMvuData && statDataBinding) {
-        const success = await statDataBinding.replaceMvuData(result.newMvuData, {
-          type: 'message',
-          message_id: 0,
-        });
+      // 3. 立即在UI中插入待保存的AI消息（如果不需要跳过UI更新）
+      const textContent = result.html.replace(/<[^>]+>/g, '').trim();
+      let pendingMessage: PendingAwareMessage | null = null;
 
-        if (success) {
-          // 等待数据更新完成，确保前端显示最新数据
-          await new Promise<void>(resolve => {
-            const timeout = setTimeout(() => {
-              resolve();
-            }, 5000);
-
-            const eventBus = statDataBinding.getEventBus();
-            if (eventBus) {
-              // 等待 mvu:update-ended 事件，这是MVU框架直接触发的事件，更可靠
-              const unsubscribe = eventBus.on('mvu:update-ended', () => {
-                clearTimeout(timeout);
-                unsubscribe();
-                resolve();
-              });
-            } else {
-              clearTimeout(timeout);
-              resolve();
-            }
-          });
-        } else {
-          console.warn('[usePlayingLogic] MVU数据应用失败');
-        }
+      if (!skipUIUpdate) {
+        // 只在需要更新UI时创建和添加消息
+        pendingMessage = createSaveMessage(
+          'assistant',
+          textContent,
+          result.html,
+          result.newMvuData,
+          formattedSummary ?? result.summary,
+        ) as PendingAwareMessage;
+        pendingMessage.pending = true;
+        markMessageAsPending(pendingMessage);
+        messages.value.push(pendingMessage);
+        scrollToBottom();
       }
 
-      // 2. 立即在UI中插入待保存的AI消息
-      const textContent = result.html.replace(/<[^>]+>/g, '').trim();
-      const pendingMessage = createSaveMessage(
-        'assistant',
-        textContent,
-        result.html,
-        result.newMvuData,
-        formattedSummary ?? result.summary,
-      ) as PendingAwareMessage;
-      pendingMessage.pending = true;
-      markMessageAsPending(pendingMessage);
-      messages.value.push(pendingMessage);
-      scrollToBottom();
-
-      // 3. 异步写入存档，成功后更新UI消息状态
+      // 4. 异步写入存档，成功后更新UI消息状态
       // 优先使用传入的 slotId，否则从游戏状态获取
       const slotId = providedSlotId || (await getCurrentSaveSlotId());
+      console.debug('[usePlayingLogic] postProcessMessage slotId 解析结果', {
+        providedSlotId,
+        resolvedSlotId: slotId,
+      });
+      slotIdForEvent = slotId || null;
+      let messageId: string | undefined = undefined;
+      let saveSuccess = false;
+
       if (slotId && saveLoadManager) {
         try {
+          const saveReady = saveLoadManager.isReady();
+          if (!saveReady) {
+            console.warn('[usePlayingLogic] SaveLoadManager 未就绪，尝试等待初始化');
+            await saveLoadManager.waitForReady(5000);
+          }
           const savedMessage = await saveLoadManager.addAssistantMessage(
             slotId,
             textContent,
@@ -462,24 +402,75 @@ export function usePlayingLogic() {
             result.newMvuData,
             formattedSummary,
           );
-          console.log('[usePlayingLogic] 消息已成功保存到存档:', savedMessage.id);
-          pendingMessage.id = savedMessage.id;
-          pendingMessage.timestamp = savedMessage.timestamp || new Date().toISOString();
-          pendingMessage.mvuSnapshot = result.newMvuData;
-          pendingMessage.summary = formattedSummary ?? result.summary;
-          pendingMessage.pending = false;
-          unmarkPendingMessage(pendingMessage);
+          messageId = savedMessage.id;
+
+          // 只在需要更新UI时更新pendingMessage状态
+          if (pendingMessage) {
+            pendingMessage.id = savedMessage.id;
+            pendingMessage.timestamp = savedMessage.timestamp || new Date().toISOString();
+            pendingMessage.mvuSnapshot = result.newMvuData;
+            pendingMessage.summary = formattedSummary ?? result.summary;
+            pendingMessage.pending = false;
+            unmarkPendingMessage(pendingMessage);
+          }
+
+          saveSuccess = true;
+          console.debug('[usePlayingLogic] 已保存AI消息到存档', {
+            slotId,
+            messageId,
+            summaryIncluded: !!formattedSummary,
+            skipUIUpdate,
+          });
         } catch (error) {
           console.error('[usePlayingLogic] 保存消息到存档失败:', error);
+          saveSuccess = false;
         }
       } else {
-        console.warn('[usePlayingLogic] 无法保存消息到存档，slotId:', slotId, 'saveLoadManager:', !!saveLoadManager);
+        console.warn('[usePlayingLogic] 无法保存消息到存档，slotId为空或saveLoadManager缺失', {
+          slotId,
+          hasSaveLoadManager: !!saveLoadManager,
+        });
+        saveSuccess = false;
       }
 
-      return true;
+      // 5. 发出后处理完成事件，通知外部消息已保存到存档
+      messageIdForEvent = messageId || null;
+      saveSuccessForEvent = saveSuccess;
+      return saveSuccess;
     } catch (error) {
       console.error('[usePlayingLogic] 消息后处理失败:', error);
       return false;
+    } finally {
+      console.debug('[usePlayingLogic] 准备发出 message:post-process-completed 事件', {
+        slotIdForEvent,
+        messageIdForEvent,
+        saveSuccessForEvent,
+      });
+      const globalEventBus = (window as any).__RPG_EVENT_BUS__;
+      if (globalEventBus && typeof globalEventBus.emit === 'function') {
+        try {
+          globalEventBus.emit('message:post-process-completed', {
+            slotId: slotIdForEvent,
+            messageId: messageIdForEvent,
+            success: saveSuccessForEvent,
+          });
+          if (saveSuccessForEvent) {
+            console.log('[usePlayingLogic] 已发出后处理完成事件:', {
+              slotId: slotIdForEvent,
+              messageId: messageIdForEvent,
+              success: saveSuccessForEvent,
+            });
+          } else {
+            console.warn('[usePlayingLogic] 已发出后处理完成事件（失败）:', {
+              slotId: slotIdForEvent,
+              messageId: messageIdForEvent,
+              success: saveSuccessForEvent,
+            });
+          }
+        } catch (error) {
+          console.warn('[usePlayingLogic] 发出后处理完成事件失败:', error);
+        }
+      }
     }
   };
 

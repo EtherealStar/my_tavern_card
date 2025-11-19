@@ -1,62 +1,62 @@
 $meta:
   recursiveExtensible: false
-date: 2025-01-01
-time: 06:00
-location: 未知
-gender: 未知
-race: 未知
-age: 16
-level: 1
-exp: 0
-event: 无
-base_attributes:
+日期: 2025-01-01
+时间: 06:00
+地点: 未知
+性别: 未知
+种族: 未知
+年龄: 16
+等级: 1
+经验: 0
+事件: 无
+基础属性:
   $meta:
     recursiveExtensible: false
-  strength: 10
-  intelligence: 10
-  agility: 10
-  defense: 10
-  constitution: 10
-  charisma: 10
-  willpower: 10
-  luck: 10
-current_attributes:
+  力量: 2
+  智力: 1
+  敏捷: 1
+  防御: 2
+  体质: 4
+  魅力: 2
+  意志: 2
+  幸运: 1
+当前属性:
   $meta:
     recursiveExtensible: false
-  strength: 10
-  intelligence: 10
-  agility: 10
-  defense: 10
-  constitution: 10
-  charisma: 10
-  willpower: 10
-  luck: 10
-equipment:
+  力量: 2
+  智力: 1
+  敏捷: 1
+  防御: 2
+  体质: 4
+  魅力: 2
+  意志: 2
+  幸运: 1
+装备:
   $meta:
     recursiveExtensible: false
-  weapon: null
-  armor: null
-  accessory: null
-inventory:
+  武器: null
+  盔甲: null
+  饰品: null
+物品栏:
   $meta:
     recursiveExtensible: true
-  items: []
-relationships:
-  $meta:
-    recursiveExtensible: true
-    template:
-      gender: 未知
-      race: 未知
-      background: 未知
-      personality: 未知
-      outfit: 未知
-      relationship: 陌生人
-      affinity: 0
-      avatarUrl: null
-enemies:
+  物品: []
+关系:
   $meta:
     recursiveExtensible: true
     template:
-      variant: 未知敌人变体
-      race: 未知
-      battle_end: false
+      性别: 未知
+      种族: 未知
+      背景: 未知
+      性格: 未知
+      服装: 未知
+      关系状态: 陌生人
+      好感度: 0
+      头像URL: null
+敌人:
+  $meta:
+    recursiveExtensible: true
+    敌人模板:
+      类型: 未知敌人变体
+      种族: 未知
+      战斗结束: false

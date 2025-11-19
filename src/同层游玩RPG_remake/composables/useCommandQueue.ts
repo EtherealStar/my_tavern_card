@@ -1,7 +1,15 @@
 import { computed, inject, onMounted, onUnmounted, ref } from 'vue';
 import { TYPES } from '../core/ServiceIdentifiers';
-import type { Command, CommandQueueService } from '../services/CommandQueueService';
+import type {
+  Command,
+  CommandConflict,
+  CommandQueueHooks,
+  CommandQueueService,
+  ExecutionResult,
+} from '../services/CommandQueueService';
 import { CommandType } from '../services/CommandQueueService';
+import type { StatDataBindingService } from '../services/StatDataBindingService';
+import { useStatData } from './useStatData';
 /**
  * 指令队列组合式函数
  * 作为服务层和Vue层之间的桥梁，提供响应式接口和便捷方法
@@ -16,6 +24,7 @@ export function useCommandQueue() {
 
   // 服务层集成
   const commandQueueService = inject<CommandQueueService>(TYPES.CommandQueueService);
+  const statDataBinding = inject<StatDataBindingService>(TYPES.StatDataBindingService);
 
   // UI反馈服务（已移除toast提示，不再使用）
   // const { showSuccess, showError, showWarning } = useGameServices();
@@ -23,9 +32,148 @@ export function useCommandQueue() {
   // 事件监听器清理函数
   let unsubscribeUIUpdate: (() => void) | null = null;
 
+  // 物品结构验证辅助函数
+  const validateItemStructure = (item: any): boolean => {
+    return item && typeof item === 'object' && typeof item.name === 'string' && item.name.trim().length > 0;
+  };
+
+  // 检测指令冲突
+  const detectConflicts = (commands: Command[]): CommandConflict[] => {
+    const conflicts: CommandConflict[] = [];
+    const equipmentSlots = new Set<string>();
+    const inventoryOperations = new Map<string, number>();
+
+    for (const command of commands) {
+      // 检测装备槽位冲突
+      if (command.type === 'equip' || command.type === 'unequip' || command.type === 'equip_swap') {
+        // 从 action 中提取槽位类型，例如 'equip.weapon' -> 'weapon'
+        let slot: string | undefined;
+        if (command.type === 'equip_swap') {
+          slot = command.params.type; // equip_swap 指令的 params 中有 type 字段
+        } else {
+          // 从 action 中提取，例如 'equip.weapon' -> 'weapon'
+          const actionParts = command.action.split('.');
+          if (actionParts.length > 1) {
+            slot = actionParts[1];
+          }
+        }
+
+        if (slot) {
+          if (equipmentSlots.has(slot)) {
+            conflicts.push({
+              type: 'equipment_slot_conflict',
+              commands: commands.filter(c => {
+                if (c.type === 'equip_swap') {
+                  return c.params.type === slot;
+                } else {
+                  const parts = c.action.split('.');
+                  return parts.length > 1 && parts[1] === slot;
+                }
+              }),
+              message: `装备槽位 ${slot} 存在冲突操作`,
+            });
+          }
+          equipmentSlots.add(slot);
+        }
+      }
+
+      // 检测背包操作冲突
+      if (command.type === 'inventory') {
+        const key = `${command.params.type}_${command.params.itemIndex}`;
+        const count = inventoryOperations.get(key) || 0;
+        inventoryOperations.set(key, count + 1);
+
+        if (count > 0) {
+          conflicts.push({
+            type: 'inventory_operation_conflict',
+            commands: commands.filter(
+              c => c.params.type === command.params.type && c.params.itemIndex === command.params.itemIndex,
+            ),
+            message: `背包操作冲突: ${command.params.type}[${command.params.itemIndex}]`,
+          });
+        }
+      }
+    }
+
+    return conflicts;
+  };
+
+  // 验证数据一致性
+  const validateDataConsistency = async (): Promise<boolean> => {
+    if (!statDataBinding) {
+      return true; // 如果服务不可用，跳过验证
+    }
+
+    try {
+      const [equipment, inventory, attributes] = await Promise.all([
+        statDataBinding.getMvuEquipment(),
+        statDataBinding.getMvuInventory(),
+        statDataBinding.getMvuCurrentAttributes(),
+      ]);
+
+      // 验证装备数据
+      for (const [slot, item] of Object.entries(equipment)) {
+        if (item && !validateItemStructure(item)) {
+          console.error(`[CommandQueue] 装备数据无效: ${slot}`, item);
+          return false;
+        }
+      }
+
+      // 验证背包数据
+      for (const [type, items] of Object.entries(inventory)) {
+        if (!Array.isArray(items)) {
+          console.error(`[CommandQueue] 背包数据格式错误: ${type}`, items);
+          return false;
+        }
+      }
+
+      // 验证属性数据
+      for (const [attr, value] of Object.entries(attributes)) {
+        if (typeof value !== 'number' || !Number.isFinite(value)) {
+          console.error(`[CommandQueue] 属性数据无效: ${attr}`, value);
+          return false;
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error('[CommandQueue] 数据一致性验证失败:', error);
+      return false;
+    }
+  };
+
+  // 自定义指令执行器 - 处理升级指令
+  const executeCommand = async (command: Command): Promise<ExecutionResult | null> => {
+    // 如果是升级指令，使用组合式函数处理
+    if (command.type === CommandType.LEVEL_UP) {
+      try {
+        // 延迟导入 useStatData 以避免循环依赖
+        const { applyLevelUp } = useStatData();
+        const success = await applyLevelUp(command.params.newLevel, command.params.reason);
+        return { command, success, result: success };
+      } catch (error) {
+        return {
+          command,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    }
+    // 其他指令返回 null，让服务层使用默认处理
+    return null;
+  };
+
   // 设置事件监听器
   const setupEventListeners = () => {
     if (commandQueueService) {
+      // 设置钩子函数
+      const hooks: CommandQueueHooks = {
+        detectConflicts,
+        validateDataConsistency,
+        executeCommand, // 添加自定义执行器
+      };
+      commandQueueService.setHooks(hooks);
+
       // 监听队列变化事件，同步到响应式状态
       unsubscribeUIUpdate = commandQueueService.onUIUpdate((newQueue: Command[]) => {
         queue.value = [...newQueue];

@@ -3,6 +3,7 @@ import { computed, inject, onMounted, onUnmounted, ref } from 'vue';
 import { useBattleSystem } from '同层游玩RPG_remake/composables/useBattleSystem';
 import { BattleConfigService } from '同层游玩RPG_remake/services/BattleConfigService';
 import { useBattleConfig } from '../composables/useBattleConfig';
+import { useGameStateManager } from '../composables/useGameStateManager';
 import { useStatData } from '../composables/useStatData';
 import type { EventBus } from '../core/EventBus';
 import { TYPES } from '../core/ServiceIdentifiers';
@@ -14,6 +15,9 @@ import BattleDebugPanel from './components/BattleDebugPanel.vue';
 import BattleLayout from './components/BattleLayout.vue';
 import BattleResultDialog from './components/BattleResultDialog.vue';
 const battleConfigManager = useBattleConfig();
+
+// 使用游戏状态管理器
+const gameState = useGameStateManager();
 
 // 使用统计数据服务（用于经验值结算）
 const statData = useStatData();
@@ -415,6 +419,11 @@ async function closeBattleResult() {
     try {
       // 获取敌人信息（从战斗状态中）
       const enemyParticipant = battleState.battleState.value?.participants?.find((p: any) => p.side === 'enemy');
+      const enemyId =
+        (enemyParticipant as any)?.sourceEnemyId ??
+        (enemyParticipant as any)?.enemyId ??
+        (enemyParticipant as any)?.sourceId ??
+        enemyParticipant?.id;
 
       if (enemyParticipant?.level) {
         // 计算经验值
@@ -438,6 +447,18 @@ async function closeBattleResult() {
             console.warn('[BattleRoot] StatDataBindingService 不可用，无法更新经验值');
           }
         }
+      }
+
+      // 战斗胜利确认时将敌人标记为已击败
+      if (enemyId && statDataBindingService) {
+        try {
+          await statDataBindingService.setEnemyDefeated(enemyId, true, 'battle_victory');
+          battleConsoleLog('[BattleRoot] 标记敌人已击败（battle_end=true）:', enemyId);
+        } catch (error) {
+          console.error('[BattleRoot] 标记敌人 battle_end 失败:', { enemyId, error });
+        }
+      } else if (!enemyId) {
+        console.warn('[BattleRoot] 无法标记战斗敌人，缺少 enemyId');
       }
     } catch (error) {
       console.error('[BattleRoot] 结算经验值失败:', error);

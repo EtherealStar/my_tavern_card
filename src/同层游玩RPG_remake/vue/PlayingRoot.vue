@@ -211,7 +211,12 @@
 
       <section class="center-pane">
         <!-- 标题区域 -->
-        <div class="center-header" @mouseenter="showEventDetails = true" @mouseleave="showEventDetails = false">
+        <div
+          class="center-header"
+          v-if="false"
+          @mouseenter="showEventDetails = true"
+          @mouseleave="showEventDetails = false"
+        >
           <div class="event-banner">
             <span class="event-label">当前事件</span>
             <div v-if="showEventDetails" class="event-expanded">
@@ -1406,16 +1411,82 @@ const loadMvuData = async () => {
         scrollToBottom,
         nextTick,
       };
-      await loadToUI(pendingSaveData.slotId, uiContext);
-
-      // 清理待处理数据
-      (window as any).__RPG_PENDING_SAVE_DATA__ = undefined;
+      try {
+        await loadToUI(pendingSaveData.slotId, uiContext);
+        // 清理待处理数据
+        (window as any).__RPG_PENDING_SAVE_DATA__ = undefined;
+      } catch (error) {
+        console.error('[PlayingRoot] 加载待处理存档数据失败，返回到创建界面:', error);
+        // 清理待处理数据
+        (window as any).__RPG_PENDING_SAVE_DATA__ = undefined;
+        // 返回到创建界面
+        if (gameStateManager && typeof gameStateManager.transitionToCreation === 'function') {
+          await gameStateManager.transitionToCreation();
+        }
+        throw error; // 重新抛出错误，阻止后续执行
+      }
     } else {
-      // 否则使用 useStatData 的方法
-      await loadGameStateData();
+      // 如果没有待处理数据，检查当前游戏状态，如果有存档则主动加载消息
+      if (gameStateManager && gameStateManager.currentState?.value) {
+        const gameState = gameStateManager.currentState.value;
+        console.log('[PlayingRoot] 当前游戏状态:', {
+          phase: gameState.phase,
+          slotId: gameState.slotId,
+          saveName: gameState.saveName,
+        });
+        // 如果当前处于 PLAYING 状态且有存档，尝试从存档加载消息
+        if (gameState.phase === 'playing' && gameState.slotId) {
+          try {
+            console.log('[PlayingRoot] 开始从存档加载消息，slotId:', gameState.slotId);
+            const uiContext = {
+              messages,
+              streamingHtml,
+              isStreaming,
+              isSending,
+              scrollToBottom,
+              nextTick,
+            };
+            await loadToUI(gameState.slotId, uiContext);
+            console.log('[PlayingRoot] 从存档加载消息成功，消息数量:', messages.value.length);
+            // 验证消息是否已加载
+            if (messages.value.length === 0) {
+              console.warn('[PlayingRoot] 警告：从存档加载后消息数组为空，可能存档中没有消息');
+            } else {
+              console.log(
+                '[PlayingRoot] 已加载的消息:',
+                messages.value.map(m => ({ id: m.id, role: m.role })),
+              );
+            }
+          } catch (error) {
+            console.error('[PlayingRoot] 从存档加载消息失败，返回到创建界面:', error);
+            // 如果加载失败，返回到创建界面
+            if (gameStateManager && typeof gameStateManager.transitionToCreation === 'function') {
+              await gameStateManager.transitionToCreation();
+            }
+            throw error; // 重新抛出错误，阻止后续执行
+          }
+        } else {
+          console.log('[PlayingRoot] 游戏状态不满足加载条件，使用 useStatData 的方法');
+          // 否则使用 useStatData 的方法
+          await loadGameStateData();
+        }
+      } else {
+        console.log('[PlayingRoot] 游戏状态管理器不可用，使用 useStatData 的方法');
+        // 否则使用 useStatData 的方法
+        await loadGameStateData();
+      }
     }
   } catch (err) {
     console.error('[PlayingRoot] 加载MVU数据失败:', err);
+    // 如果还没有返回到创建界面，尝试返回
+    if (gameStateManager && typeof gameStateManager.transitionToCreation === 'function') {
+      try {
+        await gameStateManager.transitionToCreation();
+      } catch (transitionError) {
+        console.error('[PlayingRoot] 返回到创建界面失败:', transitionError);
+      }
+    }
+    throw err; // 重新抛出错误
   }
 };
 
@@ -2577,8 +2648,6 @@ onUnmounted(() => {
   overflow-x: hidden;
   /* 设置最小高度以确保滚动 */
   min-height: 200px;
-  /* 确保容器有明确的高度限制 */
-  max-height: calc(100vh - 200px);
   /* 强制显示滚动条 */
   scrollbar-width: thin;
 }

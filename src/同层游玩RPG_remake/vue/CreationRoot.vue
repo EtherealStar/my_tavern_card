@@ -373,6 +373,7 @@ import { useGlobalState } from '../composables/useGlobalState';
 import { usePlayingLogic } from '../composables/usePlayingLogic';
 import { usePromptInjector } from '../composables/usePromptInjector';
 import { useSaveLoad } from '../composables/useSaveLoad';
+import { useStatData } from '../composables/useStatData';
 import { useWorldbookToggle } from '../composables/useWorldbookToggle';
 import { TYPES } from '../core/ServiceIdentifiers';
 import { getBackgroundsForWorld } from '../data/backgrounds';
@@ -404,6 +405,7 @@ const emitEvent = (event: string, payload?: any) => {
   }
 };
 const injector = usePromptInjector();
+const { getLatestMessageMvuSnapshot } = useStatData();
 
 // 使用 usePlayingLogic 获取 postProcessMessage 函数
 // 注意：这里只使用 postProcessMessage，不依赖 messages 数组
@@ -789,24 +791,24 @@ async function handleConfirmCreateSave() {
       return;
     }
 
-    // 组装开局提示词并注入为系统提示
+    // 组装开局提示词，直接作为首条 user_input 发送
     let openingPrompt = (creationState.value.opening.customText || '').trim();
     if (!openingPrompt) {
       const preset = openingList.value.find(p => p.id === creationState.value.opening.selectedId);
-      openingPrompt = preset?.prompt || '';
-    }
-    if (openingPrompt) {
-      try {
-        injector.addSystemHintNext(openingPrompt, { priority: 100, source: 'opening' });
-      } catch (e) {
-        console.warn('[CreationRoot] 注入开局提示词失败，将继续生成:', e);
-      }
+      openingPrompt = preset?.prompt?.trim() || '';
     }
 
     isBootstrapping.value = true;
     retryCount.value = 0;
     let generated = false;
     let lastError: any = null;
+
+    let initialMvuSnapshot: Mvu.MvuData | null = null;
+    try {
+      initialMvuSnapshot = getLatestMessageMvuSnapshot();
+    } catch (snapshotError) {
+      console.warn('[CreationRoot] 获取MVU快照失败，将继续生成:', snapshotError);
+    }
 
     while (retryCount.value < 3 && !generated) {
       const attempt = retryCount.value + 1;
@@ -816,8 +818,8 @@ async function handleConfirmCreateSave() {
         const injects = (injector as any)?.collectForNextGeneration?.() || undefined;
         // 使用非流式一次性拿结果；user_input 留空串代表"开始"
         const result = await sameLayerService.generateWithSaveHistorySync(
-          { user_input: '', slotId },
-          undefined,
+          { user_input: openingPrompt || '', slotId },
+          initialMvuSnapshot ?? undefined,
           injects,
         );
 
@@ -825,11 +827,41 @@ async function handleConfirmCreateSave() {
         // 这会自动处理：应用MVU数据变更、格式化总结、保存到存档等
         // 传入 slotId 确保在游戏状态切换前也能正确保存消息
         bootstrapMsg.value = '正在处理消息数据...';
-        const postProcessSuccess = await postProcessMessage('', result, slotId);
+
+        // 先设置事件监听器，确保能捕获到事件
+        const postProcessPromise = new Promise<void>((resolve, reject) => {
+          const globalEventBus = (window as any).__RPG_EVENT_BUS__;
+          if (!globalEventBus || typeof globalEventBus.on !== 'function') {
+            console.warn('[CreationRoot] EventBus不可用，跳过事件等待');
+            resolve();
+            return;
+          }
+
+          const unsubscribe = globalEventBus.on('message:post-process-completed', (data: any) => {
+            // 检查是否是当前slotId的消息
+            if (data.slotId === slotId) {
+              unsubscribe();
+              if (data.success) {
+                console.log('[CreationRoot] 消息已成功保存到存档:', data.messageId);
+                resolve();
+              } else {
+                reject(new Error('消息保存到存档失败'));
+              }
+            }
+          });
+        });
+
+        // 调用postProcessMessage，传入skipUIUpdate: true跳过UI更新
+        // 因为此时PlayingRoot尚未挂载，消息会在切换界面后通过loadToUI加载
+        const postProcessSuccess = await postProcessMessage('', result, slotId, true);
 
         if (!postProcessSuccess) {
           throw new Error('消息后处理失败');
         }
+
+        // 等待后处理完成事件，确保消息已保存到存档
+        bootstrapMsg.value = '正在等待消息保存完成...';
+        await postProcessPromise;
 
         generated = true;
         bootstrapMsg.value = '开局内容生成完成';
@@ -850,6 +882,19 @@ async function handleConfirmCreateSave() {
       console.warn('[CreationRoot] 创建开局失败', '已重试 3 次仍失败，请稍后重试');
       console.warn('[CreationRoot] 开局生成连续失败:', lastError);
       return;
+    }
+
+    // 记录待加载的存档数据，PlayingRoot 初始化时会自动 loadToUI
+    try {
+      globalState.setPendingSaveData?.({
+        slotId,
+        name: createResult.saveName || name,
+        messages: [],
+        statData: {},
+        mvuSnapshots: [],
+      });
+    } catch (e) {
+      console.warn('[CreationRoot] 设置待处理存档数据失败:', e);
     }
 
     // 先更新创建数据到游戏状态

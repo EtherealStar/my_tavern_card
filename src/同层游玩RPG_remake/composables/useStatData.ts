@@ -17,12 +17,12 @@
 
 import { computed, inject, onMounted, onUnmounted, ref } from 'vue';
 import { TYPES } from '../core/ServiceIdentifiers';
+import { getAttributeIncrement } from '../data/levelAttributes';
 import { calculateLevelByTotalExp, getExpRequiredByLevel, getTotalExpByLevel } from '../data/levelExpTable';
 import { ATTRIBUTE_NAME_MAP, CHINESE_ATTRIBUTE_NAMES } from '../models/CreationSchemas';
 import type { GameState } from '../models/GameState';
 import { GamePhase } from '../models/GameState';
 import type { StatDataBindingService } from '../services/StatDataBindingService';
-import { useCommandQueue } from './useCommandQueue';
 
 export function useStatData() {
   const statDataBinding = inject<StatDataBindingService>(TYPES.StatDataBindingService);
@@ -30,9 +30,6 @@ export function useStatData() {
   if (!statDataBinding) {
     throw new Error('StatDataBindingService not found. Make sure it is provided in the Vue app.');
   }
-
-  // 指令队列接口，用于添加升级指令
-  const { addLevelUpCommand } = useCommandQueue();
 
   // ==================== 属性名映射工具 ====================
   // 中文属性名到英文属性名的反向映射
@@ -933,6 +930,20 @@ export function useStatData() {
     }
   };
 
+  /**
+   * 获取最新消息级别的 MVU 数据快照
+   */
+  const getLatestMessageMvuSnapshot = (
+    options: any = { type: 'message', message_id: 'latest' },
+  ): Mvu.MvuData | null => {
+    try {
+      return statDataBinding?.getMvuData(options) ?? null;
+    } catch (err) {
+      console.error('[useStatData] 获取最新消息 MVU 快照失败:', err);
+      return null;
+    }
+  };
+
   // 从usePlayingLogic获取MVU数据更新的接口
   // 注意：此函数现在主要用于向后兼容，实际的数据更新由MVU事件系统处理
   const updateFromPlayingLogic = async (_updatedData: any) => {
@@ -1187,7 +1198,7 @@ export function useStatData() {
 
   /**
    * 应用升级，更新 base_attributes 和 current_attributes
-   * 现在通过指令队列处理，会在下个回复中自动应用
+   * 使用 addAttributes 方法通过增量方式更新属性
    */
   const applyLevelUp = async (newLevel: number, reason?: string): Promise<boolean> => {
     try {
@@ -1206,21 +1217,54 @@ export function useStatData() {
         return false;
       }
 
-      // 优先通过指令队列添加升级指令
-      const queued = addLevelUpCommand(newLevel, reasonText);
-      if (queued) {
-        console.log(`[useStatData] 升级指令已添加到队列: 等级 ${newLevel}`);
-        return true;
+      // 1. 获取当前等级
+      const currentLevel = await getPlayerLevel();
+
+      // 2. 计算属性增量
+      const increment = getAttributeIncrement(currentLevel, newLevel);
+      if (!increment) {
+        console.warn('[useStatData] 无法计算属性增量:', { currentLevel, newLevel });
+        return false;
       }
 
-      // 如果指令队列不可用或添加失败，回退到直接执行
-      console.warn('[useStatData] 升级指令添加到队列失败，尝试直接执行');
-      const success = await statDataBinding?.applyLevelUp(newLevel, reasonText);
-      if (success) {
-        await loadGameStateData();
-        await initializeData();
+      // 3. 转换为中文属性名并调用 addAttributes
+      const chineseAttributes: Record<string, number> = {};
+      for (const [englishName, delta] of Object.entries(increment)) {
+        const chineseName = getChineseAttributeName(englishName);
+        chineseAttributes[chineseName] = delta;
       }
-      return success || false;
+
+      // 4. 使用 addAttributes 增加属性
+      const results = await statDataBinding?.addAttributes(chineseAttributes, reasonText);
+      if (!results || !results.some(r => r === true)) {
+        console.error('[useStatData] 属性增加失败');
+        return false;
+      }
+
+      // 5. 更新等级
+      const levelUpdateSuccess = await statDataBinding?.setStatDataField('level', newLevel, reasonText);
+      if (!levelUpdateSuccess) {
+        console.error('[useStatData] 等级更新失败');
+        return false;
+      }
+
+      // 6. 重新加载数据并触发事件
+      await loadGameStateData();
+      await initializeData();
+
+      // 7. 触发升级事件
+      const eventBus = statDataBinding?.getEventBus();
+      if (eventBus) {
+        eventBus.emit('stat_data:level_up', {
+          fromLevel: currentLevel,
+          toLevel: newLevel,
+          attributeIncrement: increment,
+          timestamp: new Date(),
+        });
+      }
+
+      console.log(`[useStatData] 成功升级从等级 ${currentLevel} 到 ${newLevel}`, increment);
+      return true;
     } catch (error) {
       console.error('[useStatData] 应用升级失败:', error);
       return false;
@@ -1433,6 +1477,7 @@ export function useStatData() {
     updateBaseAttributes,
     updateCurrentAttributes,
     getAttributeValue,
+    getLatestMessageMvuSnapshot,
 
     // MVU 变量方法
     getMvuAffinity,

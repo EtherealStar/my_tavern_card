@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { EventBus } from '../core/EventBus';
 import { TYPES } from '../core/ServiceIdentifiers';
 import { getAttributesByLevel, isValidLevel, type LevelAttributes } from '../data/levelAttributes';
-import { ATTRIBUTE_KEYS, ATTRIBUTE_NAME_MAP, CHINESE_ATTRIBUTE_NAMES } from '../models/CreationSchemas';
+import { ATTRIBUTE_NAME_MAP, CHINESE_ATTRIBUTE_NAMES } from '../models/CreationSchemas';
 
 // 导入 MVU 相关类型
 type VariableOption = {
@@ -543,6 +543,54 @@ export class StatDataBindingService {
   }
 
   /**
+   * 对MVU变量进行相加操作
+   * 注意：MVU框架初始化已在GameCoreFactory中完成，此处直接使用MVU框架
+   * @param path 变量路径
+   * @param delta 增量（可以是正数或负数）
+   * @param reason 更新原因
+   * @returns 是否成功
+   */
+  public async addMvuVariable(
+    path: string,
+    delta: number,
+    reason?: string,
+    options?: { mvuData?: Mvu.MvuData },
+  ): Promise<boolean> {
+    try {
+      // 获取MVU数据
+      const mvuData = options?.mvuData ?? this.getMvuData();
+      if (!mvuData) {
+        console.warn('[StatDataBindingService] 无法获取MVU数据');
+        return false;
+      }
+
+      // 获取当前值
+      const currentValue = Mvu.getMvuVariable(mvuData, path, { default_value: 0 });
+      const numValue = Number(currentValue);
+      const finalCurrentValue = Number.isFinite(numValue) ? numValue : 0;
+
+      // 计算新值
+      const newValue = finalCurrentValue + delta;
+
+      // 设置新值
+      const success = await Mvu.setMvuVariable(mvuData, path, newValue, {
+        reason: reason || `相加 ${delta > 0 ? '+' : ''}${delta}`,
+        is_recursive: false,
+      });
+
+      if (success) {
+        // 写回数据
+        await this.replaceMvuData(mvuData);
+      }
+
+      return success;
+    } catch (error) {
+      console.error('[StatDataBindingService] MVU变量相加失败:', path, error);
+      return false;
+    }
+  }
+
+  /**
    * 设置属性值
    * 注意：MVU框架初始化已在GameCoreFactory中完成，此处直接使用MVU框架
    */
@@ -564,100 +612,101 @@ export class StatDataBindingService {
   }
 
   /**
+   * 批量属性相加
+   * 对 base_attributes 和 current_attributes 中的每个属性进行相加操作
+   * @param attributes 要相加的属性对象（键为属性名，值为增量）
+   * @param reason 更新原因
+   * @returns 每个属性相加操作的结果数组
+   */
+  public async addAttributes(
+    attributes: Record<string, number>,
+    reason?: string,
+    options?: { mvuData?: Mvu.MvuData },
+  ): Promise<boolean[]> {
+    const results: boolean[] = [];
+    const updatedPaths: string[] = [];
+
+    try {
+      const sharedMvuData = options?.mvuData ?? this.getMvuData();
+
+      // 遍历每个属性，对 base_attributes 和 current_attributes 进行相加
+      for (const [attributeName, delta] of Object.entries(attributes)) {
+        // 验证增量值
+        const numDelta = Number(delta);
+        if (!Number.isFinite(numDelta)) {
+          console.warn(`[StatDataBindingService] 无效的属性增量: ${attributeName} = ${delta}`);
+          results.push(false);
+          continue;
+        }
+
+        // 对 base_attributes 进行相加
+        const basePath = `base_attributes.${attributeName}`;
+        const baseSuccess = await this.addMvuVariable(basePath, numDelta, reason || `属性相加 ${attributeName}`, {
+          mvuData: sharedMvuData,
+        });
+        results.push(baseSuccess);
+        if (baseSuccess) {
+          updatedPaths.push(basePath);
+        }
+
+        // 对 current_attributes 进行相加
+        const currentPath = `current_attributes.${attributeName}`;
+        const currentSuccess = await this.addMvuVariable(currentPath, numDelta, reason || `属性相加 ${attributeName}`, {
+          mvuData: sharedMvuData,
+        });
+        results.push(currentSuccess);
+        if (currentSuccess) {
+          updatedPaths.push(currentPath);
+        }
+      }
+
+      // 更新本地缓存
+      if (updatedPaths.length > 0) {
+        this.currentStatData = { ...this.currentStatData };
+        this.notifyBindingHandlers();
+      }
+
+      return results;
+    } catch (error) {
+      console.error('[StatDataBindingService] 批量属性相加失败:', error);
+      return results;
+    }
+  }
+
+  /**
    * 批量设置属性
    */
   public async setAttributes(attributes: Record<string, any>, reason?: string): Promise<boolean[]> {
     // 获取MVU数据
     const mvuData = this.getMvuData();
 
-    let workingMvuData = mvuData;
-
     const results: boolean[] = [];
     const updatedPaths: string[] = [];
 
-    // 检查是否是角色创建时的属性数据
-    const isCharacterCreation = this._isCharacterCreationAttributes(attributes);
+    // 原有的批量设置逻辑（用于其他类型的属性更新）
+    for (const [attributeName, value] of Object.entries(attributes)) {
+      // 验证并清理数据值
+      const validatedValue = this._validateAndCleanValue(attributeName, value);
 
-    if (isCharacterCreation) {
-      // 在角色创建时，先重新加载初始数据
-      try {
-        if (Mvu && typeof Mvu.reloadInitVar === 'function') {
-          const reloadSuccess = await Mvu.reloadInitVar(mvuData);
-          console.log(
-            '[StatDataBindingService] Mvu.reloadInitVar 返回结果:',
-            reloadSuccess,
-            '是否成功:',
-            reloadSuccess === true,
-          );
-          if (reloadSuccess) {
-            // 成功后重新获取一份最新的 MVU 数据，避免继续基于旧引用进行写入
-            workingMvuData = this.getMvuData();
-            console.log('[StatDataBindingService] 初始变量数据已重新加载，已刷新本地数据引用');
-          } else {
-            console.warn('[StatDataBindingService] 重新加载初始数据失败，但继续执行属性设置');
-          }
-        } else {
-          console.warn('[StatDataBindingService] MVU框架或reloadInitVar方法不可用');
-        }
-      } catch (error) {
-        console.error('[StatDataBindingService] 重新加载初始数据异常:', error);
-        // 继续执行属性设置，不因reloadInitVar失败而中断
-      }
-
-      // 直接设置属性，让 MVU 框架自动处理格式
-      // 设置 base_attributes
-      const baseSuccess = await Mvu.setMvuVariable(workingMvuData, 'base_attributes', attributes, {
-        reason: reason || 'character_creation_base_attributes',
+      const success = await Mvu.setMvuVariable(mvuData, attributeName, validatedValue, {
+        reason: reason || 'stat_data_binding_batch_update',
         is_recursive: false,
       });
-      results.push(baseSuccess);
-      if (baseSuccess) {
-        updatedPaths.push('base_attributes');
-      }
+      results.push(success);
 
-      // 设置 current_attributes
-      const currentSuccess = await Mvu.setMvuVariable(workingMvuData, 'current_attributes', attributes, {
-        reason: reason || 'character_creation_current_attributes',
-        is_recursive: false,
-      });
-      results.push(currentSuccess);
-      if (currentSuccess) {
-        updatedPaths.push('current_attributes');
-      }
-    } else {
-      // 原有的批量设置逻辑（用于其他类型的属性更新）
-      for (const [attributeName, value] of Object.entries(attributes)) {
-        // 验证并清理数据值
-        const validatedValue = this._validateAndCleanValue(attributeName, value);
-
-        const success = await Mvu.setMvuVariable(workingMvuData, attributeName, validatedValue, {
-          reason: reason || 'stat_data_binding_batch_update',
-          is_recursive: false,
-        });
-        results.push(success);
-
-        if (success) {
-          updatedPaths.push(attributeName);
-        }
+      if (success) {
+        updatedPaths.push(attributeName);
       }
     }
 
     // 批量写回数据
     if (updatedPaths.length > 0) {
-      await this.replaceMvuData(workingMvuData);
+      await this.replaceMvuData(mvuData);
     }
 
     // 更新本地缓存
     this.currentStatData = { ...this.currentStatData };
     this.notifyBindingHandlers();
-
-    // 如果是角色创建，触发特殊的数据更新事件
-    if (isCharacterCreation) {
-      this.eventBus.emit('stat_data:character_created', {
-        attributes: attributes,
-        timestamp: new Date(),
-      });
-    }
 
     return results;
   }
@@ -888,9 +937,9 @@ export class StatDataBindingService {
    * const globalData = statDataService.getMvuData({ type: 'global' });
    * ```
    */
-  public getMvuData(options: VariableOption = { type: 'message', message_id: 0 }): Mvu.MvuData {
+  public getMvuData(options: VariableOption = { type: 'message', message_id: 0 } as VariableOption): Mvu.MvuData {
     try {
-      const mvuData = Mvu.getMvuData(options);
+      const mvuData = Mvu.getMvuData(options as any);
 
       if (!mvuData) {
         console.warn('[StatDataBindingService] 无法获取MVU数据', options);
@@ -934,10 +983,10 @@ export class StatDataBindingService {
    */
   public async replaceMvuData(
     mvuData: Mvu.MvuData,
-    options: VariableOption = { type: 'message', message_id: 0 },
+    options: VariableOption = { type: 'message', message_id: 0 } as VariableOption,
   ): Promise<boolean> {
     try {
-      await Mvu.replaceMvuData(mvuData, options);
+      await Mvu.replaceMvuData(mvuData, options as any);
 
       // 由于 replaceMvuData 是"完全替换"而不是"增量更新"，
       // 它不会触发 MVU 框架的 VARIABLE_UPDATE_ENDED 事件
@@ -2770,109 +2819,12 @@ export class StatDataBindingService {
 
   /**
    * 应用升级，更新 base_attributes 和 current_attributes
-   * 注意：虽然 base_attributes 在 MVU 规则中标记为 readonly，但升级属于特殊业务场景，
-   * 我们通过 Mvu.setMvuVariable 直接设置属性值（原因标记为 level_up）
    *
-   * @param newLevel 新的等级
-   * @param reason 升级原因（用于日志记录）
-   * @returns 是否升级成功
+   * 注意：此方法已移除，升级逻辑已迁移到 useStatData 组合式函数中。
+   * 升级现在使用 addAttributes 方法通过增量方式更新属性，而不是直接设置。
    *
-   * @example
-   * ```typescript
-   * const success = await statDataService.applyLevelUp(5, '经验值达到升级条件');
-   * if (success) {
-   *   console.log('升级成功');
-   * }
-   * ```
+   * 如需使用升级功能，请通过 useStatData 的 applyLevelUp 方法。
    */
-  public async applyLevelUp(newLevel: number, reason?: string): Promise<boolean> {
-    try {
-      // 1. 验证目标等级
-      if (!isValidLevel(newLevel)) {
-        console.warn(`[StatDataBindingService] 无效的目标等级: ${newLevel}`);
-        return false;
-      }
-
-      // 2. 检查是否可以升级
-      const canUpgrade = await this.canLevelUp(newLevel);
-      if (!canUpgrade) {
-        const currentLevel = await this.getPlayerLevel(1);
-        console.warn(`[StatDataBindingService] 无法升级到等级 ${newLevel}，当前等级: ${currentLevel}`);
-        return false;
-      }
-
-      // 3. 获取目标等级的属性值
-      const newAttributes = getAttributesByLevel(newLevel);
-      if (!newAttributes) {
-        console.warn(`[StatDataBindingService] 无法获取等级 ${newLevel} 的属性值`);
-        return false;
-      }
-
-      // 4. 获取当前等级
-      const currentLevel = await this.getPlayerLevel(1);
-
-      // 5. 获取MVU数据
-      const mvuData = this.getMvuData();
-      if (!mvuData) {
-        console.warn('[StatDataBindingService] 无法获取MVU数据');
-        return false;
-      }
-
-      // 6. 获取MVU框架实例
-      if (!Mvu || typeof Mvu.setMvuVariable !== 'function') {
-        console.warn('[StatDataBindingService] MVU框架或setMvuVariable方法不可用');
-        return false;
-      }
-
-      // 7. 更新 base_attributes（直接设置为目标值）
-      // 注意：虽然 base_attributes 标记为 readonly，但升级是特殊情况，使用 level_up 作为原因
-      const baseSuccess = await Mvu.setMvuVariable(mvuData, 'base_attributes', newAttributes, {
-        reason: reason || `升级从 ${currentLevel} 到 ${newLevel}`,
-        is_recursive: false,
-      });
-
-      if (!baseSuccess) {
-        console.error('[StatDataBindingService] 更新 base_attributes 失败');
-        return false;
-      }
-
-      // 8. 更新 current_attributes（直接设置为目标值）
-      // current_attributes 通常由 base_attributes + 装备加成计算，但升级时也直接设置为目标值
-      // 后续装备加成会通过其他机制重新计算
-      const currentSuccess = await Mvu.setMvuVariable(mvuData, 'current_attributes', newAttributes, {
-        reason: reason || `升级从 ${currentLevel} 到 ${newLevel}`,
-        is_recursive: false,
-      });
-
-      if (!currentSuccess) {
-        console.error('[StatDataBindingService] 更新 current_attributes 失败');
-        // 即使 current_attributes 更新失败，base_attributes 已经更新了，返回部分成功
-        // 但为了数据一致性，这里返回失败，让调用方处理
-        return false;
-      }
-
-      // 9. 写回数据
-      await this.replaceMvuData(mvuData);
-
-      // 10. 重新加载统计数据
-      await this.loadStatData();
-
-      // 11. 触发升级事件
-      this.eventBus.emit('stat_data:level_up', {
-        fromLevel: currentLevel,
-        toLevel: newLevel,
-        newAttributes,
-        timestamp: new Date(),
-      });
-
-      console.log(`[StatDataBindingService] 成功升级从等级 ${currentLevel} 到 ${newLevel}`, newAttributes);
-
-      return true;
-    } catch (error) {
-      console.error('[StatDataBindingService] 应用升级失败:', error);
-      return false;
-    }
-  }
 
   // ==================== 私有辅助方法 ====================
 
@@ -2888,14 +2840,6 @@ export class StatDataBindingService {
    */
   private getChineseAttributeName(englishName: string): string {
     return ATTRIBUTE_NAME_MAP[englishName as keyof typeof ATTRIBUTE_NAME_MAP] || englishName;
-  }
-
-  /**
-   * 检查是否是角色创建时的属性数据
-   */
-  private _isCharacterCreationAttributes(attributes: Record<string, any>): boolean {
-    // 检查是否包含英文属性名（角色创建时使用英文属性名）
-    return ATTRIBUTE_KEYS.some(name => Object.prototype.hasOwnProperty.call(attributes, name));
   }
 
   /**

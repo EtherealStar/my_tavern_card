@@ -51,6 +51,19 @@ export interface CommandConflict {
   message: string;
 }
 
+// 指令队列钩子接口
+export interface CommandQueueHooks {
+  // 冲突检测
+  detectConflicts?: (commands: Command[]) => CommandConflict[];
+
+  // 数据一致性验证
+  validateDataConsistency?: () => Promise<boolean>;
+
+  // 自定义指令执行器（可选）
+  // 如果返回 null，则使用默认的 COMMAND_MAPPING 处理
+  executeCommand?: (command: Command) => Promise<ExecutionResult | null>;
+}
+
 @injectable()
 export class CommandQueueService {
   private queue: Command[] = [];
@@ -75,6 +88,7 @@ export class CommandQueueService {
   private cleanupTasks = new Set<() => void>();
   private maxExecutionTime = 5000; // 5秒超时
   private executionTimeout: number | null = null;
+  private hooks?: CommandQueueHooks;
 
   constructor(
     @inject(TYPES.EventBus) eventBus: EventBus,
@@ -95,7 +109,6 @@ export class CommandQueueService {
   addCommand(command: Omit<Command, 'id' | 'timestamp'>): boolean {
     if (this.queue.length >= this.maxSize) {
       console.warn('[CommandQueue] 队列已满，无法添加新指令');
-      this.showToast('队列已满，无法添加操作', 'error');
       return false;
     }
 
@@ -108,7 +121,6 @@ export class CommandQueueService {
     this.queue.push(newCommand);
     this.eventBus.emit('command-queue:added', newCommand);
     this.notifyUIUpdate();
-    this.showToast(`操作已加入队列: ${command.description}`, 'success');
     return true;
   }
 
@@ -121,7 +133,6 @@ export class CommandQueueService {
     // 检查是否为不可删除的指令
     if (command.nonRemovable === true) {
       console.warn('[CommandQueue] 无法删除不可删除的指令:', command.description);
-      this.showToast('该指令不可删除', 'warning');
       return false;
     }
 
@@ -155,19 +166,14 @@ export class CommandQueueService {
       return false;
     }
 
-    // 检查MVU可用性
-    if (!(await this.checkMvuAvailability())) {
-      console.error('[CommandQueue] MVU框架不可用，无法执行指令');
-      this.eventBus.emit('command-queue:error', new Error('MVU框架不可用'));
-      return false;
-    }
-
-    // 检查指令冲突
-    const conflicts = this.detectConflicts(this.queue);
-    if (conflicts.length > 0) {
-      console.warn('[CommandQueue] 检测到指令冲突:', conflicts);
-      this.eventBus.emit('command-queue:conflicts', conflicts);
-      return false;
+    // 检查指令冲突（使用钩子函数）
+    if (this.hooks?.detectConflicts) {
+      const conflicts = this.hooks.detectConflicts(this.queue);
+      if (conflicts.length > 0) {
+        console.warn('[CommandQueue] 检测到指令冲突:', conflicts);
+        this.eventBus.emit('command-queue:conflicts', conflicts);
+        return false;
+      }
     }
 
     this.isExecuting = true;
@@ -183,7 +189,7 @@ export class CommandQueueService {
     }, this.maxExecutionTime);
 
     try {
-      const executor = new CommandExecutor(this.statDataBinding);
+      const executor = new CommandExecutor(this.statDataBinding, this.hooks);
       const results = await executor.executeBatch(this.queue);
 
       const endTime = performance.now();
@@ -205,11 +211,13 @@ export class CommandQueueService {
         this.performanceMetrics.maxExecutionTime = executionTime;
       }
 
-      // 验证数据一致性
-      const dataConsistent = await this.validateDataConsistency();
-      if (!dataConsistent) {
-        console.warn('[CommandQueue] 数据一致性验证失败');
-        this.logError('数据一致性验证失败', undefined, { results, executionTime });
+      // 验证数据一致性（使用钩子函数）
+      if (this.hooks?.validateDataConsistency) {
+        const dataConsistent = await this.hooks.validateDataConsistency();
+        if (!dataConsistent) {
+          console.warn('[CommandQueue] 数据一致性验证失败');
+          this.logError('数据一致性验证失败', undefined, { results, executionTime });
+        }
       }
 
       // 清空已执行的指令
@@ -270,6 +278,11 @@ export class CommandQueueService {
     return () => this.uiUpdateCallbacks.delete(callback);
   }
 
+  // 设置钩子函数
+  public setHooks(hooks: CommandQueueHooks): void {
+    this.hooks = hooks;
+  }
+
   // 清理所有资源
   public cleanup(): void {
     this.cleanupTasks.forEach(task => {
@@ -296,107 +309,6 @@ export class CommandQueueService {
     this.eventBus.off('command-queue:timeout', () => {});
   }
 
-  // 检查MVU可用性
-  private async checkMvuAvailability(): Promise<boolean> {
-    try {
-      const Mvu = (window as any).Mvu;
-      if (!Mvu || typeof Mvu.getMvuData !== 'function') {
-        return false;
-      }
-      // 尝试获取数据验证MVU可用性
-      await Promise.resolve(Mvu.getMvuData({ type: 'message', message_id: 0 }));
-      return true;
-    } catch (error) {
-      console.warn('[CommandQueue] MVU框架不可用:', error);
-      return false;
-    }
-  }
-
-  // 检测指令冲突
-  private detectConflicts(commands: Command[]): CommandConflict[] {
-    const conflicts: CommandConflict[] = [];
-    const equipmentSlots = new Set<string>();
-    const inventoryOperations = new Map<string, number>();
-
-    for (const command of commands) {
-      // 检测装备槽位冲突
-      if (command.type === 'equip' || command.type === 'unequip') {
-        const slot = command.params.slot;
-        if (equipmentSlots.has(slot)) {
-          conflicts.push({
-            type: 'equipment_slot_conflict',
-            commands: commands.filter(c => c.params.slot === slot),
-            message: `装备槽位 ${slot} 存在冲突操作`,
-          });
-        }
-        equipmentSlots.add(slot);
-      }
-
-      // 检测背包操作冲突
-      if (command.type === 'inventory') {
-        const key = `${command.params.type}_${command.params.itemIndex}`;
-        const count = inventoryOperations.get(key) || 0;
-        inventoryOperations.set(key, count + 1);
-
-        if (count > 0) {
-          conflicts.push({
-            type: 'inventory_operation_conflict',
-            commands: commands.filter(
-              c => c.params.type === command.params.type && c.params.itemIndex === command.params.itemIndex,
-            ),
-            message: `背包操作冲突: ${command.params.type}[${command.params.itemIndex}]`,
-          });
-        }
-      }
-    }
-
-    return conflicts;
-  }
-
-  // 验证数据一致性
-  private async validateDataConsistency(): Promise<boolean> {
-    try {
-      const [equipment, inventory, attributes] = await Promise.all([
-        this.statDataBinding.getMvuEquipment(),
-        this.statDataBinding.getMvuInventory(),
-        this.statDataBinding.getMvuCurrentAttributes(),
-      ]);
-
-      // 验证装备数据
-      for (const [slot, item] of Object.entries(equipment)) {
-        if (item && !this.validateItemStructure(item)) {
-          console.error(`[CommandQueue] 装备数据无效: ${slot}`, item);
-          return false;
-        }
-      }
-
-      // 验证背包数据
-      for (const [type, items] of Object.entries(inventory)) {
-        if (!Array.isArray(items)) {
-          console.error(`[CommandQueue] 背包数据格式错误: ${type}`, items);
-          return false;
-        }
-      }
-
-      // 验证属性数据
-      for (const [attr, value] of Object.entries(attributes)) {
-        if (typeof value !== 'number' || !Number.isFinite(value)) {
-          console.error(`[CommandQueue] 属性数据无效: ${attr}`, value);
-          return false;
-        }
-      }
-
-      return true;
-    } catch (error) {
-      console.error('[CommandQueue] 数据一致性验证失败:', error);
-      return false;
-    }
-  }
-
-  private validateItemStructure(item: any): boolean {
-    return item && typeof item === 'object' && typeof item.name === 'string' && item.name.trim().length > 0;
-  }
-
   // 通知UI更新
   private notifyUIUpdate(): void {
     const queue = [...this.queue];
@@ -407,16 +319,6 @@ export class CommandQueueService {
         console.error('[CommandQueue] UI更新回调执行失败:', error);
       }
     });
-  }
-
-  // 显示提示
-  private showToast(message: string, type: 'success' | 'error' | 'warning'): void {
-    const ui = (window as any).ui;
-    if (ui && typeof ui[type] === 'function') {
-      ui[type](message);
-    } else {
-      console.log(`[CommandQueue] ${type.toUpperCase()}: ${message}`);
-    }
   }
 
   // 记录错误
@@ -478,13 +380,15 @@ export const COMMAND_MAPPING = {
   'inventory.remove': { method: 'removeFromInventory', params: ['type', 'itemIndex', 'reason'] },
   'inventory.clear': { method: 'clearInventoryType', params: ['type', 'reason'] },
 
-  // 升级相关
-  'level_up.apply': { method: 'applyLevelUp', params: ['newLevel', 'reason'] },
+  // 升级相关 - 已移除，现在由 useCommandQueue 中的自定义执行器处理
 } as const;
 
 // 指令执行器类
 class CommandExecutor {
-  constructor(private statDataBinding: StatDataBindingService) {}
+  constructor(
+    private statDataBinding: StatDataBindingService,
+    private hooks?: CommandQueueHooks,
+  ) {}
 
   // 批量执行指令
   async executeBatch(commands: Command[]): Promise<ExecutionResult[]> {
@@ -511,6 +415,26 @@ class CommandExecutor {
 
   // 执行单个指令
   private async executeCommand(command: Command): Promise<ExecutionResult> {
+    // 首先检查是否有自定义执行器（钩子函数）
+    if (this.hooks?.executeCommand) {
+      try {
+        const customResult = await this.hooks.executeCommand(command);
+        // 如果自定义执行器返回了结果（非 null），则使用自定义结果
+        if (customResult !== null) {
+          return customResult;
+        }
+        // 如果返回 null，继续使用默认处理
+      } catch (error) {
+        // 如果自定义执行器抛出错误，返回错误结果
+        return {
+          command,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    }
+
+    // 使用默认的 COMMAND_MAPPING 处理
     const mapping = COMMAND_MAPPING[command.action as keyof typeof COMMAND_MAPPING];
     if (!mapping) {
       throw new Error(`Unknown command action: ${command.action}`);
@@ -521,17 +445,11 @@ class CommandExecutor {
       throw new Error(`Method ${mapping.method} not found in StatDataBindingService`);
     }
 
-    // 验证参数数量（对于升级指令，reason 是可选的）
+    // 验证参数数量
     const expectedParams = mapping.params.length;
     const actualParams = Object.keys(command.params).length;
 
-    // 对于升级指令，允许 reason 参数缺失
-    if (command.type === CommandType.LEVEL_UP && actualParams === expectedParams - 1) {
-      // 如果缺少 reason 参数，添加默认值
-      if (!command.params.reason) {
-        command.params.reason = '自动升级';
-      }
-    } else if (actualParams !== expectedParams) {
+    if (actualParams !== expectedParams) {
       throw new Error(
         `Parameter count mismatch for ${command.action}: expected ${expectedParams}, got ${actualParams}`,
       );

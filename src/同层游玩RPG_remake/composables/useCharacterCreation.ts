@@ -71,7 +71,6 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
       }
     });
 
-    console.log('[useCharacterCreation] 属性转换结果:', attributeRecord);
     return attributeRecord;
   };
 
@@ -124,36 +123,53 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
     }
 
     try {
-      console.log('[useCharacterCreation] 准备应用属性到MVU变量:', attributes);
+      // 构造一个空的MVU数据
+      const mvuData = {
+        initialized_lorebooks: {},
+        stat_data: {},
+        display_data: {},
+        delta_data: {},
+      } as Mvu.MvuData;
 
-      // 检查MVU框架是否可用
-      const Mvu = (window as any).Mvu;
-      if (!Mvu) {
-        console.error('[useCharacterCreation] MVU框架不可用');
-        return false;
+      // 先进行初始化
+      try {
+        if (typeof Mvu?.reloadInitVar === 'function') {
+          const reloadSuccess = await Mvu.reloadInitVar(mvuData);
+          if (!reloadSuccess) {
+            console.warn('[useCharacterCreation] 初始化MVU数据失败，但继续执行属性相加');
+          } else {
+            console.log('[useCharacterCreation] MVU数据初始化成功');
+          }
+        } else {
+          console.warn('[useCharacterCreation] MVU框架或reloadInitVar方法不可用');
+        }
+      } catch (error) {
+        console.error('[useCharacterCreation] 初始化MVU数据异常:', error);
+        // 继续执行属性相加，不因reloadInitVar失败而中断
       }
 
-      // 获取MVU数据
-      const mvuData = statDataBinding.getMvuData();
       if (!mvuData) {
-        console.error('[useCharacterCreation] 无法获取MVU数据');
+        console.error('[useCharacterCreation] 初始化后无法获取MVU数据');
         return false;
       }
 
-      // 使用StatDataBindingService的setAttributes方法
-      // 该方法会自动检测角色创建数据并设置base_attributes和current_attributes
-      // StatDataBindingService内部会处理初始数据重新加载
-      const results = await statDataBinding.setAttributes(attributes, 'character_creation');
-
-      console.log('[useCharacterCreation] 属性应用结果:', results);
+      // 使用StatDataBindingService的addAttributes方法进行属性相加
+      // 该方法会对base_attributes和current_attributes中的每个属性进行相加操作
+      const results = await statDataBinding.addAttributes(attributes, 'character_creation', { mvuData });
 
       const success = results.every(result => result === true);
 
       if (success) {
-        console.log('[useCharacterCreation] 属性应用成功');
+        // 触发角色创建事件
+        if (eventBus) {
+          eventBus.emit('stat_data:character_created', {
+            attributes: attributes,
+            timestamp: new Date(),
+          });
+        }
         return true;
       } else {
-        console.error('[useCharacterCreation] 部分属性应用失败:', results);
+        console.error('[useCharacterCreation] 部分属性相加失败:', results);
         return false;
       }
     } catch (error) {
@@ -179,25 +195,17 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
     }
 
     try {
-      console.log('[useCharacterCreation] 开始设置角色身份:', { gender, race });
-
       // 设置性别
       const genderSuccess = await statDataBinding.setGender(gender, '角色创建');
       if (!genderSuccess) {
         console.warn('[useCharacterCreation] 性别设置失败');
-      } else {
-        console.log('[useCharacterCreation] 性别设置成功:', gender);
       }
 
       // 设置种族
       const raceSuccess = await statDataBinding.setRace(race, '角色创建');
       if (!raceSuccess) {
         console.warn('[useCharacterCreation] 种族设置失败');
-      } else {
-        console.log('[useCharacterCreation] 种族设置成功:', race);
       }
-
-      console.log('[useCharacterCreation] 角色身份设置完成:', { gender, race });
     } catch (error) {
       console.error('[useCharacterCreation] 设置角色身份失败:', error);
       throw error; // 重新抛出错误，让调用者处理
@@ -301,8 +309,6 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
    */
   const handleInitStoryEvent = async (data: CreationData) => {
     try {
-      console.log('[useCharacterCreation] 收到game:init-story事件:', data);
-
       // 验证数据完整性
       if (!data || !data.attributes || !data.gender || !data.race) {
         console.error('[useCharacterCreation] 角色创建数据不完整:', data);
@@ -315,8 +321,6 @@ export function useCharacterCreation(): UseCharacterCreationReturn {
         if (creationError.value) {
           console.error('[useCharacterCreation] 错误详情:', creationError.value);
         }
-      } else {
-        console.log('[useCharacterCreation] 角色创建数据处理成功');
       }
     } catch (error) {
       console.error('[useCharacterCreation] 处理game:init-story事件失败:', error);

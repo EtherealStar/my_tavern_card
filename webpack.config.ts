@@ -11,6 +11,7 @@ import TerserPlugin from 'terser-webpack-plugin';
 import TsconfigPathsPlugin from 'tsconfig-paths-webpack-plugin';
 import { VueLoaderPlugin } from 'vue-loader';
 import webpack from 'webpack';
+
 const require = createRequire(import.meta.url);
 const HTMLInlineCSSWebpackPlugin = require('html-inline-css-webpack-plugin').default;
 
@@ -77,7 +78,7 @@ const config: Config = {
 
 let io: Server;
 function watch_it(compiler: webpack.Compiler) {
-  if (compiler.options.watch || compiler.options.devServer) {
+  if (compiler.options.watch) {
     if (!io) {
       const port = config.port ?? 6621;
       io = new Server(port, { cors: { origin: '*' } });
@@ -99,6 +100,7 @@ function watch_it(compiler: webpack.Compiler) {
 
 function parse_configuration(entry: Entry, isFirst: boolean = false): (_env: any, argv: any) => webpack.Configuration {
   const script_filepath = path.parse(entry.script);
+  const relativeDir = path.relative(path.join(__dirname, 'src'), script_filepath.dir);
 
   return (_env, argv) => ({
     experiments: {
@@ -113,12 +115,13 @@ function parse_configuration(entry: Entry, isFirst: boolean = false): (_env: any
     output: {
       devtoolModuleFilenameTemplate: 'webpack://tavern_helper_template/[resource-path]?[loaders]',
       filename: `${script_filepath.name}.js`,
-      path: path.join(__dirname, 'dist', path.relative(path.join(__dirname, 'src'), script_filepath.dir)),
+      path: path.join(__dirname, 'dist', relativeDir),
       chunkFilename: `${script_filepath.name}.[contenthash].chunk.js`,
       asyncChunks: true,
       chunkLoading: 'import',
       clean: true,
-      publicPath: argv.mode === 'development' ? '/' : '',
+      // 修复 publicPath - 开发模式使用绝对路径以支持 iframe
+      publicPath: argv.mode === 'development' ? `http://localhost:8080/${relativeDir}/` : 'auto',
       library: {
         type: 'module',
       },
@@ -261,7 +264,7 @@ function parse_configuration(entry: Entry, isFirst: boolean = false): (_env: any
       alias: {},
     },
     plugins: (entry.html === undefined
-      ? [new MiniCssExtractPlugin()]
+      ? [] // 修复:没有 HTML 时不需要 MiniCssExtractPlugin
       : [
           new HtmlWebpackPlugin({
             template: path.join(__dirname, entry.html),
@@ -285,7 +288,7 @@ function parse_configuration(entry: Entry, isFirst: boolean = false): (_env: any
         patterns: [
           {
             from: path.join(script_filepath.dir, 'assets'),
-            to: path.join(__dirname, 'dist', path.relative(path.join(__dirname, 'src'), script_filepath.dir), 'assets'),
+            to: path.join(__dirname, 'dist', relativeDir, 'assets'),
             noErrorOnMissing: true,
           },
         ],
@@ -311,7 +314,7 @@ function parse_configuration(entry: Entry, isFirst: boolean = false): (_env: any
       ],
     },
     externals: [],
-    // 只在第一个配置中添加 devServer，避免端口冲突
+    // 只在第一个配置中添加 devServer
     ...(isFirst
       ? {
           devServer: {
@@ -330,9 +333,8 @@ function parse_configuration(entry: Entry, isFirst: boolean = false): (_env: any
               'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
               'Access-Control-Allow-Headers': 'X-Requested-With, content-type, Authorization',
             },
-            historyApiFallback: {
-              rewrites: [],
-            },
+            // 修复 historyApiFallback
+            historyApiFallback: true,
             compress: true,
             client: {
               logging: 'info',
@@ -340,6 +342,24 @@ function parse_configuration(entry: Entry, isFirst: boolean = false): (_env: any
                 errors: true,
                 warnings: false,
               },
+            },
+            // 添加日志查看实际访问路径
+            onListening: function (devServer: any) {
+              if (!devServer) {
+                throw new Error('webpack-dev-server is not defined');
+              }
+              const port = devServer.server.address().port;
+              console.log('\n[DevServer] 服务已启动:');
+              console.log(`[DevServer] 访问地址: http://localhost:${port}`);
+              console.log('[DevServer] 可用的页面:');
+              config.entries.forEach(entry => {
+                if (entry.html) {
+                  const relativeDir = path.relative(path.join(__dirname, 'src'), path.dirname(entry.script));
+                  const htmlName = path.basename(entry.html);
+                  console.log(`  - http://localhost:${port}/${relativeDir}/${htmlName}`);
+                }
+              });
+              console.log('');
             },
           },
         }

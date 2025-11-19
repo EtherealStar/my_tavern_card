@@ -16,12 +16,7 @@
             <label
               v-for="it in saves"
               :key="it.slotId"
-              :class="[
-                selected.has(it.slotId)
-                  ? 'border-2 border-[var(--color-primary)] bg-pink-50/80 ring-1 ring-[var(--color-primary)]'
-                  : '',
-                expandedSlots.has(it.slotId) ? 'expanded' : '',
-              ]"
+              :class="expandedSlots.has(it.slotId) ? 'expanded' : ''"
               @click="toggleExpand(it.slotId)"
             >
               <input type="checkbox" :checked="selected.has(it.slotId)" @change.stop="toggleSelect(it.slotId)" />
