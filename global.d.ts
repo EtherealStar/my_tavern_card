@@ -2,14 +2,36 @@ declare module '*?raw' {
   const content: string;
   export default content;
 }
+<<<<<<< HEAD
+=======
+declare module '*?url' {
+  const content: string;
+  export default content;
+}
+>>>>>>> fa81d9815ed87aaa9cd2cfc43a3e875b9f0bcc23
 declare module '*.html' {
   const content: string;
   export default content;
 }
+<<<<<<< HEAD
+=======
+declare module '*.md' {
+  const content: string;
+  export default content;
+}
+>>>>>>> fa81d9815ed87aaa9cd2cfc43a3e875b9f0bcc23
 declare module '*.css' {
   const content: unknown;
   export default content;
 }
+<<<<<<< HEAD
+=======
+declare module '*.vue' {
+  import { DefineComponent } from 'vue';
+  const component: DefineComponent;
+  export default component;
+}
+>>>>>>> fa81d9815ed87aaa9cd2cfc43a3e875b9f0bcc23
 
 declare const YAML: typeof import('yaml');
 
@@ -20,6 +42,7 @@ declare namespace z {
   export type output<T> = import('zod').output<T>;
 }
 
+<<<<<<< HEAD
 // 添加SaveDialog相关的类型定义
 interface SaveSummary {
   slotId: string;
@@ -91,3 +114,8 @@ declare global {
   }
 }
 export {};
+=======
+declare module 'https://testingcf.jsdelivr.net/gh/StageDog/tavern_resource/dist/util/mvu_zod.js' {
+  export function registerMvuSchema(schema: z.ZodType<any>): void;
+}
+>>>>>>> fa81d9815ed87aaa9cd2cfc43a3e875b9f0bcc23
